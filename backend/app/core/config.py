@@ -18,9 +18,16 @@ class Settings(BaseSettings):
     # 판정 (명세 1장: confidence < 0.8 이면 신뢰도 낮음)
     LOW_CONFIDENCE_THRESHOLD: float = 0.8
 
+    # DB 세션 시간대. 일시 값이 +09:00 오프셋으로 응답된다 (명세 1장 예시)
+    DB_TIMEZONE: str = "Asia/Seoul"
+
     # 파일
     UPLOAD_DIR: str = "storage/uploads"
-    ALLOWED_EXTENSIONS: tuple[str, ...] = (".pdf", ".png", ".jpg", ".jpeg")
+    MAX_UPLOAD_MB: int = 20
+
+    # AI 추출기. "mock" 이면 app/pipeline/mock_data 의 JSON 을 결과로 사용 (AI 파트 연결 전)
+    EXTRACTOR: str = "mock"
+    MOCK_EXTRACTION_DIR: str = "app/pipeline/mock_data"
 
     # 산화물 → 원소 환산 계수 (명세 2.2). 원소 질량 / 산화물 질량
     OXIDE_TO_ELEMENT: dict[str, float] = {
