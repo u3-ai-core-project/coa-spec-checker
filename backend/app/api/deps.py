@@ -13,6 +13,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
 from app.core.errors import AppException, ErrorCode
+from app.core.security import decode_access_token
 from app.db.session import get_db
 from app.models.user import User
 
@@ -26,8 +27,11 @@ def get_current_user(
     """토큰 검증 후 User 반환. 토큰 없음·만료·위조면 AppException(UNAUTHORIZED)."""
     if credentials is None:
         raise AppException(ErrorCode.UNAUTHORIZED)
-    # TODO(홍채령): app.core.security 로 JWT 디코드 → sub 로 User 조회
-    raise AppException(ErrorCode.UNAUTHORIZED)
+    user_id = decode_access_token(credentials.credentials)
+    user = db.get(User, user_id) if user_id is not None else None
+    if user is None:  # 토큰은 유효하지만 사용자가 삭제된 경우 포함
+        raise AppException(ErrorCode.UNAUTHORIZED)
+    return user
 
 
 def require_admin(user: User = Depends(get_current_user)) -> User:
