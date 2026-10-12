@@ -1,0 +1,15 @@
+{
+  "_note": "목업 추출기용 가상 데이터. 실제 CoA 값이 아님",
+  "supplier": "Sample Lithium Co., Ltd.",
+  "lot_no": "LC-260920-01",
+  "test_date": "2026-09-20",
+  "origin": "China",
+  "applied_standard": "YS/T 582-2023 D1",
+  "items": [
+    {"raw_name": "Li2CO3", "normalized_name": "순도", "mapping_source": "dictionary", "raw_value": "99.62", "raw_spec": "≥99.5", "unit": "%", "confidence": 0.97, "bbox": {"page": 1, "x": 0.52, "y": 0.31, "w": 0.08, "h": 0.02}},
+    {"raw_name": "Na", "normalized_name": "Na", "mapping_source": "dictionary", "raw_value": "< 20", "raw_spec": "≤250", "unit": "ppm", "confidence": 0.91, "bbox": {"page": 1, "x": 0.52, "y": 0.34, "w": 0.08, "h": 0.02}},
+    {"raw_name": "Fe2O3", "normalized_name": "Fe", "mapping_source": "ai", "raw_value": "0.0003 %", "raw_spec": "=<0.001%", "unit": "%", "confidence": 0.74, "bbox": {"page": 1, "x": 0.52, "y": 0.37, "w": 0.08, "h": 0.02}},
+    {"raw_name": "H2O", "normalized_name": "수분", "mapping_source": "dictionary", "raw_value": "0.21", "raw_spec": "≤0.4", "unit": "%", "confidence": 0.95, "bbox": {"page": 1, "x": 0.52, "y": 0.40, "w": 0.08, "h": 0.02}},
+    {"raw_name": "Appearance", "normalized_name": "외관", "mapping_source": "dictionary", "raw_value": "White powder", "raw_spec": "White powder", "unit": null, "confidence": 0.93, "bbox": {"page": 1, "x": 0.52, "y": 0.43, "w": 0.15, "h": 0.02}}
+  ]
+}

@@ -1,0 +1,71 @@
+"""[담당: 장수민] documents 테이블 (명세 2.5, 2.6, 2.7).
+
+문서 상태의 기준은 이 테이블의 status 다. JSON 의 review_status 는 동기화용 사본.
+"""
+import uuid
+from datetime import date, datetime
+
+from sqlalchemy import BigInteger, Date, DateTime, ForeignKey, String, Text, func
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from app.core.enums import DocumentStatus, FinalDecision, LotRecommendation
+from app.db.base import Base, enum_check, str_enum
+from app.models.user import User
+
+
+def _uuid() -> str:
+    return str(uuid.uuid4())
+
+
+class Document(Base):
+    __tablename__ = "documents"
+    __table_args__ = (
+        enum_check("status", DocumentStatus),
+        enum_check("lot_recommendation", LotRecommendation),
+        enum_check("final_decision", FinalDecision),
+    )
+
+    # 명세에서 document_id 가 string 이라 UUID 문자열로 둔다
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+
+    # 파일
+    file_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    file_path: Mapped[str] = mapped_column(String(500), nullable=False)
+    file_size: Mapped[int] = mapped_column(BigInteger, nullable=False)       # 명세 4.5 응답용 (2.5 표에는 없음)
+    content_type: Mapped[str] = mapped_column(String(100), nullable=False)   # 4.7 원본 파일 응답용 (2.5 표에는 없음)
+
+    # 업로드 시 입력
+    material_code: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    supplier: Mapped[str | None] = mapped_column(String(200))
+    received_lot_no: Mapped[str | None] = mapped_column(String(100))
+
+    # 추출 결과에서 채움
+    material_name: Mapped[str | None] = mapped_column(String(100))
+    po_no: Mapped[str | None] = mapped_column(String(100))  # 시연용 목업
+    lot_no: Mapped[str | None] = mapped_column(String(100), index=True)
+    test_date: Mapped[date | None] = mapped_column(Date)
+    origin: Mapped[str | None] = mapped_column(String(100))
+    applied_standard: Mapped[str | None] = mapped_column(String(100))
+
+    # 상태와 판정
+    status: Mapped[DocumentStatus] = mapped_column(
+        str_enum(DocumentStatus, "document_status"), nullable=False, default=DocumentStatus.QUEUED, index=True
+    )
+    lot_recommendation: Mapped[LotRecommendation | None] = mapped_column(
+        str_enum(LotRecommendation, "lot_recommendation")
+    )
+    final_decision: Mapped[FinalDecision | None] = mapped_column(str_enum(FinalDecision, "final_decision"))
+    decision_reason: Mapped[str | None] = mapped_column(Text)
+    error_message: Mapped[str | None] = mapped_column(Text)
+
+    # 사람과 시각
+    uploaded_by: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    uploaded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    approved_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    uploader: Mapped[User] = relationship(foreign_keys=[uploaded_by])
+    approver: Mapped[User | None] = relationship(foreign_keys=[approved_by])
+    extraction: Mapped["ExtractionResult | None"] = relationship(  # noqa: F821
+        back_populates="document", uselist=False, cascade="all, delete-orphan"
+    )
