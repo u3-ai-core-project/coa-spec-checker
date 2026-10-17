@@ -89,11 +89,15 @@ export function CompleteDialog({ doc, extraction, pending, initialFollowUp, onCl
   const meta = DISPOSITION_META[disposition];
   const sentence = followUpSentence(summary.undetermined, summary.missing);
 
+  /** 확인 필요 항목이 남아 있으면 "승인"만 고를 수 없습니다. 조건부 승인, 불합격, 보류는 어떤 순서로든 바꿀 수 있습니다(완료는 막힘). */
+  const isChoiceBlocked = (candidate: Disposition) => blocked && candidate === 'accept';
+
   function choose(next: Disposition) {
-    if ((blocked && next !== 'hold') || isDispositionLocked(next, recommendation)) return;
+    if (isChoiceBlocked(next) || isDispositionLocked(next, recommendation)) return;
     setDisposition(next);
     // 사용자가 직접 쓰지 않은 사유는 제안 문구이므로, 처분을 바꾸면 그에 맞게 다시 채우거나 비웁니다.
-    if (!reasonTouched) setReason(next === 'reject' ? suggestRejectReason(extraction.items) : '');
+    // 확인 필요가 남은 동안에는 처음 열 때와 같게 비워 둡니다.
+    if (!reasonTouched) setReason(next === 'reject' && !blocked ? suggestRejectReason(extraction.items) : '');
   }
 
   async function submit() {
@@ -191,8 +195,8 @@ export function CompleteDialog({ doc, extraction, pending, initialFollowUp, onCl
                 type="button"
                 role="radio"
                 aria-checked={on}
-                aria-disabled={locked || (blocked && candidate !== 'hold')}
-                disabled={blocked && candidate !== 'hold'}
+                aria-disabled={locked || isChoiceBlocked(candidate)}
+                disabled={isChoiceBlocked(candidate)}
                 onClick={() => choose(candidate)}
                 className={`disp-card disp-card-${candidate} flex h-[58px] flex-col items-start justify-center gap-1 rounded-lg border px-3 text-left ${cardClass}`}
                 style={on ? { borderColor: candidateMeta.color, boxShadow: `0 0 0 1px ${candidateMeta.color}` } : undefined}
