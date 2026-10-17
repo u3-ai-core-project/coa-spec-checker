@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "coa-ai"
+version = "0.1.0"
+description = "CoA(시험성적서) PDF 추출 — U3 CoA 검수 시스템 AI 파트"
+requires-python = ">=3.11"
+dependencies = ["pymupdf>=1.24"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[tool.setuptools.packages.find]
+include = ["coa_ai*"]
+
+[tool.setuptools.package-data]
+coa_ai = ["vocab.json"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
