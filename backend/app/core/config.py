@@ -36,6 +36,24 @@ class Settings(BaseSettings):
         "Fe2O3": 0.6994,  # Fe
     }
 
+    # ---- 판정 정책 (v1.4안). 팀 결정에 따라 바꾸는 값. 자세한 설명은 app/services/judgement/policy.py ----
+    # 사유코드별 판정 덮어쓰기. 예) {"SPEC_COPIED": "check"}  (.env 에서는 JSON 문자열로)
+    # 비워 두면 API 명세 기준 기본값을 쓴다. 부적합·누락 코드는 바꿀 수 없다.
+    REASON_JUDGEMENT: dict[str, str] = {}
+    # 검출 안 됨: 검출한계 == 사내 상한일 때 적합으로 볼지 (True: 이하면 적합, False: 미만이어야 적합)
+    ND_LIMIT_INCLUSIVE: bool = True
+    # 사내 규격에 없는 항목 중 AI 가 항목명을 추정한 것: "reference"(참고, 판정 안 함) | "check"(확인 필요)
+    UNMAPPED_AI_ITEM: str = "reference"
+    # 켜 둘 교차 규칙 (여러 항목을 함께 보는 규칙). 사용 가능: heavy_metal_total
+    CROSS_RULES: list[str] = ["heavy_metal_total"]
+    # 중금속 총량 규칙에 쓰는 사내 표준 항목명 (규격 시드·매핑 사전의 normalized_name 과 같아야 함)
+    HEAVY_METAL_TOTAL_NAME: str = "중금속 총량"
+    HEAVY_METAL_TARGET_NAME: str = "Pb"
+
+    # 공급사 문의 초안 생성기 (v1.4안 4.22). "template" 이면 inquiry_draft.TemplateDrafter.
+    # AI 파트 모듈이 준비되면 followup_service.get_drafter() 에 이름을 등록하고 이 값을 바꾼다.
+    INQUIRY_DRAFTER: str = "template"
+
     CORS_ORIGINS: list[str] = ["http://localhost:5173", "http://localhost:3000"]
 
 

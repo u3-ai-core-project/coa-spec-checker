@@ -1,0 +1,19 @@
+material_code,raw_name,normalized_name
+LI2CO3,Li2CO3,순도
+LI2CO3,Assay,순도
+LI2CO3,Titration excess HCl,순도
+LI2CO3,Sodium (Na),Na
+LI2CO3,Na2O,Na
+LI2CO3,Potassium (K),K
+LI2CO3,Iron (Fe),Fe
+LI2CO3,Fe2O3,Fe
+LI2CO3,Calcium (Ca),Ca
+LI2CO3,CaO,Ca
+LI2CO3,Magnesium (Mg),Mg
+LI2CO3,Lead (Pb),Pb
+LI2CO3,Heavy metals (as Pb),중금속 총량
+LI2CO3,Chloride (Cl),염화물
+LI2CO3,Sulfur compounds (as SO4),황산염
+LI2CO3,Sulfate (SO4),황산염
+LI2CO3,Magnetic impurities,자성이물
+LI2CO3,Appearance,외관

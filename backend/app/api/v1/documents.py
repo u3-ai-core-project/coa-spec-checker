@@ -26,6 +26,7 @@ async def upload_document(
     material_code: str = Form(..., description="원자재 구분 (예: LI2CO3)"),
     supplier: str | None = Form(None, description="협력사명"),
     received_lot_no: str | None = Form(None, description="입고 로트번호 (확장)"),
+    spec_set_code: str | None = Form(None, description="사내 규격 세트 (v1.4안, 예: LI2CO3-D1-2023). 없으면 원자재 기본 세트"),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
@@ -38,6 +39,7 @@ async def upload_document(
         material_code=material_code,
         supplier=supplier,
         received_lot_no=received_lot_no,
+        spec_set_code=spec_set_code,
     )
     background_tasks.add_task(process_document, doc.id)
     return ok(DocumentUploadResponse(document_id=doc.id, file_name=doc.file_name, status=doc.status))

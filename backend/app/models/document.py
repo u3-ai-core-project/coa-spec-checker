@@ -47,6 +47,10 @@ class Document(Base):
     origin: Mapped[str | None] = mapped_column(String(100))
     applied_standard: Mapped[str | None] = mapped_column(String(100))
 
+    # 이 문서를 판정한 사내 규격 세트 (v1.4안). 업로드 때 정한다.
+    # 지정하지 않으면 원자재 기본 세트. 규격 세트가 바뀌어도 어떤 기준으로 판정했는지 남기기 위해 둔다.
+    spec_set_id: Mapped[int | None] = mapped_column(ForeignKey("spec_sets.id"), index=True)
+
     # 상태와 판정
     status: Mapped[DocumentStatus] = mapped_column(
         str_enum(DocumentStatus, "document_status"), nullable=False, default=DocumentStatus.QUEUED, index=True
@@ -66,6 +70,7 @@ class Document(Base):
 
     uploader: Mapped[User] = relationship(foreign_keys=[uploaded_by])
     approver: Mapped[User | None] = relationship(foreign_keys=[approved_by])
+    spec_set: Mapped["SpecSet | None"] = relationship()  # noqa: F821
     extraction: Mapped["ExtractionResult | None"] = relationship(  # noqa: F821
         back_populates="document", uselist=False, cascade="all, delete-orphan"
     )

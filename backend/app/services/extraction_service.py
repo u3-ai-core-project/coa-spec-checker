@@ -4,7 +4,7 @@ AI 추출 파트의 결과가 들어오는 입구는 save_extraction() 하나다
 """
 from sqlalchemy.orm import Session
 
-from app.core.enums import DocumentStatus
+from app.core.enums import DocumentStatus, status_to_review_status
 from app.models import Document, ExtractionResult as ExtractionResultRow
 from app.schemas.extraction import ExtractionInput, ExtractionResult
 from app.services import spec_service
@@ -22,7 +22,8 @@ def save_extraction(db: Session, document: Document, extraction: ExtractionInput
     if not extraction.items:
         raise EmptyExtractionError(MSG_NO_ITEMS)
 
-    specs = spec_service.get_rules(db, document.material_code)
+    spec_set = document.spec_set or spec_service.get_default_set(db, document.material_code)
+    specs = spec_service.get_rules(db, spec_set.id) if spec_set else []
     result = judge_document(extraction, document_id=document.id, specs=specs)
 
     # 업로드 때 입력한 협력사명이 있으면 그것을 우선한다
@@ -45,6 +46,12 @@ def save_extraction(db: Session, document: Document, extraction: ExtractionInput
 def mark_failed(document: Document, message: str) -> None:
     document.status = DocumentStatus.FAILED
     document.error_message = message
+
+
+def sync_review_status(document: Document) -> None:
+    """documents.status 가 바뀐 뒤 JSON 의 review_status 를 맞춘다 (명세 2.1: 기준은 documents.status)."""
+    if document.extraction is not None:
+        document.extraction.result["review_status"] = status_to_review_status(document.status).value
 
 
 def get_result(document: Document) -> ExtractionResult | None:

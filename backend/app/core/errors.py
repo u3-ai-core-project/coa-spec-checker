@@ -22,6 +22,7 @@ class ErrorCode(Enum):
     # (HTTP 상태, 기본 메시지)
     INVALID_FILE = (400, "지원하지 않는 파일 형식이거나 손상된 파일입니다")
     UNKNOWN_MATERIAL = (400, "등록되지 않은 원자재 구분입니다")
+    UNKNOWN_SPEC_SET = (400, "등록되지 않은 규격 세트입니다")  # 명세 외 추가 (v1.4안 규격 세트, 업로드 spec_set_code)
     UNKNOWN_ITEM_NAME = (400, "사내 규격에 없는 항목명입니다")
     REASON_REQUIRED = (400, "사유를 입력해야 합니다")
     INVALID_SPEC_RANGE = (400, "규격 하한이 상한보다 큽니다")

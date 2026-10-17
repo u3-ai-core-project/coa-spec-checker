@@ -57,16 +57,21 @@ def convert_unit(value: float, from_unit: str | None, to_unit: str | None) -> fl
 _SUBSCRIPTS = str.maketrans("₀₁₂₃₄₅₆₇₈₉", "0123456789")
 
 
-def oxide_factor(raw_name: str | None, factors: dict[str, float] | None = None) -> float:
-    """raw_name 에 Na2O, CaO, Fe2O3 같은 산화물 표기가 있으면 원소 환산 계수, 없으면 1."""
+def find_oxide(raw_name: str | None, factors: dict[str, float] | None = None) -> tuple[str | None, float]:
+    """raw_name 에 Na2O, CaO, Fe2O3 같은 산화물 표기가 있으면 (화학식, 원소 환산 계수), 없으면 (None, 1)."""
     if not raw_name:
-        return 1.0
+        return None, 1.0
     factors = settings.OXIDE_TO_ELEMENT if factors is None else factors
     name = raw_name.translate(_SUBSCRIPTS)
     for formula, factor in factors.items():
         if re.search(rf"(?<![A-Za-z0-9]){re.escape(formula)}(?![a-z0-9])", name):
-            return factor
-    return 1.0
+            return formula, factor
+    return None, 1.0
+
+
+def oxide_factor(raw_name: str | None, factors: dict[str, float] | None = None) -> float:
+    """원소 환산 계수만 필요할 때 (산화물 표기가 없으면 1)."""
+    return find_oxide(raw_name, factors)[1]
 
 
 # ---------------------------------------------------------------------------
@@ -78,6 +83,7 @@ class ParsedValue:
     value: float | str | None
     detection_limit: float | None = None
     error: str | None = None  # 해석 실패 사유. 있으면 판정은 check
+    oxide: str | None = None  # 산화물 환산을 했으면 원래 화학식 (예: "Na2O"). 부적합이면 CONVERTED_OOS 로 구분
 
 
 _ND = re.compile(
@@ -120,7 +126,7 @@ def parse_value(
         return ParsedValue(None, None, error="값 없음")
 
     s = _normalize_text(raw_value)
-    factor = oxide_factor(raw_name, oxide_factors)
+    oxide, factor = find_oxide(raw_name, oxide_factors)
 
     def to_target(num: float, value_unit: str | None) -> float:
         return _clean(convert_unit(num, value_unit or unit, target_unit) * factor)
@@ -131,7 +137,7 @@ def parse_value(
             rest = _ND.sub(" ", s)
             m = re.search(rf"(?P<num>{_NUM})\s*(?P<unit>{_UNIT})?", rest)
             dl = to_target(float(m["num"]), m["unit"]) if m else None
-            return ParsedValue(ValueQualifier.NOT_DETECTED, None, detection_limit=dl)
+            return ParsedValue(ValueQualifier.NOT_DETECTED, None, detection_limit=dl, oxide=oxide if dl else None)
 
         m = _VALUE.match(s)
         if m is None:
@@ -149,7 +155,7 @@ def parse_value(
             "<": ValueQualifier.LESS_THAN,
             "<=": ValueQualifier.LESS_EQUAL,
         }[op]
-        return ParsedValue(qualifier, value)
+        return ParsedValue(qualifier, value, oxide=oxide)
 
     except UnitConversionError as e:
         return ParsedValue(None, None, error=str(e))

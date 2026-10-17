@@ -69,6 +69,17 @@ alembic upgrade head
 ```
 이 절차를 건너뛰면 다른 팀원 로컬 DB에서 컬럼 누락으로 인한 500 에러가 발생합니다.
 
+**5-1. 시드 적재 (최초 1회, 여러 번 실행해도 됨)**
+```bash
+python -m seeds.seed
+```
+사용자 계정, 사내 규격 세트·항목, 항목명 매핑 사전을 넣습니다. 이미 있는 데이터는 건너뜁니다.
+- 규격 세트: `seeds/data/spec_sets.csv` (원자재 + 등급 + 버전, 원자재별 기본 세트 1개)
+- 규격 항목: `seeds/data/spec_items_*.csv` (원자재별로 파일을 나눠도 됨)
+- 매핑 사전: `seeds/data/item_mappings.csv`
+
+현재 탄산리튬 D1 값은 **임시값**입니다. 확정 규격 CSV를 받으면 파일만 바꾸면 됩니다.
+
 **6. 서버 실행**
 ```bash
 python -m uvicorn app.main:app --reload
@@ -77,3 +88,25 @@ python -m uvicorn app.main:app --reload
 **7. 확인**
 - Swagger UI: http://127.0.0.1:8000/docs
 - 헬스체크: http://127.0.0.1:8000/health
+
+
+### 판정 정책 설정 (v1.4안)
+
+판정 규칙 일부는 팀 결정에 따라 바뀌므로 `.env` 설정값으로 바꿀 수 있게 했습니다. 비워 두면 API 명세 기준 기본값입니다.
+규칙은 사유코드(`reason_code`)만 내고, 사유코드 → 판정(5종) 대응은 `app/services/judgement/policy.py`의 정책 표가 정합니다.
+
+| 설정 | 기본값 | 의미 |
+| --- | --- | --- |
+| `REASON_JUDGEMENT` | `{}` | 사유코드별 판정 덮어쓰기. 예: `{"SPEC_COPIED": "check"}`. 부적합·누락 코드는 바꿀 수 없음 |
+| `ND_LIMIT_INCLUSIVE` | `true` | 검출 안 됨: 검출한계 == 사내 상한이면 적합 |
+| `UNMAPPED_AI_ITEM` | `reference` | 사내 규격에 없는 AI 추정 항목명: `reference`(참고) / `check`(확인 필요) |
+| `CROSS_RULES` | `["heavy_metal_total"]` | 켤 교차 규칙. 중금속 총량 → Pb 판정 |
+
+잘못된 값을 넣으면 서버가 시작할 때 오류로 알려 줍니다. 정책을 바꾸면 이후 판정부터 적용됩니다.
+
+판정 관련 파일 (`app/services/judgement/`)
+- `item_judge.py`: 항목 1개 판정 (사유코드 → 판정, 해결 조건)
+- `policy.py`: 판정 정책
+- `resolutions.py`: 사유코드별 해결 조건 문구·수치
+- `cross_rules.py`: 여러 항목을 함께 보는 규칙 (중금속 총량 → Pb). Na+K 합산은 자리만 있음
+- `engine.py`: 문서 1건 전체 판정 (DB 없이 호출 가능 → 평가 스크립트에서 바로 사용 가능)

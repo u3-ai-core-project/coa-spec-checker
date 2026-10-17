@@ -7,10 +7,14 @@
 AI 파트에는 ExtractionInput 과 ExtractedItem 만 맞추면 된다고 전달한다.
 """
 from datetime import date
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.core.enums import Judgement, LotRecommendation, MappingSource, ReviewStatus, ValueQualifier
+from app.core.enums import (
+    DocumentIssueCode, Judgement, LotRecommendation, MappingSource, ReasonCode, ResolutionType, ReviewStatus,
+    ValueQualifier, ValueSource,
+)
 
 
 class BBox(BaseModel):
@@ -56,6 +60,29 @@ class ExtractionInput(BaseModel):
 # ---------------------------------------------------------------------------
 # 서버가 판정까지 채운 전체 결과 (JSONB 저장, API 응답)
 # ---------------------------------------------------------------------------
+class Resolution(BaseModel):
+    """해결 조건 (명세 v1.4안 2.1). 예외 항목(fail, undetermined, missing, check)에만 붙는다.
+
+    condition 은 화면·리포트·문의 초안에 쓰는 문구이고, operator·threshold·unit 은 서버가
+    회신값이 조건을 만족하는지 비교할 때 쓰는 값이다 (비교할 수치가 없는 조건이면 null).
+    예) Fe "none detected", 사내 상한 5 ppm
+        {"type": "detection_limit", "condition": "검출한계 ≤ 5 ppm",
+         "target_item": "Fe", "operator": "<=", "threshold": 5, "unit": "ppm"}
+    """
+    type: ResolutionType
+    condition: str
+    target_item: str | None = None  # 값을 받아야 하는 항목 (예: 중금속 총량 → "Pb"). 보통은 이 항목 자신
+    operator: Literal["<", "<=", ">="] | None = None
+    threshold: float | None = None
+    unit: str | None = None
+
+
+class DocumentIssue(BaseModel):
+    """문서 정합성 오류 (명세 v1.4안 2.1). 1개 이상이면 fail 이 없어도 보류 권고 (v1.4안 2.4)."""
+    code: DocumentIssueCode
+    message: str
+
+
 class ExtractionItem(ExtractedItem):
     """항목 1개의 전체 필드. AI 필드 + 서버(규칙) 필드."""
     item_id: str
@@ -67,6 +94,13 @@ class ExtractionItem(ExtractedItem):
     judgement: Judgement
     judgement_reason: str | None = None
     deviation: float | None = None
+    reason_code: ReasonCode | None = None    # v1.4안. 적합이면 null
+    resolution: Resolution | None = None     # v1.4안. 적합이면 null
+    # ---- 검수 상태 (서버 작성, 명세 외 추가) ----
+    # 다시 판정할 때(항목명 수정, 규격 재판정, 교차 규칙) 담당자가 확인·입력한 내용을 잃지 않도록 항목에 남긴다.
+    # 대시보드 "사람 확인 항목 수"(v1.4안 reviewed_item_ratio)도 reviewed 로 셀 수 있다.
+    reviewed: bool = False                   # 담당자가 확인(confirm)하거나 값을 입력함
+    value_source: ValueSource | None = None  # 담당자가 값을 입력했으면 그 출처. 원문 값을 쓰는 중이면 null
 
 
 class Summary(BaseModel):
@@ -87,6 +121,7 @@ class ExtractionResult(BaseModel):
     origin: str | None = None
     applied_standard: str | None = None
     items: list[ExtractionItem]
+    document_issues: list[DocumentIssue] = []  # v1.4안. 탐지 규칙은 P1 (지금은 항상 빈 목록)
     lot_recommendation: LotRecommendation
     summary: Summary
     review_status: ReviewStatus = ReviewStatus.PENDING

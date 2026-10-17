@@ -43,6 +43,7 @@ def create_document(
     material_code: str,
     supplier: str | None,
     received_lot_no: str | None,
+    spec_set_code: str | None = None,
 ) -> Document:
     """파일을 검증·저장하고 queued 상태로 등록한다. commit 까지 한다."""
     if not content:
@@ -52,9 +53,8 @@ def create_document(
     content_type = detect_content_type(file_name, content[:16])
 
     material_code = material_code.strip()
-    if not spec_service.material_exists(db, material_code):
-        raise AppException(ErrorCode.UNKNOWN_MATERIAL)
-    material_name, _ = spec_service.get_material_info(db, material_code)
+    # 판정에 쓸 규격 세트를 업로드 시점에 정해 문서에 남긴다 (지정 없으면 원자재 기본 세트)
+    spec_set = spec_service.resolve_spec_set(db, material_code, (spec_set_code or "").strip() or None)
 
     doc = Document(
         file_name=file_name,
@@ -62,7 +62,8 @@ def create_document(
         file_size=len(content),
         content_type=content_type,
         material_code=material_code,
-        material_name=material_name,
+        material_name=spec_set.material_name,
+        spec_set_id=spec_set.id,
         supplier=(supplier or "").strip() or None,
         received_lot_no=(received_lot_no or "").strip() or None,
         status=DocumentStatus.QUEUED,
@@ -92,7 +93,8 @@ def create_document(
 def get_document(db: Session, document_id: str) -> Document:
     doc = db.get(
         Document, document_id,
-        options=[joinedload(Document.uploader), joinedload(Document.approver), joinedload(Document.extraction)],
+        options=[joinedload(Document.uploader), joinedload(Document.approver), joinedload(Document.extraction),
+                 joinedload(Document.spec_set)],
     )
     if doc is None:
         raise AppException(ErrorCode.DOCUMENT_NOT_FOUND)
@@ -133,7 +135,8 @@ def to_list_item(doc: Document) -> DocumentListItem:
 
 
 def to_detail(db: Session, doc: Document) -> DocumentDetail:
-    _, grade = spec_service.get_material_info(db, doc.material_code)
+    # 세트가 연결되지 않은 옛 문서는 원자재 기본 세트 정보를 보여준다
+    spec_set = doc.spec_set or spec_service.get_default_set(db, doc.material_code)
     return DocumentDetail(
         document_id=doc.id,
         file_name=doc.file_name,
@@ -146,7 +149,9 @@ def to_detail(db: Session, doc: Document) -> DocumentDetail:
         test_date=doc.test_date,
         origin=doc.origin,
         applied_standard=doc.applied_standard,
-        spec_grade=grade,
+        spec_grade=spec_set.grade if spec_set else None,
+        spec_set_code=spec_set.code if spec_set else None,
+        spec_version=spec_set.version if spec_set else None,
         status=doc.status,
         lot_recommendation=doc.lot_recommendation,
         final_decision=doc.final_decision,

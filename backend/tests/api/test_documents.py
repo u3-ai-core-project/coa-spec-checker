@@ -5,7 +5,7 @@ import pytest
 
 from app.core.config import settings
 from app.core.enums import SpecType
-from app.models import Document, SpecItem
+from app.models import Document, SpecItem, SpecSet
 
 PDF = b"%PDF-1.7\n%test\n" + b"0" * 100
 PNG = b"\x89PNG\r\n\x1a\n" + b"0" * 100
@@ -13,22 +13,20 @@ PNG = b"\x89PNG\r\n\x1a\n" + b"0" * 100
 
 @pytest.fixture
 def specs(db):
-    """탄산리튬 테스트용 규격 (실제 사내 규격 아님)."""
-    rows = [
-        SpecItem(material_code="LI2CO3", material_name="탄산리튬", item_name="순도", unit="%", lsl=99.5,
-                 spec_type=SpecType.QUANTITATIVE, grade="D1", source="test"),
-        SpecItem(material_code="LI2CO3", material_name="탄산리튬", item_name="Na", unit="ppm", usl=250,
-                 spec_type=SpecType.QUANTITATIVE, grade="D1", source="test"),
-        SpecItem(material_code="LI2CO3", material_name="탄산리튬", item_name="Fe", unit="ppm", usl=10,
-                 spec_type=SpecType.QUANTITATIVE, grade="D1", source="test"),
-        SpecItem(material_code="LI2CO3", material_name="탄산리튬", item_name="수분", unit="%", lsl=0, usl=0.4,
-                 spec_type=SpecType.QUANTITATIVE, grade="D1", source="test"),
-        SpecItem(material_code="LI2CO3", material_name="탄산리튬", item_name="Ca", unit="ppm", usl=50,
-                 spec_type=SpecType.QUANTITATIVE, grade="D1", source="test"),
+    """탄산리튬 테스트용 규격 세트 (실제 사내 규격 아님). 기본 세트 1개."""
+    spec_set = SpecSet(code="LI2CO3-TEST", material_code="LI2CO3", material_name="탄산리튬",
+                       grade="D1", version="test", is_default=True)
+    q = SpecType.QUANTITATIVE
+    spec_set.items = [
+        SpecItem(item_name="순도", unit="%", lsl=99.5, spec_type=q, source="test"),
+        SpecItem(item_name="Na", unit="ppm", usl=250, spec_type=q, source="test"),
+        SpecItem(item_name="Fe", unit="ppm", usl=10, spec_type=q, source="test"),
+        SpecItem(item_name="수분", unit="%", lsl=0, usl=0.4, spec_type=q, source="test"),
+        SpecItem(item_name="Ca", unit="ppm", usl=50, spec_type=q, source="test"),
     ]
-    db.add_all(rows)
+    db.add(spec_set)
     db.commit()
-    return rows
+    return spec_set.items
 
 
 def upload(client, content=PDF, name="coa.pdf", material_code="LI2CO3", **form):
@@ -99,6 +97,59 @@ def test_uploaded_file_saved_with_document_id(auth_client, specs, db):
     doc_id = upload(auth_client, name="한글 이름.pdf").json()["data"]["document_id"]
     doc = db.get(Document, doc_id)
     assert doc.file_path.endswith(f"{doc_id}.pdf") and doc.file_name == "한글 이름.pdf"
+
+
+# ---- 규격 세트 선택 (v1.4안) -------------------------------------------------
+@pytest.fixture
+def d3_set(db, specs):
+    """같은 원자재의 두 번째 세트 (Na 상한만 다름). 기본 세트가 아니다."""
+    spec_set = SpecSet(code="LI2CO3-D3-TEST", material_code="LI2CO3", material_name="탄산리튬",
+                       grade="D3", version="test-2006", is_default=False)
+    spec_set.items = [SpecItem(item_name="Na", unit="ppm", usl=10, spec_type=SpecType.QUANTITATIVE)]
+    db.add(spec_set)
+    db.commit()
+    return spec_set
+
+
+def test_upload_uses_default_spec_set(auth_client, specs, d3_set, db):
+    doc_id = upload(auth_client).json()["data"]["document_id"]
+    d = auth_client.get(f"/api/v1/documents/{doc_id}").json()["data"]
+    assert (d["spec_set_code"], d["spec_grade"], d["spec_version"]) == ("LI2CO3-TEST", "D1", "test")
+
+
+def test_upload_with_spec_set_code_judges_with_that_set(auth_client, specs, d3_set, db):
+    doc_id = upload(auth_client, spec_set_code="LI2CO3-D3-TEST").json()["data"]["document_id"]
+    d = auth_client.get(f"/api/v1/documents/{doc_id}").json()["data"]
+    assert (d["spec_set_code"], d["spec_grade"]) == ("LI2CO3-D3-TEST", "D3")
+    doc = db.get(Document, doc_id)
+    db.refresh(doc)
+    names = {i["normalized_name"]: i for i in doc.extraction.result["items"]}
+    # 목업 Na "< 20" → D3 세트 상한 10 보다 큼 → 판정 불가, 그 세트에 없는 순도·Ca 는 판정 대상 아님
+    assert (names["Na"]["judgement"], names["Na"]["reason_code"]) == ("undetermined", "BOUND_ABOVE_LIMIT")
+    assert names["Na"]["resolution"]["threshold"] == 10
+    assert "Ca" not in names and names["순도"]["judgement_reason"] == "규격 없음"
+
+
+@pytest.mark.parametrize("code", ["NOPE", "LIOH-OTHER"])
+def test_upload_unknown_spec_set(auth_client, specs, db, code):
+    if code == "LIOH-OTHER":  # 다른 원자재의 세트를 지정한 경우
+        db.add(SpecSet(code=code, material_code="LIOH", material_name="수산화리튬", is_default=True))
+        db.commit()
+    r = upload(auth_client, spec_set_code=code)
+    assert r.status_code == 400 and r.json()["error"]["code"] == "UNKNOWN_SPEC_SET"
+
+
+def test_result_has_reason_codes_and_resolutions(auth_client, specs, db):
+    doc_id = upload(auth_client).json()["data"]["document_id"]
+    doc = db.get(Document, doc_id)
+    db.refresh(doc)
+    result = doc.extraction.result
+    by_name = {i["normalized_name"]: i for i in result["items"]}
+    assert by_name["Fe"]["reason_code"] == "LOW_CONFIDENCE"           # 목업 confidence 0.74
+    assert by_name["Ca"]["reason_code"] == "MISSING_REQUIRED"
+    assert by_name["Ca"]["resolution"]["type"] == "internal_test"
+    assert by_name["순도"]["reason_code"] is None and by_name["순도"]["resolution"] is None
+    assert result["document_issues"] == []
 
 
 # ---- 추출 실패 → failed ----------------------------------------------------
