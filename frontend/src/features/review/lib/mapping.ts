@@ -27,7 +27,7 @@ const ELEMENT_KO: Record<string, string> = { Pb: '납', As: '비소', Cd: '카�
  * 원문 표기가 "(as Pb)"처럼 환산 기준이 붙은 합계 표기일 때 매핑 수정에서 보여 주는 안내 문구(시안 2-9).
  * 규격에 "총량" 항목이 있으면 그 항목으로 매핑하라고 안내합니다. 해당 표기가 아니면 null입니다.
  */
-export function mappingHint(rawName: string | null, specs: SpecItem[]): string | null {
+export function mappingHint(rawName: string | null, specs: ReadonlyArray<Pick<SpecItem, 'item_name'>>): string | null {
   const element = asElementOf(rawName);
   if (!element) return null;
   const korean = ELEMENT_KO[element];

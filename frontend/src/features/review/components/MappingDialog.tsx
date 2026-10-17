@@ -5,7 +5,8 @@ import type { DocumentDetail, ExtractionItem, SpecItem } from '../shared/api/typ
 import { Chem } from '../shared/components/Chem';
 import { Icon } from '../shared/components/Icon';
 import { AiMappingBadge } from '../shared/components/badges';
-import { filterSpecOptions, mappingHint } from '../lib/mapping';
+import { mappingHint } from '../lib/mapping';
+import { buildMappingOptions, EXTRA_MAPPING_OPTIONS } from '../lib/mappingOptions';
 import { Modal } from './Modal';
 
 interface MappingDialogProps {
@@ -31,8 +32,8 @@ export function MappingDialog({ doc, item, specs, page, onClose, onDone, onStale
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const options = useMemo(() => filterSpecOptions(specs, query), [specs, query]);
-  const hint = mappingHint(item.raw_name, specs);
+  const options = useMemo(() => buildMappingOptions(specs, query), [specs, query]);
+  const hint = mappingHint(item.raw_name, [...specs, ...EXTRA_MAPPING_OPTIONS.map((option) => ({ item_name: option.name }))]);
   const canApply = selected !== null && selected !== item.normalized_name && !busy;
 
   async function apply() {
@@ -98,16 +99,16 @@ export function MappingDialog({ doc, item, specs, page, onClose, onDone, onStale
           />
         </div>
         <ul className="map-options flex max-h-[200px] flex-col gap-1.5 overflow-y-auto" role="radiogroup" aria-label="표준 항목">
-          {options.map((spec) => {
-            const on = selected === spec.item_name;
-            const current = spec.item_name === item.normalized_name;
+          {options.map((option) => {
+            const on = selected === option.name;
+            const current = option.name === item.normalized_name;
             return (
-              <li key={spec.id}>
+              <li key={option.name}>
                 <button
                   type="button"
                   role="radio"
                   aria-checked={on}
-                  onClick={() => setSelected(spec.item_name)}
+                  onClick={() => setSelected(option.name)}
                   className={`map-option flex w-full items-center gap-2.5 rounded-lg border px-3 py-2 text-left text-[13px] ${
                     on ? 'border-[#2B4FCB] bg-[#F3F6FE]' : 'border-[#E3E5E8] bg-white'
                   }`}
@@ -119,8 +120,8 @@ export function MappingDialog({ doc, item, specs, page, onClose, onDone, onStale
                   ) : (
                     <span className="h-4 w-4 rounded-full border-2 border-[#B6BBC4]" />
                   )}
-                  <span className="font-semibold">{spec.item_name}</span>
-                  <span className="text-[#8A9099]">{spec.unit}</span>
+                  <span className="font-semibold">{option.name}</span>
+                  <span className="text-[#8A9099]">{option.note}</span>
                   {current && (
                     <span className="rounded bg-[#F0ECFA] px-1 text-[10px] font-semibold text-[#6B4FBB]">현재 매핑</span>
                   )}
