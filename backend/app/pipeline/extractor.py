@@ -26,4 +26,8 @@ def get_extractor() -> Extractor:
         from app.pipeline.mock_extractor import MockExtractor
 
         return MockExtractor(Path(settings.MOCK_EXTRACTION_DIR))
+    if settings.EXTRACTOR == "ai":
+        from app.pipeline.ai_extractor import AIExtractor  # ai/ 패키지(coa_ai)가 설치돼 있어야 한다
+
+        return AIExtractor()
     raise ValueError(f"알 수 없는 EXTRACTOR 설정: {settings.EXTRACTOR}")
