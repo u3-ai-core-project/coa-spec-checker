@@ -89,6 +89,17 @@ python -m uvicorn app.main:app --reload
 - Swagger UI: http://127.0.0.1:8000/docs
 - 헬스체크: http://127.0.0.1:8000/health
 
+**8. AI 추출기 연결 (선택)**
+
+기본값은 목업 추출기(`EXTRACTOR=mock`)로, `app/pipeline/mock_data`의 JSON을 추출 결과로 씁니다. 실제 CoA PDF를 읽으려면 같은 가상환경에 AI 패키지를 설치하고 `.env`에 `EXTRACTOR=ai`를 넣습니다.
+```bash
+pip install -e ../ai
+```
+```
+EXTRACTOR=ai
+```
+- 현재 글자가 있는 PDF만 읽습니다. 이미지·스캔본은 "이미지·스캔본 추출은 아직 지원하지 않습니다"로 실패합니다.
+- AI 패키지 설명과 표준 항목명 표는 `ai/README.md`에 있습니다.
 
 ### 판정 정책 설정 (v1.4안)
 
