@@ -148,11 +148,12 @@ function makeItem(def: ItemDef, specs: SpecItem[], resolved = false): Extraction
   return judged;
 }
 
-function makeMissing(id: string, name: string, specs: SpecItem[]): ExtractionItem {
+/** 누락 항목. 시안은 "원문:" 자리에 사전의 영문 표기(황산염 → Sulfate)를 보여 주므로 목업에서는 rawName으로 채웁니다. */
+function makeMissing(id: string, name: string, specs: SpecItem[], rawName: string | null = null): ExtractionItem {
   const specItem = specs.find((entry) => entry.item_name === name);
   return {
     item_id: id,
-    raw_name: null,
+    raw_name: rawName,
     normalized_name: name,
     mapping_source: 'spec',
     raw_value: null,
@@ -187,7 +188,7 @@ function itemsA(specs: SpecItem[]): ExtractionItem[] {
     makeItem(FE, specs),
     makeItem(CA, specs),
     makeItem(CL, specs),
-    makeMissing('so4', '황산염', specs),
+    makeMissing('so4', '황산염', specs, 'Sulfate'),
   ];
 }
 
@@ -201,7 +202,7 @@ function itemsAnomaly(specs: SpecItem[]): ExtractionItem[] {
     makeItem(fe, specs),
     makeItem(CA, specs),
     makeItem(CL, specs),
-    makeMissing('so4', '황산염', specs),
+    makeMissing('so4', '황산염', specs, 'Sulfate'),
   ];
 }
 
@@ -251,7 +252,7 @@ function itemsC(specs: SpecItem[]): ExtractionItem[] {
     makeItem(FE, specs, true),
     makeItem(CA, specs),
     makeItem(CL, specs),
-    makeMissing('so4', '황산염', specs),
+    makeMissing('so4', '황산염', specs, 'Sulfate'),
   ];
 }
 
