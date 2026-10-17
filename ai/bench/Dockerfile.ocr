@@ -1,0 +1,23 @@
+# [담당: 고도영] OCR 엔진을 Docker CPU 에서 돌리는 이미지. ai/ 폴더를 빌드 컨텍스트로 쓴다.
+#   docker build -f bench/Dockerfile.ocr --build-arg ENGINE=rapidocr -t coa-bench-rapidocr .
+#   ENGINE: rapidocr | paddleocr | easyocr | tesseract
+FROM python:3.12-slim
+# PaddlePaddle 은 리눅스 arm64 휠이 없어 Apple Silicon 에서는 --platform linux/amd64 (에뮬레이션)로만 빌드된다
+ARG ENGINE=rapidocr
+WORKDIR /ai
+RUN apt-get update && case "$ENGINE" in \
+      tesseract) apt-get install -y --no-install-recommends tesseract-ocr tesseract-ocr-kor tesseract-ocr-chi-sim ;; \
+      paddleocr|easyocr) apt-get install -y --no-install-recommends libgl1 libglib2.0-0 libgomp1 ;; \
+    esac && rm -rf /var/lib/apt/lists/*
+COPY pyproject.toml ./
+COPY coa_ai ./coa_ai
+RUN pip install --no-cache-dir . pillow psutil requests && case "$ENGINE" in \
+      rapidocr) pip install --no-cache-dir rapidocr==3.10.0 onnxruntime==1.31.0 ;; \
+      tesseract) pip install --no-cache-dir pytesseract==0.3.13 ;; \
+      paddleocr) pip install --no-cache-dir paddlepaddle==3.3.1 paddleocr==3.7.0 ;; \
+      easyocr) pip install --no-cache-dir easyocr==1.7.2 ;; \
+    esac
+COPY bench ./bench
+# 모델 파일을 이미지에 미리 받아 둔다 (실행 중 다운로드 시간이 측정에 섞이지 않게)
+RUN python -c "import sys; sys.path.insert(0, 'bench'); import engines as e; \
+{'rapidocr': e.RapidOcrEngine, 'paddleocr': e.PaddleOcrEngine, 'easyocr': e.EasyOcrEngine, 'tesseract': e.TesseractEngine}['$ENGINE']()"
