@@ -33,6 +33,7 @@
 - VLM JSON 틀에는 `method`(시험법) 칸을 넣었다. 없으면 시험법 열을 결과로 읽는 일이 있었다. 채점에는 쓰지 않는다.
 - RapidOCR·PaddleOCR: 검출 상자를 글줄 높이의 10% 줄이고 글줄 방향 분류를 끈다 (`engines.RapidOcrEngine` 설명). 이 두 값은 이번 샘플을 보고 정했으므로 기본 설정 결과도 같이 싣는다.
 - RapidOCR 스레드는 4개로 둔다. 기본값(코어 수)은 M4·Docker 에서 2~3배 느렸다.
+- RapidOCR 에 PaddleOCR 원본과 같은 모델(PP-OCRv6 medium 검출·인식의 ONNX 판, `--model medium`)과 같은 검출 설정(`--paddle-params`, `engines.RapidOcrEngine.PADDLE_PARAMS`)을 넣은 결과도 싣는다. 아래 'PaddleOCR 모델의 ONNX 판' 참고.
 
 ## 실행
 
@@ -44,6 +45,7 @@ bench/.venv/bin/python bench/samples.py      # 이미지 152장 + 정답
 bench/.venv/bin/python bench/run.py rapidocr # 엔진별 실행 (중간에 멈추면 이어서 돈다)
 bench/.venv/bin/python bench/score.py        # 결과표
 bash bench/docker_cpu.sh rapidocr            # Docker CPU 시간·메모리 (가상 3장 원본)
+bench/.venv/bin/python bench/run.py rapidocr --model medium --paddle-params --tag medium-pdet   # PaddleOCR 모델의 ONNX 판
 ```
 
 모델 파일은 `~/.cache/coa-bench/models` 에 둔다 (`COA_BENCH_MODELS` 로 바꿀 수 있음).
@@ -59,6 +61,8 @@ bash bench/docker_cpu.sh rapidocr            # Docker CPU 시간·메모리 (가
 | --- | --- | --- | --- | --- | --- | --- |
 | RapidOCR (PP-OCR ONNX) | 91.2% | 90.6% | 99.5% | 3초 | 0.6GB | O |
 | RapidOCR 기본 설정 | 79.6% | 77.7% | 99.5% | 3초 | 0.6GB | O |
+| RapidOCR + PP-OCRv6 medium | 93.9% | 91.0% | 100.0% | 19초 | 1.2GB | O |
+| RapidOCR + PP-OCRv6 medium + PaddleOCR 검출 설정 | 96.4% | 95.8% | 100.0% | 30초 | 1.8GB | O |
 | PaddleOCR | 96.4% | 95.8% | 100.0% | 157초 (x86 에뮬레이션) | 3.1GB | △ arm64 휠 없음, x86 만 |
 | EasyOCR | 57.8% | 39.5% | 69.1% | 33초 | 3.8GB | O |
 | Tesseract | 68.3% | 65.0% | 90.7% | 2초 | 0.2GB | O |
@@ -71,6 +75,25 @@ bash bench/docker_cpu.sh rapidocr            # Docker CPU 시간·메모리 (가
 
 - 처리 시간: Docker(맥 M4, 리눅스 arm64, 스레드 4개)에서 가상 CoA 원본으로 잰 값. 장당 2분이 넘는 모델은 1장, 나머지는 3장의 중앙값이다. 다른 작업이 없을 때 쟀다.
 - RapidOCR 기본 설정의 시간·메모리는 같은 엔진 값이다.
+
+### PaddleOCR 모델의 ONNX 판
+
+PaddleOCR 3.7 은 PP-OCRv6 medium 검출·인식 모델을 쓰고, RapidOCR 은 같은 모델의 ONNX 판을 내려받아 쓸 수 있다 (`multi_PP-OCRv6_{det,rec}_medium.onnx`).
+
+- 모델만 바꾸면 93.9% 였다. 남은 차이는 가상 B 저해상도·흐림(1/17)과 가상 D 저해상도 값(5/20)이다. 글자는 바르게 읽었지만, 검출 상자가 PaddleOCR 보다 커서 '번호' 열의 `1` 과 항목명 `外观 Appearance` 가 한 구로 붙었다.
+- 원인은 두 엔진의 검출 설정 차이다 (PaddleOCR: `paddlex/configs/pipelines/OCR.yaml`).
+
+  | 설정 | PaddleOCR 3.7 | RapidOCR 3.10 기본 |
+  | --- | --- | --- |
+  | 이미지 긴 변 상한 | 4000 | 2000 |
+  | 정규화 | ImageNet 평균·표준편차 | 0.5 / 0.5 |
+  | 상자 팽창(dilation) | 끔 | 켬 |
+  | box_thresh / unclip_ratio | 0.6 / 1.5 | 0.5 / 1.6 |
+  | 인식 점수 하한 | 0.0 | 0.5 |
+
+- 이 값을 PaddleOCR 과 같게 맞추면 47장 모두 문서별 점수가 PaddleOCR 원본과 하나도 다르지 않다 (96.4 / 95.8 / 100).
+- Docker 에서는 PaddleOCR 원본보다 가볍다: 장당 30초, 1.8GB, `pip install rapidocr onnxruntime` 만으로 설치되고 arm64·x86 모두 그대로 돈다. PaddleOCR 원본은 리눅스 arm64 휠이 없어 이 맥에서는 x86 에뮬레이션(157초)으로만 돈다.
+- small 모델(3초)보다 10배 느린 것은 모델 크기와 원본 해상도 처리 때문이다.
 
 ### 오류 유형
 
@@ -85,7 +108,7 @@ bash bench/docker_cpu.sh rapidocr            # Docker CPU 시간·메모리 (가
 ### 결론 (제안)
 
 1. 스캔본 경로는 'OCR + 기존 표 복원 규칙'으로 간다. VLM 이 표를 직접 JSON 으로 내는 방식은 숫자·부등호를 바꾸는 오류가 있어 원문 그대로 전달 원칙과 맞지 않는다.
-2. Docker CPU 기본 엔진은 RapidOCR (3초/장, 0.6GB, pip 만으로 설치). 정확도 차이(91% 대 PaddleOCR 96%)는 같은 PP-OCR 계열의 server 모델을 RapidOCR(ONNX)로 돌려 줄여 본다 (다음 단계).
+2. Docker CPU 기본 엔진은 RapidOCR + PP-OCRv6 medium(ONNX) + PaddleOCR 검출 설정. PaddleOCR 원본과 정확도가 같고(96.4%), 장당 30초·1.8GB 에 pip 만으로 설치된다. 처리 시간이 더 중요하면 RapidOCR small(3초, 91.2%)로 바꿀 수 있다.
 3. 한글 문서는 한국어 인식 모델로 보내는 단계를 넣는다 (첫 OCR 결과의 한글 비율 등으로 판단).
 4. GPU 가 있으면 Surya 2 가 가장 정확하다 (99.4%). CPU 에서는 장당 8분이라 데모 로트를 미리 처리해 두는 용도 정도다. 가중치는 수정 OpenRAIL-M (연구·개인·매출 500만 달러 미만 무료).
 
@@ -96,3 +119,4 @@ bash bench/docker_cpu.sh rapidocr            # Docker CPU 시간·메모리 (가
 - RapidOCR·PaddleOCR 의 상자 축소(10%)·방향 분류 끄기, Tesseract 의 줄 높이 보정, Surya·PaddleOCR-VL 의 HTML/OTSL → Page 변환은 이번 샘플을 보며 맞췄다. Surya·PaddleOCR-VL 은 변환 코드를 고친 뒤 저장해 둔 모델 원출력으로 다시 채점했다 (`rescore.py`).
 - VLM 지시문은 하나로 고정했다. 모델별로 지시문을 다듬으면 달라질 수 있다.
 - Docker 시간은 맥 arm64 기준이다. 팀 PC(x86)에서는 다를 수 있고, PaddleOCR 은 이 맥에서 x86 에뮬레이션으로만 돈다.
+- RapidOCR 의 PaddleOCR 검출 설정 효과는 47장(1단계)에서만 확인했다. 열화 샘플 152장 전체는 2단계 결과표에서 다시 본다.

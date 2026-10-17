@@ -11,6 +11,8 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import signal
+import sys
 import threading
 import time
 import traceback
@@ -59,7 +61,12 @@ def main() -> None:
     ap.add_argument("--no-schema", action="store_true", help="JSON 스키마 제약 없이 생성")
     ap.add_argument("--shrink", type=float, default=0.1, help="OCR 검출 상자 축소 비율 (OCR 엔진 전용)")
     ap.add_argument("--use-cls", action="store_true", help="OCR 글줄 방향 분류 켜기 (OCR 엔진 전용)")
+    ap.add_argument("--model", default="small", choices=["small", "medium"], help="RapidOCR PP-OCRv6 모델 크기")
+    ap.add_argument("--paddle-params", action="store_true", help="RapidOCR 검출 설정을 PaddleOCR 원본과 같게")
     args = ap.parse_args()
+    # kill(TERM)·셸 종료로 끊겨도 finally 에서 llama-server 를 끈다 (남으면 다음 실행이 그 서버에 붙는다)
+    for sig in (signal.SIGTERM, signal.SIGHUP):
+        signal.signal(sig, lambda *_, s=sig: sys.exit(128 + s))
 
     manifest = json.loads((OUT / "manifest.json").read_text())
     levels = args.levels.split(",")
@@ -79,7 +86,8 @@ def main() -> None:
 
     pid = os.getpid()
     if args.engine == "rapidocr":
-        engine = eng.RapidOcrEngine(shrink=args.shrink, use_cls=args.use_cls)
+        engine = eng.RapidOcrEngine(shrink=args.shrink, use_cls=args.use_cls, model=args.model,
+                                     paddle_params=args.paddle_params)
     elif args.engine == "paddleocr":
         engine = eng.PaddleOcrEngine(shrink=args.shrink)
     elif args.engine == "easyocr":

@@ -20,4 +20,5 @@ RUN pip install --no-cache-dir . pillow psutil requests && case "$ENGINE" in \
 COPY bench ./bench
 # 모델 파일을 이미지에 미리 받아 둔다 (실행 중 다운로드 시간이 측정에 섞이지 않게)
 RUN python -c "import sys; sys.path.insert(0, 'bench'); import engines as e; \
-{'rapidocr': e.RapidOcrEngine, 'paddleocr': e.PaddleOcrEngine, 'easyocr': e.EasyOcrEngine, 'tesseract': e.TesseractEngine}['$ENGINE']()"
+{'rapidocr': e.RapidOcrEngine, 'paddleocr': e.PaddleOcrEngine, 'easyocr': e.EasyOcrEngine, 'tesseract': e.TesseractEngine}['$ENGINE'](); \
+'$ENGINE' == 'rapidocr' and e.RapidOcrEngine(model='medium')"

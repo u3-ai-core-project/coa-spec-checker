@@ -2,6 +2,8 @@
 # [담당: 고도영] Docker CPU 에서 엔진별 처리 시간·최대 메모리를 잰다 (가상 CoA 원본만, CPU 는 느리므로).
 #   bash bench/docker_cpu.sh <엔진>            # 가상 3장
 #   DOCS=COA_A_0007 bash bench/docker_cpu.sh qwen3.5-2b   # 1장만 (장당 몇 분 걸리는 모델)
+#   MODEL=medium bash bench/docker_cpu.sh rapidocr        # RapidOCR 에 PP-OCRv6 medium 모델
+#   MODEL=medium PADDLE_PARAMS=1 bash bench/docker_cpu.sh rapidocr   # + PaddleOCR 원본 검출 설정
 # 다른 측정과 겹치면 시간이 몇 배로 늘어나므로 컴퓨터가 한가할 때 돌린다.
 # 결과: data/generated/bench/results/<엔진>__docker-cpu.jsonl, 최대 메모리(MB)는 <엔진>.mem
 set -euo pipefail
@@ -12,16 +14,24 @@ MODELS=${COA_BENCH_MODELS:-$HOME/.cache/coa-bench/models}
 LLAMA_IMAGE=ghcr.io/ggml-org/llama.cpp:server-b11669
 RESULTS=data/generated/bench/results
 NAME=coa-bench-$ENGINE
+MODEL=${MODEL:-}
+TAG=docker-cpu
+MEMNAME=$ENGINE
+MODEL_ARGS=()
+VARIANT=$MODEL
+if [ -n "$MODEL" ]; then MODEL_ARGS=(--model "$MODEL"); fi
+if [ -n "${PADDLE_PARAMS:-}" ]; then VARIANT="$VARIANT-pdet"; MODEL_ARGS+=(--paddle-params); fi
+if [ -n "$VARIANT" ]; then TAG="$VARIANT-docker-cpu"; MEMNAME="$ENGINE-$VARIANT"; fi
 mkdir -p "$RESULTS"
 
 watch_mem() {  # 컨테이너 메모리 사용량을 2초마다 기록
   while docker inspect "$NAME" >/dev/null 2>&1; do
-    docker stats --no-stream --format '{{.MemUsage}}' "$NAME" 2>/dev/null | awk '{print $1}' >> "$RESULTS/$ENGINE.mem.raw"
+    docker stats --no-stream --format '{{.MemUsage}}' "$NAME" 2>/dev/null | awk '{print $1}' >> "$RESULTS/$MEMNAME.mem.raw"
     sleep 2
   done
 }
 
-rm -f "$RESULTS/$ENGINE.mem.raw"
+rm -f "$RESULTS/$MEMNAME.mem.raw"
 case $ENGINE in
   rapidocr|paddleocr|easyocr|tesseract)
     # PaddlePaddle 은 리눅스 arm64 휠이 없어 Apple Silicon 에서는 x86 에뮬레이션으로 돈다 (시간은 비교 불가)
@@ -29,7 +39,7 @@ case $ENGINE in
     [ "$ENGINE" = paddleocr ] && PLATFORM=(--platform linux/amd64)
     docker build -q ${PLATFORM[@]+"${PLATFORM[@]}"} -f bench/Dockerfile.ocr --build-arg ENGINE="$ENGINE" -t "coa-bench-$ENGINE" . >/dev/null
     docker run -d ${PLATFORM[@]+"${PLATFORM[@]}"} --name "$NAME" -v "$PWD/data/generated/bench:/ai/data/generated/bench" "coa-bench-$ENGINE" \
-      python bench/run.py "$ENGINE" --docs "$DOCS" --levels original --tag docker-cpu >/dev/null
+      python bench/run.py "$ENGINE" --docs "$DOCS" --levels original --tag "$TAG" ${MODEL_ARGS[@]+"${MODEL_ARGS[@]}"} >/dev/null
     watch_mem &
     docker wait "$NAME" >/dev/null
     docker logs "$NAME" 2>&1 | grep -E "^\[|peak" || true
@@ -59,7 +69,7 @@ esac
 sleep 3
 docker rm -f "$NAME" >/dev/null 2>&1 || true
 wait
-python3 - "$RESULTS/$ENGINE.mem.raw" > "$RESULTS/$ENGINE.mem" <<'EOF'
+python3 - "$RESULTS/$MEMNAME.mem.raw" > "$RESULTS/$MEMNAME.mem" <<'EOF'
 import re, sys
 mb = []
 for line in open(sys.argv[1]):
@@ -68,4 +78,4 @@ for line in open(sys.argv[1]):
         mb.append(float(m.group(1)) * {"K": 1 / 1024, "M": 1, "G": 1024}[m.group(2)[0]])
 print(round(max(mb)) if mb else "")
 EOF
-echo "docker peak memory: $(cat "$RESULTS/$ENGINE.mem") MB"
+echo "docker peak memory: $(cat "$RESULTS/$MEMNAME.mem") MB"

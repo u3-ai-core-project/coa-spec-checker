@@ -17,6 +17,8 @@ from score import RESULTS, load, summarize
 ENGINES = [  # (결과 파일 이름, 표에 쓰는 이름)
     ("rapidocr", "RapidOCR (PP-OCR ONNX)"),
     ("rapidocr__default", "RapidOCR 기본 설정"),
+    ("rapidocr__medium", "RapidOCR + PP-OCRv6 medium"),
+    ("rapidocr__medium-pdet", "RapidOCR + PP-OCRv6 medium + PaddleOCR 검출 설정"),
     ("paddleocr", "PaddleOCR"),
     ("easyocr", "EasyOCR"),
     ("tesseract", "Tesseract"),
@@ -31,15 +33,20 @@ ENGINES = [  # (결과 파일 이름, 표에 쓰는 이름)
 
 def docker_cell(engine: str) -> tuple[str, str, str]:
     """(처리 시간/장, 최대 메모리, Docker 실행 확인)."""
-    base = engine.split("__")[0]
+    base, _, variant = engine.partition("__")
     f = RESULTS / f"{base}__docker-cpu.jsonl"
+    mem_file = RESULTS / f"{base}.mem"
+    if variant and (RESULTS / f"{base}__{variant}-docker-cpu.jsonl").exists():  # 예: rapidocr__medium
+        f, mem_file = RESULTS / f"{base}__{variant}-docker-cpu.jsonl", RESULTS / f"{base}-{variant}.mem"
+    elif variant and variant != "default":  # 설정이 다르면 기본 엔진 값을 빌려 쓰지 않는다
+        return "-", "-", "미측정"
     if not f.exists():
         return "-", "-", "미측정"
     rows = [r for r in load(f) if not r.get("error")]
     if not rows:
         return "-", "-", "실패"
     sec = statistics.median(r["seconds"] for r in rows)
-    mem = (RESULTS / f"{base}.mem").read_text().strip() if (RESULTS / f"{base}.mem").exists() else ""
+    mem = mem_file.read_text().strip() if mem_file.exists() else ""
     return f"{sec:.0f}초 ({len(rows)}장)", f"{int(mem) / 1024:.1f}GB" if mem else "-", "O"
 
 

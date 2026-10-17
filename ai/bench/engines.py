@@ -20,6 +20,7 @@ import json
 import math
 import os
 import re
+import socket
 import statistics
 import subprocess
 import time
@@ -61,18 +62,34 @@ def _rules(page: Page, material: str) -> dict:
 class RapidOcrEngine:
     name = "rapidocr"
 
-    def __init__(self, shrink: float = 0.1, use_cls: bool = False):
+    # PaddleOCR 3.7 OCR 파이프라인(paddlex/configs/pipelines/OCR.yaml)의 검출·인식 설정.
+    # RapidOCR 기본값은 긴 변을 2000 으로 줄이고, 정규화가 다르고, 상자를 팽창(dilation)·unclip 1.6 으로 더 부풀린다.
+    PADDLE_PARAMS = {
+        "Global.max_side_len": 4000, "Global.text_score": 0.0,
+        "Det.limit_side_len": 64, "Det.limit_type": "min",
+        "Det.mean": [0.485, 0.456, 0.406], "Det.std": [0.229, 0.224, 0.225],
+        "Det.thresh": 0.3, "Det.box_thresh": 0.6, "Det.unclip_ratio": 1.5, "Det.use_dilation": False,
+    }
+
+    def __init__(self, shrink: float = 0.1, use_cls: bool = False, model: str = "small", paddle_params: bool = False):
         """shrink: OCR 검출 상자를 글줄 높이의 이 비율만큼 안쪽으로 줄인다.
             PP-OCR 검출기는 상자를 글자보다 넓게 부풀려(unclip) 내므로, 그대로 쓰면 '번호' 열과 항목명 사이의
             빈 띠가 사라져 두 열이 붙는다 (가상 B). 0.1 은 이번 샘플을 보고 고른 값이다.
         use_cls: 글줄 방향(0°/180°) 분류. 켜 두면 바로 선 글줄을 뒤집어 '=<5 ppm' 을 'udd g>=' 로 읽는 일이 있다.
             CoA 는 바로 놓인 문서이고 작은 기울기는 ocr_to_page 가 되돌리므로 끈다.
-        결과표에는 RapidOCR 기본 설정(shrink=0, use_cls=True) 결과도 함께 싣는다."""
-        from rapidocr import RapidOCR
+        결과표에는 RapidOCR 기본 설정(shrink=0, use_cls=True) 결과도 함께 싣는다.
+        model: PP-OCRv6 검출·인식 모델 크기. 기본(small)은 RapidOCR 기본값, medium 은 PaddleOCR 3.7 기본값과 같은 모델의 ONNX 판.
+        paddle_params: 검출 전처리·후처리를 PaddleOCR 원본 설정(PADDLE_PARAMS)으로 맞춘다."""
+        from rapidocr import ModelType, OCRVersion, RapidOCR
+        size = {"small": ModelType.SMALL, "medium": ModelType.MEDIUM}[model]
+        models = {} if model == "small" else {
+            "Det.ocr_version": OCRVersion.PPOCRV6, "Det.model_type": size,
+            "Rec.ocr_version": OCRVersion.PPOCRV6, "Rec.model_type": size}
         # 스레드 기본값(코어 수만큼)은 M4·Docker 에서 서로 밀려 2~3배 느려진다. 4개가 가장 빨랐다
         self.ocr = RapidOCR(params={"Global.use_cls": use_cls,
                                     "EngineConfig.onnxruntime.intra_op_num_threads": 4,
-                                    "EngineConfig.onnxruntime.inter_op_num_threads": 1})
+                                    "EngineConfig.onnxruntime.inter_op_num_threads": 1, **models,
+                                    **(self.PADDLE_PARAMS if paddle_params else {})})
         self.shrink = shrink
 
     def run(self, image: Path, material: str, dpi: int) -> dict:
@@ -463,6 +480,11 @@ class LlamaServerEngine:
         self.base = base_url or f"http://127.0.0.1:{port}"
         if base_url is None:
             model, mmproj = SERVERS[name]
+            # 포트에 남은 서버(예: 멈춘 실행의 고아 llama-server)가 있으면 새 서버는 bind 에 실패하고
+            # /health 는 남은 서버가 받아 다른 모델로 돌게 된다.
+            with socket.socket() as s:
+                if s.connect_ex(("127.0.0.1", port)) == 0:
+                    raise RuntimeError(f"포트 {port} 에 이미 다른 서버가 떠 있음 ({name}). 먼저 종료할 것")
             self.proc = subprocess.Popen(
                 ["llama-server", "-m", str(MODELS / model), "--mmproj", str(MODELS / mmproj),
                  "--port", str(port), "-c", "16384", "-ngl", "99", "--temp", "0", "--no-webui"],
