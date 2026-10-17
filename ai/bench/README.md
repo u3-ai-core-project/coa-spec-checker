@@ -94,6 +94,17 @@ PaddleOCR 3.7 은 PP-OCRv6 medium 검출·인식 모델을 쓰고, RapidOCR 은 
 - 이 값을 PaddleOCR 과 같게 맞추면 47장 모두 문서별 점수가 PaddleOCR 원본과 하나도 다르지 않다 (96.4 / 95.8 / 100).
 - Docker 에서는 PaddleOCR 원본보다 가볍다: 장당 30초, 1.8GB, `pip install rapidocr onnxruntime` 만으로 설치되고 arm64·x86 모두 그대로 돈다. PaddleOCR 원본은 리눅스 arm64 휠이 없어 이 맥에서는 x86 에뮬레이션(157초)으로만 돈다.
 - small 모델(3초)보다 10배 느린 것은 모델 크기와 원본 해상도 처리 때문이다.
+- 열화 샘플까지 152장 전체 (항목 / 값 / 머리글):
+
+  | RapidOCR 구성 | 전체 | 원본 | 저해상도 | 기울기 | 흐림 |
+  | --- | --- | --- | --- | --- | --- |
+  | small | 90.8 / 90.1 / 99.8 | 92.0 / 91.2 | 90.6 / 89.8 | 91.4 / 90.8 | 89.3 / 88.5 |
+  | medium | 95.1 / 93.6 / 100 | 98.2 / 97.5 | 93.4 / 89.6 | 95.5 / 94.7 | 93.4 / 92.6 |
+  | medium + PaddleOCR 검출 설정 | 96.6 / 95.8 / 99.1 | 95.3 / 94.5 | 96.5 / 95.7 | 97.7 / 97.1 | 96.9 / 96.1 |
+
+  - PaddleOCR 검출 설정은 열화 샘플(가상 B·D, Piochem)에서 낫고, 원본에서는 Puratronic S29G083 한 건에서 15항목을 더 놓친다. 이 문서는 PaddleOCR 원본도 35/55 다.
+  - 그 원인은 OCR 이 아니라 규칙 쪽이다. 한 줄에 '원소 값' 쌍이 5개씩 있는 표에서 검출기가 `< 1` 상자 하나를 놓치자(box_thresh 0.6), 표 복원이 그 블록의 3행을 통째로 버렸다. 칸이 하나 빠져도 나머지 행은 살리도록 `coa_ai.table` 을 보강할 과제다.
+  - Fisher 양식 D 저해상도 5장에서는 시험일을 놓치고 공급사를 'Thermo Fisher Scientific' 으로 읽어 머리글 일치율이 99.1% 로 내려갔다.
 
 ### 오류 유형
 
@@ -119,4 +130,4 @@ PaddleOCR 3.7 은 PP-OCRv6 medium 검출·인식 모델을 쓰고, RapidOCR 은 
 - RapidOCR·PaddleOCR 의 상자 축소(10%)·방향 분류 끄기, Tesseract 의 줄 높이 보정, Surya·PaddleOCR-VL 의 HTML/OTSL → Page 변환은 이번 샘플을 보며 맞췄다. Surya·PaddleOCR-VL 은 변환 코드를 고친 뒤 저장해 둔 모델 원출력으로 다시 채점했다 (`rescore.py`).
 - VLM 지시문은 하나로 고정했다. 모델별로 지시문을 다듬으면 달라질 수 있다.
 - Docker 시간은 맥 arm64 기준이다. 팀 PC(x86)에서는 다를 수 있고, PaddleOCR 은 이 맥에서 x86 에뮬레이션으로만 돈다.
-- RapidOCR 의 PaddleOCR 검출 설정 효과는 47장(1단계)에서만 확인했다. 열화 샘플 152장 전체는 2단계 결과표에서 다시 본다.
+- RapidOCR(ONNX)와 PaddleOCR 원본이 똑같다는 것은 47장(1단계)에서 확인했다. PaddleOCR 원본의 152장 결과는 2단계가 끝나면 비교한다.
