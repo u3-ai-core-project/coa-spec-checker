@@ -20,7 +20,9 @@ from coa_ai.pdf_text import phrases
 LABELS: dict[str, list[str]] = {
     "lot_no": [r"lot\s*(?:number|no\.?|#|nr\.?)", r"batch\s*/\s*lot", r"lot\s*/\s*batch",
                r"manufacturer'?s\s+batch\s*(?:no\.?|number)", r"batch\s*(?:number|no\.?)", r"批\s*号",
-               r"로트\s*(?:번호|no\.?)?", r"제조\s*번호"],
+               r"로트\s*(?:번호|no\.?)?", r"제조\s*번호",
+               # 접미사 없는 'Lot:', 'Batch:' 는 맨 마지막에 본다 (크기·수량 라벨은 제외)
+               r"lot(?!\s*size)", r"batch(?!\s*(?:size|quantity|qty|weight|disposition))"],
     "test_date": [r"quality\s*test\s*/\s*release\s*date", r"(?:test|analysis)\s*date", r"date\s+of\s+(?:test|analysis)",
                   r"sampled\s*/\s*tested", r"检\s*验\s*日\s*期", r"检\s*测\s*日\s*期", r"시험\s*일(?:자)?"],
     "issue_date": [r"date\s+of\s+issue", r"issue\s*date", r"issued(?:\s+on)?", r"报\s*告\s*日\s*期",

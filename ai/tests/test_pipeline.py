@@ -111,3 +111,15 @@ def test_same_standard_item_twice_is_kept(make_pdf):
     assert [(i.raw_name, i.normalized_name) for i in r.items] == [
         ("Appearance (Color)", "외관"), ("Appearance (Form)", "외관"),
     ]
+
+
+def test_coa_with_bare_lot_label_and_unknown_title_is_accepted(make_pdf):
+    # 제목이 사전에 없어도(Analysis Report) 로트 + 결과 표가 있으면 CoA (잘못 막지 않기 우선)
+    path = make_pdf([
+        "Analysis Report",
+        [(50, "Lot:"), (200, "AB12345")],
+        [(40, "Item"), (210, "Specification"), (410, "Result")],
+        [(40, "Sodium (Na)"), (210, "<= 50 ppm"), (410, "12 ppm")],
+    ])
+    r = extract(path, material_code="LI2CO3")
+    assert (r.doc_type, r.lot_no, [i.normalized_name for i in r.items]) == ("coa", "AB12345", ["Na"])

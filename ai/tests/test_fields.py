@@ -44,3 +44,16 @@ def test_manufacture_date_is_not_used_as_test_date(make_pdf):
     path = make_pdf([[(50, "Date of Manufacture"), (200, "27-Dec-2025")], [(50, "Lot Number"), (200, "A0266047")]])
     f = extract_fields(read_pages(path))
     assert (f["lot_no"], f["test_date"]) == ("A0266047", None)
+
+
+@pytest.mark.parametrize("label", ["Lot:", "LOT", "Lot", "Batch:", "BATCH"])
+def test_bare_lot_and_batch_labels(make_pdf, label):
+    # 처음 보는 공급사 양식에 흔한 'Lot: …', 'Batch: …' (최종 검토에서 발견)
+    path = make_pdf([[(50, label), (200, "AB12345")]])
+    assert extract_fields(read_pages(path))["lot_no"] == "AB12345"
+
+
+@pytest.mark.parametrize("label", ["Lot Size", "Batch size", "Batch Quantity", "Batch weight"])
+def test_size_labels_are_not_lot_numbers(make_pdf, label):
+    path = make_pdf([[(50, label), (200, "500kg")]])
+    assert extract_fields(read_pages(path))["lot_no"] is None
