@@ -202,3 +202,23 @@ def test_symbol_value_grid(make_pdf):
         ("Al", "7"), ("Sb", "ND"), ("Fe", "1"), ("Pb", "ND"), ("Na", "ND"), ("Si", "1"),
     ]
     assert all(r.confidence == CONF_LIST and r.spec is None for r in rows)
+
+
+def test_sparse_min_column_is_kept(tmp_path):
+    # Min 값이 한 행(순도)에만 있는 표: 값이 적은 열도 머리글이 있으면 열로 남아야 한다 (최종 검토에서 발견)
+    import pymupdf
+    doc = pymupdf.open()
+    page = doc.new_page(width=595, height=842)
+    lines = [[(44, "Parameter"), (283, "Unit"), (342, "Min"), (386, "Max"), (439, "Result")],
+             [(44, "Assay"), (283, "%"), (335, "99.50"), (447, "99.62")]]
+    for name in ["Sodium (Na)", "Potassium (K)", "Calcium (Ca)", "Magnesium (Mg)", "Iron (Fe)", "Copper (Cu)",
+                 "Manganese (Mn)", "Silicon (Si)", "Chloride (Cl)", "Sulfate (SO4)", "Nickel (Ni)"]:
+        lines.append([(44, name), (280, "mg/kg"), (390, "40"), (455, "12")])
+    for n, parts in enumerate(lines):
+        for x, text in parts:
+            page.insert_text((x, 60 + 15 * n), text, fontsize=9)
+    path = tmp_path / "sparse.pdf"
+    doc.save(path)
+    rows = parse_tables(read_pages(path))
+    assert (rows[0].name, rows[0].spec, rows[0].unit, rows[0].value) == ("Assay", "≥ 99.50", "%", "99.62")
+    assert (rows[1].name, rows[1].spec, rows[1].unit) == ("Sodium (Na)", "≤ 40", "mg/kg")

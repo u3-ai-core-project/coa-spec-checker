@@ -189,8 +189,9 @@ def _columns(lines: list[Line], idx: list[int], header: Header) -> list[Column]:
     words = [w for i in idx for w in lines[i].words]
     if not words:
         return []
-    lo = int(min(w.box.x0 for w in words)) - 1
-    hi = int(max(w.box.x1 for w in words)) + 2
+    boxes = [w.box for w in words] + [box for _, box in header.cells]
+    lo = int(min(b.x0 for b in boxes)) - 1
+    hi = int(max(b.x1 for b in boxes)) + 2
     cover = [0] * (hi - lo)
     for i in idx:
         seen = set()
@@ -200,6 +201,10 @@ def _columns(lines: list[Line], idx: list[int], header: Header) -> list[Column]:
         for x in seen:
             cover[x] += 1
     limit = max(1, int(len(idx) * 0.1))  # 10% 이하 줄만 걸친 띠는 빈 띠로 본다
+    # 머리글 칸 아래는 값이 몇 줄뿐이어도 열로 남긴다 (순도 행에만 값이 있는 Min 열 등)
+    for _, box in header.cells:
+        for x in range(int(box.x0) - lo, int(box.x1) - lo + 1):
+            cover[x] += limit + 1
     blocks: list[list[float]] = []
     for x, n in enumerate(cover):
         if n > limit:
