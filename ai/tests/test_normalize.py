@@ -11,8 +11,8 @@ from coa_ai.normalize import AI_CAP, Normalizer, canon, strip_charges
     ("Assay Titrimetry", "순도"),
     ("Titration excess HCl", "순도"),
     ("Sulfur compounds (as SO4)", "황산염"),
-    ("Heavy metals (as Pb)", "중금속"),
-    ("Heavy metals (ICP-OES)", "중금속"),
+    ("Heavy metals (as Pb)", "중금속 총량"),
+    ("Heavy metals (ICP-OES)", "중금속 총량"),
     ("Insoluble matter", "불용분"),
     ("Appearance (Color)", "외관"),
     ("Appearance (Form)", "외관"),
@@ -24,12 +24,12 @@ from coa_ai.normalize import AI_CAP, Normalizer, canon, strip_charges
     ("CaO", "Ca"),
     ("Fe₂O₃", "Fe"),
     ("SO₄", "황산염"),
-    ("Cl", "Cl"),
+    ("Cl", "염화물"),
     ("Insolubles", "불용분"),
     # 대정화금 (한글, 글자 사이 공백)
     ("함 량(after dried )", "순도"),
     ("납(Pb)", "Pb"),
-    ("염 화 물(Cl)", "Cl"),
+    ("염 화 물(Cl)", "염화물"),
     ("황 산 염(SO₄)", "황산염"),
     ("마그네슘(Mg)", "Mg"),
     # 기타
@@ -46,7 +46,7 @@ def test_li2co3_dictionary(raw, expected):
     ("Lithium Hydroxide (as LiOH)", "LiOH 함량"),
     ("LiOH (as LiOH)", "LiOH 함량"),
     ("Carbonate (as CO₃)", "탄산"),
-    ("Chloride (Cl⁻)", "Cl"),
+    ("Chloride (Cl⁻)", "염화물"),
     ("Sulfate (SO₄²⁻)", "황산염"),
     ("Magnetic Impurities", "자성이물"),
     ("Particle Size D50", "입도 D50"),
@@ -58,7 +58,7 @@ def test_li2co3_dictionary(raw, expected):
     ("外观Appearance", "외관"),
     ("氢氧化锂LiOH", "LiOH 함량"),
     ("碳酸根CO₃²⁻", "탄산"),
-    ("氯离子Cl⁻", "Cl"),
+    ("氯离子Cl⁻", "염화물"),
     ("硫酸根SO₄²⁻", "황산염"),
     ("硼B", "B"),
     ("酸不溶物Acid Insoluble", "불용분"),
@@ -72,7 +72,7 @@ def test_lioh_dictionary(raw, expected):
 
 def test_heavy_metals_never_become_lead():
     for material in ("LI2CO3", "LIOH"):
-        assert Normalizer(material).map("Heavy metals (as Pb)").name == "중금속"
+        assert Normalizer(material).map("Heavy metals (as Pb)").name == "중금속 총량"
 
 
 def test_assay_is_not_mapped_for_lithium_hydroxide():

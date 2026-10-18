@@ -59,7 +59,7 @@
     },
     {
       "raw_name": "Chloride (Cl)",
-      "normalized_name": "Cl",
+      "normalized_name": "염화물",
       "mapping_source": "dictionary",
       "raw_value": "12",
       "raw_spec": "≤ 30",

@@ -9,7 +9,7 @@
   5. 못 찾음: 원문 항목명 그대로                                            → ai, 신뢰도 상한 0.6
 
 신뢰도 상한 0.6 은 서버 기준(0.8)보다 낮아서, 자동으로 확정하지 않고 담당자 확인으로 넘긴다.
-'Heavy metals (as Pb)' 는 3단계에서 중금속으로 먼저 잡혀 Pb 로 가지 않는다.
+'Heavy metals (as Pb)' 는 3단계에서 중금속 총량으로 먼저 잡혀 Pb 로 가지 않는다.
 """
 from __future__ import annotations
 
