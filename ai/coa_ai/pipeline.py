@@ -15,7 +15,7 @@ from coa_ai.fields import extract_fields
 from coa_ai.llm import LLMClient
 from coa_ai.meaning import classify as classify_value
 from coa_ai.models import Box, Extraction, Item, Page, RawRow
-from coa_ai.normalize import Normalizer
+from coa_ai.normalize import AI_CAP, Mapping, Normalizer
 from coa_ai.ocr import ImageOpenError, read_image, read_pdf_page
 from coa_ai.pdf_text import PdfOpenError, read_pages
 from coa_ai.table import parse_tables
@@ -68,7 +68,9 @@ def extract(
     doc_llm = llm.for_document() if llm is not None else None
     normalizer = Normalizer(material_code, mappings, llm=doc_llm)
     by_number = {p.number: p for p in pages}
-    items = [_to_item(row, normalizer, by_number[row.page], doc_llm) for row in table_parser(pages)]
+    rows = table_parser(pages)
+    mappings = _drop_duplicate_suggestions(rows, [normalizer.map(row.name) for row in rows])
+    items = [_to_item(row, m, by_number[row.page], doc_llm) for row, m in zip(rows, mappings)]
     return Extraction(doc_type=doc_type, items=items, **fields)
 
 
@@ -86,8 +88,18 @@ def _read(path: Path) -> list[Page]:
     return [p if p.lines else read_pdf_page(path, p.number) for p in pages]
 
 
-def _to_item(row: RawRow, normalizer: Normalizer, page: Page, llm: LLMClient | None = None) -> Item:
-    mapping = normalizer.map(row.name)
+def _drop_duplicate_suggestions(rows: list[RawRow], mappings: list[Mapping]) -> list[Mapping]:
+    """같은 문서에서 사전으로 확정된 표준 항목명을 LLM 이 또 제안하면 받지 않는다.
+
+    CoA 에는 같은 시험 항목이 보통 한 번 나온다. 실물에서 'Traceable to' 같은 시험 항목 아닌 행을 LLM 이
+    이미 있는 '순도'로 제안해, '참고'로 지나갈 행이 확인 필요(로트 보류)가 되는 일이 있었다.
+    """
+    confirmed = {m.name for m in mappings if m.source == "dictionary"}
+    return [Mapping(row.name, "ai", AI_CAP) if m.by_llm and m.name in confirmed else m
+            for row, m in zip(rows, mappings)]
+
+
+def _to_item(row: RawRow, mapping: Mapping, page: Page, llm: LLMClient | None = None) -> Item:
     meaning = classify_value(row.value, row.spec, llm, raw_name=row.name)
     confidence = min(row.confidence, mapping.cap, OCR_CONFIDENCE_CAP if page.ocr else 1.0)
     return Item(

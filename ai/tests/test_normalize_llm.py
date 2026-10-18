@@ -63,3 +63,11 @@ def test_prompt_has_material_and_enum():
     assert "원자재: 탄산리튬" in call["user"]
     assert "Natrium content" in call["user"]
     assert "중금속 총량" in call["system"]
+
+
+@pytest.mark.parametrize("raw", ["Assay", "Assay (LiOH·H2O)", "Main content"])
+def test_other_material_alias_not_asked(raw):
+    """탄산리튬 전용 '순도' 별칭(Assay 등)은 수산화리튬에서 일부러 매핑하지 않는다. LLM 에도 묻지 않는다."""
+    llm = FakeLLM({"name": "LiOH 함량"})
+    assert Normalizer("LIOH", llm=llm).map(raw) == Mapping(raw, "ai", AI_CAP)
+    assert llm.calls == []

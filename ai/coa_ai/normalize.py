@@ -8,6 +8,7 @@
   4. 유사도 (6자 이상 별칭, 0.88 이상)                                       → ai, 신뢰도 상한 0.6
   5. 이름 전체가 표준 목록 밖 원소 기호 하나('Ti', 'Co²⁺'): 원문 그대로        → ai, 신뢰도 상한 0.6
   6. LLM 제안 (llm 을 넘겼을 때만, 후보 목록 + '없음' 중 하나로 답을 강제)     → ai, 신뢰도 상한 0.6
+     단, 다른 원자재 전용 항목의 별칭(수산화리튬의 'Assay')은 일부러 매핑하지 않은 것이라 묻지 않는다
   7. 못 찾음: 원문 항목명 그대로                                            → ai, 신뢰도 상한 0.6
 
 신뢰도 상한 0.6 은 서버 기준(0.8)보다 낮아서, 자동으로 확정하지 않고 담당자 확인으로 넘긴다.
@@ -21,7 +22,7 @@ import difflib
 import json
 import re
 import unicodedata
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import lru_cache
 from importlib import resources
 
@@ -53,6 +54,7 @@ class Mapping:
     name: str
     source: str  # "dictionary" | "ai"
     cap: float   # 이 항목 신뢰도의 상한
+    by_llm: bool = field(default=False, compare=False)  # LLM 제안 (pipeline 이 문서 단위로 한 번 더 거른다)
 
 
 @lru_cache
@@ -96,6 +98,7 @@ class Normalizer:
         self.material = material
         self.llm = llm
         self._candidates: dict[str, str] = {}
+        self._other_material_aliases: set[str] = set()
         self.mappings = {k.strip(): v for k, v in (mappings or {}).items()}
         self.mappings_ci = {canon(k): v for k, v in self.mappings.items()}
         self.names: dict[str, str] = {}
@@ -104,6 +107,7 @@ class Normalizer:
         for code, item in load_vocab()["items"].items():
             allowed = item.get("materials")
             if allowed and material not in allowed:
+                self._other_material_aliases.update(canon(a) for a in item.get("aliases", []))
                 continue
             self.names[code] = item["name"]
             self._candidates.setdefault(item["name"], item.get("meaning", ""))
@@ -130,15 +134,18 @@ class Normalizer:
         close = difflib.get_close_matches(base, self._fuzzy_keys, n=1, cutoff=0.88) if len(base) >= 6 else []
         if close:
             return Mapping(self.names[self.aliases[close[0]]], "ai", AI_CAP)
-        if not self._element_only(raw) and self.llm is not None:
+        if self.llm is not None and not self._element_only(raw) and not self._other_material(raw):
             suggested = self._ask_llm(raw)
             if suggested:
-                return Mapping(suggested, "ai", AI_CAP)
+                return Mapping(suggested, "ai", AI_CAP, by_llm=True)
         return Mapping(raw, "ai", AI_CAP)
 
     def candidates(self) -> list[tuple[str, str]]:
         """LLM 에 주는 후보: (표준 항목명, 뜻). 이 원자재에서 쓰는 이름만."""
         return list(self._candidates.items())
+
+    def _other_material(self, raw: str) -> bool:
+        return canon(_without_parens(raw)) in self._other_material_aliases or canon(raw) in self._other_material_aliases
 
     def _element_only(self, raw: str) -> bool:
         token = _formula_token(raw)

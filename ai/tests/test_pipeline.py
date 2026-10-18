@@ -242,3 +242,14 @@ def test_coa_with_bare_lot_label_and_unknown_title_is_accepted(make_pdf):
     ])
     r = extract(path, material_code="LI2CO3")
     assert (r.doc_type, r.lot_no, [i.normalized_name for i in r.items]) == ("coa", "AB12345", ["Na"])
+
+
+def test_llm_suggestion_duplicating_dictionary_item_is_dropped(fixture_pdf):
+    def parser(pages):
+        box = Box(0, 0, 59.5, 84.2)
+        return [RawRow(page=1, name="Assay", value="99.6 %", spec=None, unit=None, value_box=None, row_box=box,
+                       confidence=0.95),
+                RawRow(page=1, name="Traceable to", value="NIST", spec=None, unit=None, value_box=None, row_box=box,
+                       confidence=0.95)]
+    r = extract(fixture_pdf("COA_A_0007.pdf"), material_code="LI2CO3", llm=FakeLLM({"name": "순도"}), table_parser=parser)
+    assert [(i.normalized_name, i.mapping_source) for i in r.items] == [("순도", "dictionary"), ("Traceable to", "ai")]
