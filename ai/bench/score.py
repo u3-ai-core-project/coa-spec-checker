@@ -34,8 +34,12 @@ def _flat(text: str | None) -> str:
     return re.sub(r"[^0-9a-z가-힣一-鿿]+", "", text.casefold())
 
 
+# 2026-10-18 표준 이름을 규격 시드에 맞춰 바꿨다. 그 전에 만든 정답·결과의 옛 이름도 같은 항목으로 본다
+RENAMED = {"Cl": "염화물", "중금속": "중금속 총량"}
+
+
 def key(name: str | None) -> str:
-    return _flat(name)
+    return _flat(RENAMED.get(name, name))
 
 
 def value_key(value: str | None) -> tuple:

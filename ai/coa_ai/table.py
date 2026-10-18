@@ -19,6 +19,7 @@ import unicodedata
 from dataclasses import dataclass, field
 
 from coa_ai.models import Box, Line, Page, RawRow, Word
+from coa_ai.normalize import ELEMENTS
 from coa_ai.pdf_text import phrases
 
 CONF_CLEAN = 0.95    # 머리글이 있는 표에서 깨끗하게 읽은 행
@@ -63,6 +64,8 @@ _VALUE_LIKE_RE = re.compile(
 _HIDDEN_NAME_RE = re.compile(r"^Type:\s*(?P<analyte>.+?)\s+measure\b\s*(?P<rest>.*)$", re.IGNORECASE)
 _SPACED_CAPS_RE = re.compile(r"^(?:[A-Z]{1,3}\s)+[A-Z]{1,3}$")  # 'A S S AY', 'T R A C E M E TA L S'
 _SYMBOL_RE = re.compile(r"^[A-Z][a-z]?$")
+_GRID_OPS = {"<", ">", "≤", "≥", "<=", ">=", "=<", "=>", "＜", "＞"}
+GRID_MIN_PAIRS = 3  # 기호·값 짝이 이만큼 있는 줄은 앞뒤 줄 없이 혼자서도 격자로 본다
 
 
 def compact(text: str) -> str:
@@ -381,14 +384,10 @@ def _list_rows(page: Page) -> list[RawRow]:
     candidates: list[tuple[int, list[tuple[str, Box, str, Box]]]] = []
     for i, ln in enumerate(page.lines):
         ph = phrases(ln, i)
-        pairs = []
-        if len(ph) == 2 and _is_name(ph[0].text) and _VALUE_LIKE_RE.match(ph[1].text.strip()):
+        grid = _grid_pairs(ln.words)
+        pairs = grid if len(grid) >= 2 else []  # 격자를 먼저 본다 (스캔본은 구가 붙어 2개로 줄기도 한다)
+        if not pairs and len(ph) == 2 and _is_name(ph[0].text) and _VALUE_LIKE_RE.match(ph[1].text.strip()):
             pairs = [(ph[0].text, ph[0].box, ph[1].text, ph[1].box)]
-        elif len(ph) >= 4 and len(ph) % 2 == 0:
-            ok = all(_SYMBOL_RE.match(ph[k].text) and _VALUE_LIKE_RE.match(ph[k + 1].text)
-                     for k in range(0, len(ph), 2))
-            if ok:
-                pairs = [(ph[k].text, ph[k].box, ph[k + 1].text, ph[k + 1].box) for k in range(0, len(ph), 2)]
         candidates.append((i, pairs))
 
     # 같은 x 에서 시작하는 연속 줄 묶음 중 3줄 이상인 것만
@@ -396,7 +395,7 @@ def _list_rows(page: Page) -> list[RawRow]:
     run: list[list[tuple[str, Box, str, Box]]] = []
 
     def flush():
-        if len(run) >= 3:
+        if len(run) >= 3 or any(len(pairs) >= GRID_MIN_PAIRS for pairs in run):
             for pairs in run:
                 for name, nbox, value, vbox in pairs:
                     out.append(RawRow(page=page.number, name=name, value=value, spec=None, unit=None,
@@ -412,6 +411,38 @@ def _list_rows(page: Page) -> list[RawRow]:
                 run.append(pairs)
     flush()
     return out
+
+
+def _grid_symbol(text: str) -> str | None:
+    """격자 칸의 원소 기호. OCR 이 소문자 l 을 대문자 I 로 읽은 것('TI', 'AI')은 고친다."""
+    if _SYMBOL_RE.match(text) and text in ELEMENTS:
+        return text
+    if len(text) == 2 and text[1] == "I" and text[0].isupper() and text[0] + "l" in ELEMENTS:
+        return text[0] + "l"
+    return None
+
+
+def _grid_pairs(words: list[Word]) -> list[tuple[str, Box, str, Box]]:
+    """'기호 값 기호 값 …' 줄을 단어 단위로 짝짓는다. 구 단위로 나누면 스캔본에서 값과 다음 기호가
+    한 구로 붙어('< 1 Cr') 줄 전체를 놓쳤다. 값이 아닌 칸('Li  Matrix')은 건너뛴다."""
+    pairs = []
+    i = 0
+    while i < len(words):
+        sym = _grid_symbol(words[i].text)
+        if sym is None:
+            i += 1
+            continue
+        j = i + 1
+        if j < len(words) and words[j].text in _GRID_OPS:
+            j += 1
+        if j < len(words) and _VALUE_LIKE_RE.match(" ".join(w.text for w in words[i + 1:j + 1])):
+            value_words = words[i + 1:j + 1]
+            pairs.append((sym, words[i].box, " ".join(w.text for w in value_words),
+                          Box.around(w.box for w in value_words)))
+            i = j + 1
+        else:
+            i += 1
+    return pairs
 
 
 def _is_name(text: str) -> bool:

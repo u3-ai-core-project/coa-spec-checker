@@ -222,3 +222,49 @@ def test_sparse_min_column_is_kept(tmp_path):
     rows = parse_tables(read_pages(path))
     assert (rows[0].name, rows[0].spec, rows[0].unit, rows[0].value) == ("Assay", "≥ 99.50", "%", "99.62")
     assert (rows[1].name, rows[1].spec, rows[1].unit) == ("Sodium (Na)", "≤ 40", "mg/kg")
+
+
+def _grid_line(cells, x0=126, step=46, gap=0):
+    """[(기호, 값), ...] → make_pdf 한 줄. gap 을 줄이면 값과 다음 기호가 한 구로 붙는다 (OCR 처럼)."""
+    out, x = [], x0
+    for sym, val in cells:
+        out += [(x, sym), (x + 20, val)]
+        x += step - gap
+    return out
+
+
+def test_grid_value_and_next_symbol_merged(make_pdf):
+    # 스캔본 OCR: 글자 간격이 좁아 '< 1 Cr' 처럼 값과 다음 기호가 한 구가 된다 (Puratronic S29G083)
+    rows = [[("Ag", "< 1"), ("Cr", "< 1"), ("In", "< 1")],
+            [("Au", "< 1"), ("Cu", "< 1"), ("La", "< 1")],
+            [("Be", "< 1"), ("Eu", "2"), ("Mn", "< 1")]]
+    path = make_pdf([_grid_line(r, gap=6) for r in rows])
+    got = [(r.name, r.value) for r in parse_tables(read_pages(path))]
+    assert got == [(s, v) for r in rows for s, v in r]
+
+
+def test_grid_line_alone_is_kept(make_pdf):
+    # 앞뒤 줄을 못 읽어도, 기호·값 짝이 3개 이상인 줄은 혼자서도 격자로 본다
+    path = make_pdf(["Certificate of Analysis", _grid_line([("Au", "< 1"), ("Cu", "< 1"), ("La", "< 1"), ("Pt", "3")]),
+                     "Values given in ppm unless otherwise noted"])
+    assert [(r.name, r.value) for r in parse_tables(read_pages(path))] == \
+        [("Au", "< 1"), ("Cu", "< 1"), ("La", "< 1"), ("Pt", "3")]
+
+
+def test_grid_symbol_ocr_confusion(make_pdf):
+    # OCR 이 소문자 l 을 대문자 I 로 읽은 기호 (Tl → TI, Al → AI). 격자 안에서는 원소 기호로 고친다
+    path = make_pdf([_grid_line([("Ba", "< 1"), ("Re", "< 1"), ("TI", "< 1")]),
+                     _grid_line([("AI", "< 1"), ("Cs", "< 1"), ("K", "< 1")])])
+    assert [r.name for r in parse_tables(read_pages(path))] == ["Ba", "Re", "Tl", "Al", "Cs", "K"]
+
+
+def test_grid_skips_pair_without_value(make_pdf):
+    # 'Li  Matrix' 처럼 값이 아닌 칸은 건너뛰고 나머지 짝은 읽는다
+    path = make_pdf([_grid_line([("As", "< 1"), ("Dy", "< 1"), ("Li", "Matrix"), ("Rb", "< 1"), ("Ti", "< 1")])])
+    assert [(r.name, r.value) for r in parse_tables(read_pages(path))] == \
+        [("As", "< 1"), ("Dy", "< 1"), ("Rb", "< 1"), ("Ti", "< 1")]
+
+
+def test_single_symbol_value_line_is_not_a_grid(make_pdf):
+    path = make_pdf(["Certificate of Analysis", [(126, "Ca"), (160, "< 20 ppm")], "Inductively Coupled Plasma"])
+    assert parse_tables(read_pages(path)) == []
