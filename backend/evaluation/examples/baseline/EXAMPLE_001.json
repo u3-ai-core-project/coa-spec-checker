@@ -1,0 +1,33 @@
+{
+  "document_id": "EXAMPLE_001",
+  "supplier": "Example Lithium Co.",
+  "lot_no": "L-0001",
+  "test_date": "2026-09-28",
+  "items": [
+    {
+      "normalized_name": "순도",
+      "raw_value": "99.6 %",
+      "converted_value": 99.6,
+      "judgement": "pass"
+    },
+    {
+      "normalized_name": "Na",
+      "raw_value": "12 ppm",
+      "converted_value": 12,
+      "judgement": "pass"
+    },
+    {
+      "normalized_name": "K",
+      "raw_value": "< 100 ppm",
+      "converted_value": 100,
+      "judgement": "pass"
+    },
+    {
+      "normalized_name": "Fe",
+      "raw_value": "ND",
+      "converted_value": null,
+      "judgement": "pass"
+    }
+  ],
+  "lot_recommendation": "approve"
+}

@@ -1,0 +1,60 @@
+{
+  "success": true,
+  "error": null,
+  "data": {
+    "document_id": "EXAMPLE_001",
+    "supplier": "Example Lithium Co.",
+    "lot_no": "L-0001",
+    "test_date": "2026-09-28",
+    "items": [
+      {
+        "item_id": "item-001",
+        "normalized_name": "순도",
+        "raw_value": "99.6 %",
+        "converted_value": 99.6,
+        "judgement": "pass",
+        "confidence": 0.97,
+        "mapping_source": "dictionary"
+      },
+      {
+        "item_id": "item-002",
+        "normalized_name": "Na",
+        "raw_value": "1.2 ppm",
+        "converted_value": 1.2,
+        "judgement": "check",
+        "reason_code": "LOW_CONFIDENCE",
+        "confidence": 0.55,
+        "mapping_source": "dictionary"
+      },
+      {
+        "item_id": "item-003",
+        "normalized_name": "K",
+        "raw_value": "< 100 ppm",
+        "converted_value": 100,
+        "judgement": "undetermined",
+        "reason_code": "BOUND_ABOVE_LIMIT",
+        "confidence": 0.91,
+        "mapping_source": "dictionary"
+      },
+      {
+        "item_id": "item-004",
+        "normalized_name": "Fe",
+        "raw_value": "ND",
+        "converted_value": null,
+        "judgement": "check",
+        "reason_code": "ND_NO_LOD",
+        "confidence": 0.93,
+        "mapping_source": "dictionary"
+      },
+      {
+        "item_id": "item-005",
+        "normalized_name": "황산염",
+        "mapping_source": "spec",
+        "judgement": "missing",
+        "reason_code": "MISSING_REQUIRED"
+      }
+    ],
+    "document_issues": [],
+    "lot_recommendation": "hold"
+  }
+}
