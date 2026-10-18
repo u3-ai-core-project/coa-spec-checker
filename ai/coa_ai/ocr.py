@@ -1,6 +1,6 @@
 """[담당: 고도영] 스캔본·이미지 → Page (RapidOCR, PP-OCRv6 small ONNX).
 
-엔진과 설정은 모델 테스트(ai/bench/README.md) 결과로 골랐다: Docker CPU 장당 약 3초, 152장 항목 인식률 98.4%.
+엔진과 설정은 모델 테스트(ai/bench/README.md) 결과로 골랐다: Docker CPU 장당 약 3초, 152장 항목 인식률 99.0%.
 OCR 글줄을 텍스트 PDF 와 같은 Page 로 바꿔 두면 머리글·표 복원·정규화 규칙을 그대로 쓴다.
 
 한글 문서: 기본 인식 모델(중·영)에는 한글이 없어 '이하'를 '0|' 로 읽는다. 그런 흔적이 KOREAN_TRIGGER 개
