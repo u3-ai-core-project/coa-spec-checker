@@ -26,6 +26,19 @@ python -m coa_ai data/raw/real/*.pdf --material LI2CO3                # 여러 �
 python -m coa_ai tests/fixtures/COA_D_0007.pdf --material LIOH --llm-url http://127.0.0.1:8090   # LLM 단계 포함
 ```
 
+## 열화 처리 도구 (`tools/degrade.py`)
+
+평가용 스캔본을 만듭니다. 원본 CoA(PDF·이미지)를 열화 단계별로 글자 층이 없는 PDF로 바꾸고 목록(`manifest.csv`)을 씁니다.
+
+```bash
+cd ai
+python tools/degrade.py data/raw/real/*.pdf --out data/generated/degraded              # 기본 4단계
+python tools/degrade.py a.pdf --out out --levels levels.json --format png             # 단계 직접 지정, PNG
+```
+- 기본 단계는 모델 테스트와 같은 임시값입니다: 원본 200dpi, 저해상도 100dpi, 기울기 2°, 흐림(가우시안 1.5).
+- 단계 설정 JSON 예: `{"fax": {"dpi": 150, "rotate": 1.0, "blur": 0.8, "jpeg_quality": 40}}`. 소성훈 님 열화 조건 표를 받으면 이 JSON만 바꾸면 됩니다.
+- `manifest.csv`의 `group`은 원본 이름입니다. 같은 원본에서 만든 변형본은 개발용과 평가용에 나눠 넣지 마세요(기획안 v2 분리 원칙).
+
 ## 테스트
 
 ```bash
