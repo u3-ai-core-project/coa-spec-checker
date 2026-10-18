@@ -162,11 +162,11 @@ def classify(raw_value: str | None, raw_spec: str | None, llm=None, *, raw_name:
                 return ValueMeaning("spec_copy", f"규격 칸과 같은 범위({_fmt(ps)})를 결과 칸에 다시 적음")
             return ValueMeaning(None, f"범위로 적힌 결과({value})")
         if pv.op == "=":
-            return ValueMeaning("number", f"숫자 결과({_fmt(pv)})")
+            return ValueMeaning("number", f"숫자 결과({value})")
         if ps and ps.kind == "value" and (ps.op, ps.num) == (pv.op, pv.num) and _same_unit(pv, ps):
             return ValueMeaning("spec_copy", f"규격 칸과 같은 조건({_fmt(ps)})을 결과 칸에 다시 적음")
         other = f", 규격 조건({_fmt(ps)})과 다름" if ps and ps.kind == "value" else ""
-        return ValueMeaning("bound", f"부등호 결과({_fmt(pv)}){other}")
+        return ValueMeaning("bound", f"부등호 결과({value}){other}")
 
     if not has_digit:
         if _PASS.search(value):

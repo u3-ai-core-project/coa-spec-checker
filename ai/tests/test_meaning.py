@@ -130,3 +130,8 @@ def test_parse_condition():
     assert parse_condition("N.D.") == Condition("nd", None, None, None, None)
     assert parse_condition("12 ppm") == Condition("value", "=", 12.0, "ppm", None)
     assert parse_condition("approx. 12 ppm (ICP)") is None
+
+
+def test_reason_quotes_original_value():
+    assert classify("24.0", None).reason == "숫자 결과(24.0)"
+    assert classify("<0,5 ppm", "≤ 5 ppm").reason == "부등호 결과(<0,5 ppm), 규격 조건(<= 5 ppm)과 다름"

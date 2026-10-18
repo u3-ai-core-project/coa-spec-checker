@@ -121,6 +121,9 @@ class Item:
     unit: str | None
     confidence: float
     bbox: dict | None  # {"page": 1부터, "x", "y", "w", "h": 0~1 비율}
+    # 결과 의미 (coa_ai.meaning, 팀 제안 칸). 서버 ExtractedItem 은 아직 이 칸을 무시한다 (extra="ignore")
+    value_kind: str | None = None    # number | bound | nd | spec_copy | pass_text | description
+    value_reason: str | None = None  # 근거 한 줄. LLM 이 정했으면 "AI 판단: " 으로 시작
 
 
 @dataclass

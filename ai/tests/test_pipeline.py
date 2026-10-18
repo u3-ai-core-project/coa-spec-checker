@@ -8,11 +8,14 @@ import pytest
 from PIL import Image
 
 from coa_ai import ExtractionFailed, extract
+from coa_ai.meaning import KINDS
 from coa_ai.models import Box, RawRow
 from coa_ai.pipeline import MSG_BROKEN, MSG_BROKEN_IMAGE, MSG_NO_TEXT, MSG_NOT_COA, OCR_CONFIDENCE_CAP
+from tests.fake_llm import FakeLLM
 
 INPUT_FIELDS = {"supplier", "lot_no", "test_date", "origin", "applied_standard", "items"}
-ITEM_FIELDS = {"raw_name", "normalized_name", "mapping_source", "raw_value", "raw_spec", "unit", "confidence", "bbox"}
+ITEM_FIELDS = {"raw_name", "normalized_name", "mapping_source", "raw_value", "raw_spec", "unit", "confidence", "bbox",
+               "value_kind", "value_reason"}  # 뒤의 두 칸은 팀 제안 (서버는 아직 무시)
 
 
 def test_synthetic_a(fixture_pdf):
@@ -51,6 +54,44 @@ def test_table_parser_can_be_replaced(fixture_pdf):
     r = extract(fixture_pdf("COA_A_0007.pdf"), material_code="LIOH", table_parser=fake)
     assert [(i.normalized_name, i.bbox) for i in r.items] == [("Na", {"page": 1, "x": 0.0, "y": 0.0, "w": 0.0937, "h": 0.1079})]
 
+
+
+def test_items_have_value_meaning(fixture_pdf):
+    r = extract(fixture_pdf("COA_A_0007.pdf"), material_code="LIOH")
+    co3 = next(i for i in r.items if i.normalized_name == "탄산")
+    assert (co3.value_kind, co3.value_reason) == ("number", "숫자 결과(0.36 %)")
+    assert all(i.value_kind in (*KINDS, None) for i in r.items)
+    assert {"value_kind", "value_reason"} <= set(r.to_dict()["items"][0])
+
+
+def _one_row(name, value, spec=None):
+    def parser(pages):
+        return [RawRow(page=1, name=name, value=value, spec=spec, unit=None, value_box=None,
+                       row_box=Box(0, 0, 59.5, 84.2), confidence=0.95)]
+    return parser
+
+
+def test_llm_is_used_per_document(fixture_pdf):
+    llm = FakeLLM(None)
+    extract(fixture_pdf("COA_A_0007.pdf"), material_code="LIOH", llm=llm, table_parser=_one_row("Natrium content", "12 ppm"))
+    assert llm.documents == 1
+
+
+def test_unknown_name_gets_llm_suggestion(fixture_pdf):
+    llm = FakeLLM({"name": "Na"})
+    r = extract(fixture_pdf("COA_A_0007.pdf"), material_code="LIOH", llm=llm,
+                table_parser=_one_row("Natrium content", "12 ppm", "≤ 30 ppm"))
+    item = r.items[0]
+    assert (item.normalized_name, item.mapping_source, item.value_kind) == ("Na", "ai", "number")
+    assert item.confidence <= 0.6
+
+
+def test_open_text_value_gets_llm_meaning(fixture_pdf):
+    llm = FakeLLM({"kind": "pass_text", "reason": "합격을 뜻함"})
+    r = extract(fixture_pdf("COA_A_0007.pdf"), material_code="LIOH", llm=llm,
+                table_parser=_one_row("Appearance", "Satisfactory", "White powder"))
+    assert (r.items[0].value_kind, r.items[0].value_reason) == ("pass_text", "AI 판단: 합격을 뜻함")
+    assert "Appearance" in llm.calls[0]["user"]
 
 def _render(pdf, path, dpi=200, skew=0.0):
     """PDF 첫 쪽을 이미지로 그린다 (스캔본 흉내). skew: 반시계 방향 회전 각도(도), 크기는 그대로."""

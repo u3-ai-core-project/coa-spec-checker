@@ -1,7 +1,8 @@
-"""[담당: 고도영] 추출 파이프라인: 파일 → 줄 → 문서 유형 → 머리글 필드 → 표 → 항목명 정규화 → 결과.
+"""[담당: 고도영] 추출 파이프라인: 파일 → 줄 → 문서 유형 → 머리글 필드 → 표 → 항목명 정규화·결과 의미 → 결과.
 
 텍스트 PDF 는 글자 층을 읽고, 이미지 파일과 글자 없는 PDF 쪽(스캔본)은 OCR 로 읽는다 (coa_ai.ocr).
 표 구조화 함수(table_parser)는 바꿔 끼울 수 있다.
+LLM(llm)을 넘기면 규칙이 못 읽은 항목명·결과 칸만 LLM 에 묻는다. 없거나 실패해도 결과는 나온다.
 실패하면 ExtractionFailed(화면에 보여줄 한국어 사유) 를 던진다.
 """
 from __future__ import annotations
@@ -11,6 +12,8 @@ from pathlib import Path
 
 from coa_ai.classify import ACCEPTED_DOC_TYPES, classify
 from coa_ai.fields import extract_fields
+from coa_ai.llm import LLMClient
+from coa_ai.meaning import classify as classify_value
 from coa_ai.models import Box, Extraction, Item, Page, RawRow
 from coa_ai.normalize import Normalizer
 from coa_ai.ocr import ImageOpenError, read_image, read_pdf_page
@@ -45,11 +48,13 @@ def extract(
     material_code: str,
     mappings: dict[str, str] | None = None,
     table_parser: TableParser = parse_tables,
+    llm: LLMClient | None = None,
 ) -> Extraction:
     """CoA 파일 1건을 읽는다.
 
     material_code : 원자재 구분(LI2CO3, LIOH). 항목명 사전을 원자재별로 고른다.
     mappings      : DB item_mappings 의 {원문 항목명: 표준 항목명}. 사전보다 먼저 본다.
+    llm           : LLM 서버 클라이언트. 문서 1건마다 호출 상한을 새로 센다 (LLMClient.for_document).
     """
     pages = _read(Path(path))
     if not any(p.lines for p in pages):
@@ -60,9 +65,10 @@ def extract(
     if doc_type not in ACCEPTED_DOC_TYPES:
         raise ExtractionFailed(MSG_NOT_COA.get(doc_type, MSG_NOT_COA["other"]))
 
-    normalizer = Normalizer(material_code, mappings)
+    doc_llm = llm.for_document() if llm is not None else None
+    normalizer = Normalizer(material_code, mappings, llm=doc_llm)
     by_number = {p.number: p for p in pages}
-    items = [_to_item(row, normalizer, by_number[row.page]) for row in table_parser(pages)]
+    items = [_to_item(row, normalizer, by_number[row.page], doc_llm) for row in table_parser(pages)]
     return Extraction(doc_type=doc_type, items=items, **fields)
 
 
@@ -80,8 +86,9 @@ def _read(path: Path) -> list[Page]:
     return [p if p.lines else read_pdf_page(path, p.number) for p in pages]
 
 
-def _to_item(row: RawRow, normalizer: Normalizer, page: Page) -> Item:
+def _to_item(row: RawRow, normalizer: Normalizer, page: Page, llm: LLMClient | None = None) -> Item:
     mapping = normalizer.map(row.name)
+    meaning = classify_value(row.value, row.spec, llm, raw_name=row.name)
     confidence = min(row.confidence, mapping.cap, OCR_CONFIDENCE_CAP if page.ocr else 1.0)
     return Item(
         raw_name=row.name,
@@ -92,6 +99,8 @@ def _to_item(row: RawRow, normalizer: Normalizer, page: Page) -> Item:
         unit=row.unit,
         confidence=round(confidence, 2),
         bbox=_bbox(page.to_image_box(row.value_box or row.row_box), page),
+        value_kind=meaning.kind,
+        value_reason=meaning.reason,
     )
 
 
