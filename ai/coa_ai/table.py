@@ -65,6 +65,7 @@ _VALUE_LIKE_RE = re.compile(
 _HIDDEN_NAME_RE = re.compile(r"^Type:\s*(?P<analyte>.+?)\s+measure\b\s*(?P<rest>.*)$", re.IGNORECASE)
 _SPACED_CAPS_RE = re.compile(r"^(?:[A-Z]{1,3}\s)+[A-Z]{1,3}$")  # 'A S S AY', 'T R A C E M E TA L S'
 _SYMBOL_RE = re.compile(r"^[A-Z][a-z]?$")
+_CJK_ONLY = re.compile(r"^[一-鿿]+$")
 _GRID_OPS = {"<", ">", "≤", "≥", "<=", ">=", "=<", "=>", "＜", "＞"}
 GRID_MIN_PAIRS = 3  # 기호·값 짝이 이만큼 있는 줄은 앞뒤 줄 없이 혼자서도 격자로 본다
 
@@ -82,15 +83,17 @@ def role_of(text: str) -> str | None:
     for role, words in ROLE_WORDS.items():
         if c in words:
             return role
-    # 중·영 병기 칸('检验项目Test Item')이나 오타('Sepecification')
+    # 중·영 병기 칸('检验项目Test Item')이나 오타('Sepecification'), 스캔본 오독('Resuft', '检胎结果')
     best, best_score = None, 0.0
+    cjk = bool(_CJK_ONLY.match(c))
     for role, words in ROLE_WORDS.items():
         for w in words:
-            if len(w) >= 4 and (c.startswith(w) or c.endswith(w)) and len(w) >= len(c) * 0.4:
+            long_enough = len(w) >= 4 or (cjk and len(w) >= 2 and _CJK_ONLY.match(w))  # 한자는 두 글자로도 뜻이 선다
+            if long_enough and (c.startswith(w) or c.endswith(w)) and len(w) >= len(c) * 0.4:
                 score = len(w) / len(c)
             elif len(w) >= 6 and len(c) >= 6:
                 score = difflib.SequenceMatcher(None, c, w).ratio()
-                if score < 0.85:
+                if score < 0.8:
                     continue
             else:
                 continue

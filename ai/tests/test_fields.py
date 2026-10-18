@@ -48,6 +48,12 @@ def test_supplier_with_leading_korean_suffix_is_kept(make_pdf):
     assert _SUFFIX_RE.search("주식회사 한빛리튬").start() == 0  # 접미사가 앞에 오면 자르지 않는 경우
 
 
+def test_lot_label_with_one_letter_misread(make_pdf):
+    # 저해상도 스캔본이 'Batch / Lot' 을 'Betch / Lot' 으로 읽었다 (생성기 v2 양식 D)
+    path = make_pdf([[(50, "Betch / Lot"), (200, "KC26-238-02")]])
+    assert extract_fields(read_pages(path))["lot_no"] == "KC26-238-02"
+
+
 def test_lot_size_is_not_a_lot_number(make_pdf):
     path = make_pdf([[(50, "Lot Size"), (200, "16,000 kg")]])
     assert extract_fields(read_pages(path))["lot_no"] is None

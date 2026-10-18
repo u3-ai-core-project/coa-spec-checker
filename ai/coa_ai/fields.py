@@ -18,7 +18,7 @@ from coa_ai.pdf_text import phrases
 
 # 필드별 라벨. 앞의 것이 우선이다.
 LABELS: dict[str, list[str]] = {
-    "lot_no": [r"lot\s*(?:number|no\.?|#|nr\.?)", r"batch\s*/\s*lot", r"lot\s*/\s*batch",
+    "lot_no": [r"lot\s*(?:number|no\.?|#|nr\.?)", r"b\wt\wh\s*/\s*lot", r"lot\s*/\s*batch",  # 'Betch / Lot' 스캔본 오독도
                r"manufacturer'?s\s+batch\s*(?:no\.?|number)", r"batch\s*(?:number|no\.?)", r"批\s*号",
                r"로트\s*(?:번호|no\.?)?", r"제조\s*번호",
                # 접미사 없는 'Lot:', 'Batch:' 는 맨 마지막에 본다 (크기·수량 라벨은 제외)

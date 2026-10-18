@@ -81,7 +81,9 @@ def test_synthetic_golden_rows(fixture_pdf, name, expected):
     ("Specifications", "spec"), ("Sepecification", "spec"), ("TEST ITEM", "item"), ("TEST RESULT", "result"),
     ("检验项目", "item"), ("检验结果", "result"), ("标准要求", "spec"), ("单位", "unit"), ("Units", "unit"),
     ("Min", "min"), ("Max", "max"), ("Status", "judge"), ("Sr.no.", "no"), ("Item test", "item"),
-    ("Lot Number", None), ("ICP-OES", None),
+    # 스캔본 OCR 오독 (생성기 v2 저해상도·흐림): 결과 열을 못 찾으면 CoA 가 아니라고 막혔다
+    ("Resuft", "result"), ("检胎结果", "result"), ("检箱项目", "item"),
+    ("Lot Number", None), ("ICP-OES", None), ("Remarks", None), ("报告编号", None),
     ("The undersigned hereby certifies the following data", None),
 ])
 def test_role_of(text, role):
