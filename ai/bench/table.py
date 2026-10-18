@@ -15,6 +15,7 @@ from pathlib import Path
 from score import RESULTS, load, summarize
 
 ENGINES = [  # (결과 파일 이름, 표에 쓰는 이름)
+    ("coa_ai", "coa_ai.extract (제품 경로, RapidOCR small)"),
     ("rapidocr", "RapidOCR (PP-OCR ONNX)"),
     ("rapidocr__default", "RapidOCR 기본 설정"),
     ("rapidocr__medium", "RapidOCR + PP-OCRv6 medium"),

@@ -22,7 +22,7 @@ import psutil
 import engines as eng
 from engines import VLMS
 
-OCR_ENGINES = ["rapidocr", "paddleocr", "easyocr", "tesseract", "surya"]
+OCR_ENGINES = ["coa_ai", "rapidocr", "paddleocr", "easyocr", "tesseract", "surya"]
 from samples import OUT
 
 
@@ -85,7 +85,9 @@ def main() -> None:
         return
 
     pid = os.getpid()
-    if args.engine == "rapidocr":
+    if args.engine == "coa_ai":
+        engine = eng.ProductEngine()
+    elif args.engine == "rapidocr":
         engine = eng.RapidOcrEngine(shrink=args.shrink, use_cls=args.use_cls, model=args.model,
                                      paddle_params=args.paddle_params)
     elif args.engine == "paddleocr":

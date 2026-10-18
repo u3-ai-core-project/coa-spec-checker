@@ -33,7 +33,7 @@ watch_mem() {  # 컨테이너 메모리 사용량을 2초마다 기록
 
 rm -f "$RESULTS/$MEMNAME.mem.raw"
 case $ENGINE in
-  rapidocr|paddleocr|easyocr|tesseract)
+  coa_ai|rapidocr|paddleocr|easyocr|tesseract)
     # PaddlePaddle 은 리눅스 arm64 휠이 없어 Apple Silicon 에서는 x86 에뮬레이션으로 돈다 (시간은 비교 불가)
     PLATFORM=()
     [ "$ENGINE" = paddleocr ] && PLATFORM=(--platform linux/amd64)

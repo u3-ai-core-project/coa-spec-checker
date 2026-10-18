@@ -33,6 +33,7 @@ from coa_ai.classify import classify
 from coa_ai.fields import extract_fields
 from coa_ai.models import Box, Line, Page, Word
 from coa_ai.normalize import Normalizer
+from coa_ai.ocr import ocr_to_page, shrink_box, split_words
 from coa_ai.table import parse_tables
 
 MODELS = Path(os.environ.get("COA_BENCH_MODELS", Path.home() / ".cache" / "coa-bench" / "models"))
@@ -95,8 +96,22 @@ class RapidOcrEngine:
     def run(self, image: Path, material: str, dpi: int) -> dict:
         res = self.ocr(str(image))
         boxes = [] if res.boxes is None else [[(float(x), float(y)) for x, y in b] for b in res.boxes]
-        page = ocr_to_page([_shrink(b, self.shrink) for b in boxes], list(res.txts or []), dpi)
+        page = ocr_to_page([shrink_box(b, self.shrink) for b in boxes], list(res.txts or []), dpi)
         return _rules(page, material)
+
+
+class ProductEngine:
+    """제품 경로 그대로: coa_ai.extract(이미지 파일). 업로드와 같이 해상도는 모르는 것으로 보고(A4 폭으로 추정) 돈다.
+    CoA 가 아니라고 판단하거나 글자를 못 찾으면 실패(오류)로 기록된다."""
+    name = "coa_ai"
+
+    def __init__(self):
+        from coa_ai.ocr import load_engine
+        load_engine()
+
+    def run(self, image: Path, material: str, dpi: int) -> dict:
+        from coa_ai import extract
+        return extract(image, material_code=material).to_dict()
 
 
 class PaddleOcrEngine:
@@ -113,7 +128,7 @@ class PaddleOcrEngine:
     def run(self, image: Path, material: str, dpi: int) -> dict:
         res = self.ocr.predict(str(image))[0]
         boxes = [[(float(x), float(y)) for x, y in poly] for poly in res["rec_polys"]]
-        page = ocr_to_page([_shrink(b, self.shrink) for b in boxes], list(res["rec_texts"]), dpi)
+        page = ocr_to_page([shrink_box(b, self.shrink) for b in boxes], list(res["rec_texts"]), dpi)
         return _rules(page, material)
 
 
@@ -167,78 +182,6 @@ class TesseractEngine:
         angle = math.atan(statistics.median(slopes)) if slopes else 0.0
         page = ocr_to_page([b for b, _ in words], [t for _, t in words], dpi, angle=angle)
         return _rules(page, material)
-
-
-def _shrink(box: list[tuple[float, float]], ratio: float) -> list[tuple[float, float]]:
-    """네 꼭짓점을 상자 중심 쪽으로 가로·세로 (글줄 높이 × ratio) 만큼 당긴다."""
-    s = ratio * math.dist(box[1], box[2])
-    cx = sum(p[0] for p in box) / 4
-    cy = sum(p[1] for p in box) / 4
-    return [(x + (s if x < cx else -s), y + (s if y < cy else -s)) for x, y in box]
-
-
-def ocr_to_page(boxes: list[list[tuple[float, float]]], texts: list[str], dpi: int,
-                angle: float | None = None) -> Page:
-    """OCR 글줄(네 꼭짓점 + 글) → coa_ai Page. 좌표는 pt 로 바꾸고, 기울어진 스캔은 글줄 기울기 중앙값만큼 되돌린다.
-    angle 을 주면(라디안) 상자 모양 대신 그 값을 기울기로 쓴다."""
-    k = 72 / dpi
-    if angle is None:
-        angles = [math.atan2(b[1][1] - b[0][1], b[1][0] - b[0][0]) for b in boxes
-                  if math.dist(b[0], b[1]) > 3 * math.dist(b[1], b[2])]
-        angle = statistics.median(angles) if angles else 0.0
-    a = -angle
-    cos, sin = math.cos(a), math.sin(a)
-
-    segs = []
-    for b, text in zip(boxes, texts):
-        text = text.strip()
-        if not text:
-            continue
-        pts = [((x * cos - y * sin) * k, (x * sin + y * cos) * k) for x, y in b]
-        box = Box(min(p[0] for p in pts), min(p[1] for p in pts), max(p[0] for p in pts), max(p[1] for p in pts))
-        segs.append((box, text))
-    if not segs:
-        return Page(number=1, width=1, height=1, lines=[])
-
-    # 세로 중심이 가까운 글줄끼리 한 줄로 묶는다
-    groups: list[list[tuple[Box, str]]] = []
-    for box, text in sorted(segs, key=lambda s: s[0].cy):
-        for g in groups:
-            gh = statistics.median(b.height for b, _ in g)
-            gcy = statistics.median(b.cy for b, _ in g)
-            if abs(box.cy - gcy) <= 0.45 * min(gh, box.height):
-                g.append((box, text))
-                break
-        else:
-            groups.append([(box, text)])
-
-    lines = []
-    for g in groups:
-        size = 0.75 * statistics.median(b.height for b, _ in g)
-        words = []
-        for box, text in sorted(g, key=lambda s: s[0].x0):
-            words.extend(_split_words(box, text, size))
-        base = statistics.median(b.y1 for b, _ in g) - 0.2 * statistics.median(b.height for b, _ in g)
-        lines.append(Line(words=words, page=1, baseline=base, size=size))
-    lines.sort(key=lambda ln: (ln.baseline, ln.words[0].box.x0))
-    width = max(b.x1 for b, _ in segs) + 20
-    height = max(b.y1 for b, _ in segs) + 20
-    return Page(number=1, width=width, height=height, lines=lines)
-
-
-def _split_words(box: Box, text: str, size: float) -> list[Word]:
-    """OCR 글줄 하나를 공백에서 나누고, 글자 수에 비례해 x 구간을 나눠 준다."""
-    parts = text.split()
-    total = len(text)
-    out, pos = [], 0
-    for part in parts:
-        start = text.index(part, pos)
-        end = start + len(part)
-        x0 = box.x0 + box.width * start / total
-        x1 = box.x0 + box.width * end / total
-        out.append(Word(text=part, box=Box(x0, box.y0, x1, box.y1), size=size))
-        pos = end
-    return out
 
 
 # ---------------------------------------------------------------------------

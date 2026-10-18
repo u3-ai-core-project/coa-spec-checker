@@ -75,6 +75,7 @@ bench/.venv/bin/python bench/run.py rapidocr --model medium --paddle-params --ta
 
 - 처리 시간: Docker(맥 M4, 리눅스 arm64, 스레드 4개)에서 가상 CoA 원본으로 잰 값. 장당 2분이 넘는 모델은 1장, 나머지는 3장의 중앙값이다. 다른 작업이 없을 때 쟀다.
 - RapidOCR 기본 설정의 시간·메모리는 같은 엔진 값이다.
+- 제품 경로: `coa_ai.extract` 에 RapidOCR(PP-OCR ONNX) 행의 설정을 넣었다 (2026-10-18). `python bench/run.py coa_ai` 로 업로드와 같이 이미지 파일만 넘겨(해상도는 A4 폭으로 추정) 152장을 다시 돌린 결과가 위 행과 문서별로 모두 같고, Docker CPU 에서 장당 약 4초다.
 
 열화 단계별 항목 인식률 / 수치 일치율 (%)
 
