@@ -26,7 +26,8 @@
         "h": 0.0104
       },
       "value_kind": "pass_text",
-      "value_reason": "합격 문구(符合)"
+      "value_reason": "합격 문구(符合)",
+      "check_reasons": []
     },
     {
       "raw_name": "氢氧化锂LiOH",
@@ -44,7 +45,8 @@
         "h": 0.0121
       },
       "value_kind": "number",
-      "value_reason": "숫자 결과(56.96)"
+      "value_reason": "숫자 결과(56.96)",
+      "check_reasons": []
     },
     {
       "raw_name": "碳酸根CO₃²⁻",
@@ -62,7 +64,8 @@
         "h": 0.0121
       },
       "value_kind": "number",
-      "value_reason": "숫자 결과(0.38)"
+      "value_reason": "숫자 결과(0.38)",
+      "check_reasons": []
     },
     {
       "raw_name": "钠Na",
@@ -80,7 +83,8 @@
         "h": 0.0121
       },
       "value_kind": "number",
-      "value_reason": "숫자 결과(0.0018)"
+      "value_reason": "숫자 결과(0.0018)",
+      "check_reasons": []
     },
     {
       "raw_name": "钾K",
@@ -98,7 +102,8 @@
         "h": 0.0121
       },
       "value_kind": "number",
-      "value_reason": "숫자 결과(0.0004)"
+      "value_reason": "숫자 결과(0.0004)",
+      "check_reasons": []
     },
     {
       "raw_name": "铁Fe",
@@ -116,7 +121,8 @@
         "h": 0.0121
       },
       "value_kind": "number",
-      "value_reason": "숫자 결과(0.00015)"
+      "value_reason": "숫자 결과(0.00015)",
+      "check_reasons": []
     },
     {
       "raw_name": "钙Ca",
@@ -134,7 +140,8 @@
         "h": 0.0121
       },
       "value_kind": "number",
-      "value_reason": "숫자 결과(0.0007)"
+      "value_reason": "숫자 결과(0.0007)",
+      "check_reasons": []
     },
     {
       "raw_name": "铜Cu",
@@ -152,7 +159,8 @@
         "h": 0.0121
       },
       "value_kind": "number",
-      "value_reason": "숫자 결과(0.00004)"
+      "value_reason": "숫자 결과(0.00004)",
+      "check_reasons": []
     },
     {
       "raw_name": "镁Mg",
@@ -170,7 +178,8 @@
         "h": 0.0121
       },
       "value_kind": "number",
-      "value_reason": "숫자 결과(0.00038)"
+      "value_reason": "숫자 결과(0.00038)",
+      "check_reasons": []
     },
     {
       "raw_name": "锰Mn",
@@ -188,7 +197,8 @@
         "h": 0.0121
       },
       "value_kind": "number",
-      "value_reason": "숫자 결과(0.00024)"
+      "value_reason": "숫자 결과(0.00024)",
+      "check_reasons": []
     },
     {
       "raw_name": "硅Si",
@@ -206,7 +216,8 @@
         "h": 0.0121
       },
       "value_kind": "number",
-      "value_reason": "숫자 결과(0.0019)"
+      "value_reason": "숫자 결과(0.0019)",
+      "check_reasons": []
     },
     {
       "raw_name": "氯离子Cl⁻",
@@ -224,7 +235,8 @@
         "h": 0.0121
       },
       "value_kind": "number",
-      "value_reason": "숫자 결과(0.0007)"
+      "value_reason": "숫자 결과(0.0007)",
+      "check_reasons": []
     },
     {
       "raw_name": "硫酸根SO₄²⁻",
@@ -242,7 +254,8 @@
         "h": 0.0121
       },
       "value_kind": "number",
-      "value_reason": "숫자 결과(0.0062)"
+      "value_reason": "숫자 결과(0.0062)",
+      "check_reasons": []
     },
     {
       "raw_name": "硼B",
@@ -260,7 +273,8 @@
         "h": 0.0121
       },
       "value_kind": "number",
-      "value_reason": "숫자 결과(0.0008)"
+      "value_reason": "숫자 결과(0.0008)",
+      "check_reasons": []
     },
     {
       "raw_name": "酸不溶物Acid Insoluble",
@@ -278,7 +292,8 @@
         "h": 0.0121
       },
       "value_kind": "number",
-      "value_reason": "숫자 결과(0.0010)"
+      "value_reason": "숫자 결과(0.0010)",
+      "check_reasons": []
     },
     {
       "raw_name": "磁性物质Magnetic Substance",
@@ -296,7 +311,8 @@
         "h": 0.0121
       },
       "value_kind": "number",
-      "value_reason": "숫자 결과(17)"
+      "value_reason": "숫자 결과(17)",
+      "check_reasons": []
     },
     {
       "raw_name": "粒度 D50 Particle Size",
@@ -314,7 +330,8 @@
         "h": 0.0121
       },
       "value_kind": "number",
-      "value_reason": "숫자 결과(3.9)"
+      "value_reason": "숫자 결과(3.9)",
+      "check_reasons": []
     }
   ]
 }

@@ -26,7 +26,8 @@
         "h": 0.0129
       },
       "value_kind": "pass_text",
-      "value_reason": "합격 문구(Conforms)"
+      "value_reason": "합격 문구(Conforms)",
+      "check_reasons": []
     },
     {
       "raw_name": "Lithium Hydroxide (as LiOH)",
@@ -44,7 +45,8 @@
         "h": 0.0129
       },
       "value_kind": "number",
-      "value_reason": "숫자 결과(56.84 %)"
+      "value_reason": "숫자 결과(56.84 %)",
+      "check_reasons": []
     },
     {
       "raw_name": "Carbonate (as CO₃)",
@@ -62,7 +64,8 @@
         "h": 0.0129
       },
       "value_kind": "number",
-      "value_reason": "숫자 결과(0.36 %)"
+      "value_reason": "숫자 결과(0.36 %)",
+      "check_reasons": []
     },
     {
       "raw_name": "Sodium (Na)",
@@ -80,7 +83,8 @@
         "h": 0.0129
       },
       "value_kind": "number",
-      "value_reason": "숫자 결과(12.5 ppm)"
+      "value_reason": "숫자 결과(12.5 ppm)",
+      "check_reasons": []
     },
     {
       "raw_name": "Potassium (K)",
@@ -98,7 +102,8 @@
         "h": 0.0129
       },
       "value_kind": "number",
-      "value_reason": "숫자 결과(11.3 ppm)"
+      "value_reason": "숫자 결과(11.3 ppm)",
+      "check_reasons": []
     },
     {
       "raw_name": "Calcium (Ca)",
@@ -116,7 +121,8 @@
         "h": 0.0129
       },
       "value_kind": "number",
-      "value_reason": "숫자 결과(4.9 ppm)"
+      "value_reason": "숫자 결과(4.9 ppm)",
+      "check_reasons": []
     },
     {
       "raw_name": "Magnesium (Mg)",
@@ -134,7 +140,8 @@
         "h": 0.0129
       },
       "value_kind": "number",
-      "value_reason": "숫자 결과(2.3 ppm)"
+      "value_reason": "숫자 결과(2.3 ppm)",
+      "check_reasons": []
     },
     {
       "raw_name": "Iron (Fe)",
@@ -152,7 +159,8 @@
         "h": 0.0129
       },
       "value_kind": "number",
-      "value_reason": "숫자 결과(4.8 ppm)"
+      "value_reason": "숫자 결과(4.8 ppm)",
+      "check_reasons": []
     },
     {
       "raw_name": "Copper (Cu)",
@@ -170,7 +178,8 @@
         "h": 0.0129
       },
       "value_kind": "number",
-      "value_reason": "숫자 결과(0.21 ppm)"
+      "value_reason": "숫자 결과(0.21 ppm)",
+      "check_reasons": []
     },
     {
       "raw_name": "Manganese (Mn)",
@@ -188,7 +197,8 @@
         "h": 0.0129
       },
       "value_kind": "number",
-      "value_reason": "숫자 결과(1.5 ppm)"
+      "value_reason": "숫자 결과(1.5 ppm)",
+      "check_reasons": []
     },
     {
       "raw_name": "Silicon (Si)",
@@ -206,7 +216,8 @@
         "h": 0.0129
       },
       "value_kind": "number",
-      "value_reason": "숫자 결과(7.7 ppm)"
+      "value_reason": "숫자 결과(7.7 ppm)",
+      "check_reasons": []
     },
     {
       "raw_name": "Chloride (Cl⁻)",
@@ -224,7 +235,8 @@
         "h": 0.0129
       },
       "value_kind": "number",
-      "value_reason": "숫자 결과(14.5 ppm)"
+      "value_reason": "숫자 결과(14.5 ppm)",
+      "check_reasons": []
     },
     {
       "raw_name": "Sulfate (SO₄²⁻)",
@@ -242,7 +254,8 @@
         "h": 0.0129
       },
       "value_kind": "number",
-      "value_reason": "숫자 결과(47 ppm)"
+      "value_reason": "숫자 결과(47 ppm)",
+      "check_reasons": []
     },
     {
       "raw_name": "Magnetic Impurities",
@@ -260,7 +273,8 @@
         "h": 0.0129
       },
       "value_kind": "number",
-      "value_reason": "숫자 결과(26 ppb)"
+      "value_reason": "숫자 결과(26 ppb)",
+      "check_reasons": []
     },
     {
       "raw_name": "Particle Size D50",
@@ -278,7 +292,8 @@
         "h": 0.0129
       },
       "value_kind": "number",
-      "value_reason": "숫자 결과(8.5 μm)"
+      "value_reason": "숫자 결과(8.5 μm)",
+      "check_reasons": []
     }
   ]
 }

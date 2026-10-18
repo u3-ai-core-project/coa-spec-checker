@@ -1,4 +1,4 @@
-"""[담당: 고도영] 추출 파이프라인: 파일 → 줄 → 문서 유형 → 머리글 필드 → 표 → 항목명 정규화·결과 의미 → 결과.
+"""[담당: 고도영] 추출 파이프라인: 파일 → 줄 → 문서 유형 → 머리글 필드 → 표 → 항목명 정규화·결과 의미 → 자체 검증 → 결과.
 
 텍스트 PDF 는 글자 층을 읽고, 이미지 파일과 글자 없는 PDF 쪽(스캔본)은 OCR 로 읽는다 (coa_ai.ocr).
 표 구조화 함수(table_parser)는 바꿔 끼울 수 있다.
@@ -18,6 +18,7 @@ from coa_ai.models import Box, Extraction, Item, Page, RawRow
 from coa_ai.normalize import AI_CAP, Mapping, Normalizer
 from coa_ai.ocr import ImageOpenError, read_image, read_pdf_page
 from coa_ai.pdf_text import PdfOpenError, read_pages
+from coa_ai.selfcheck import check_items
 from coa_ai.table import parse_tables
 
 IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp", ".gif", ".webp"}
@@ -71,6 +72,7 @@ def extract(
     rows = table_parser(pages)
     mappings = _drop_duplicate_suggestions(rows, [normalizer.map(row.name) for row in rows])
     items = [_to_item(row, m, by_number[row.page], doc_llm) for row, m in zip(rows, mappings)]
+    check_items(items)  # 틀렸을 가능성이 높은 항목은 확인 필요(신뢰도 0.75 이하) + 이유
     return Extraction(doc_type=doc_type, items=items, **fields)
 
 

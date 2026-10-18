@@ -11,6 +11,10 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 
+class _Server(ThreadingHTTPServer):
+    request_queue_size = 64  # 기본 5: 동시 접속 테스트에서 넘치면 연결이 거절된다
+
+
 class FakeLLMServer:
     def __init__(self, replies):
         self.replies = replies
@@ -42,7 +46,7 @@ class FakeLLMServer:
             def log_message(self, *args):
                 pass
 
-        self._httpd = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        self._httpd = _Server(("127.0.0.1", 0), Handler)
         self._httpd.daemon_threads = True
         self.url = f"http://127.0.0.1:{self._httpd.server_address[1]}"
 

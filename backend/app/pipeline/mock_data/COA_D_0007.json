@@ -26,7 +26,8 @@
         "h": 0.0111
       },
       "value_kind": "pass_text",
-      "value_reason": "합격 문구(Conforms)"
+      "value_reason": "합격 문구(Conforms)",
+      "check_reasons": []
     },
     {
       "raw_name": "LiOH (as LiOH)",
@@ -44,7 +45,8 @@
         "h": 0.0111
       },
       "value_kind": "number",
-      "value_reason": "숫자 결과(56.99)"
+      "value_reason": "숫자 결과(56.99)",
+      "check_reasons": []
     },
     {
       "raw_name": "Carbonate (as CO3)",
@@ -62,7 +64,8 @@
         "h": 0.0111
       },
       "value_kind": "number",
-      "value_reason": "숫자 결과(0.17)"
+      "value_reason": "숫자 결과(0.17)",
+      "check_reasons": []
     },
     {
       "raw_name": "Chloride (Cl)",
@@ -80,7 +83,8 @@
         "h": 0.0111
       },
       "value_kind": "number",
-      "value_reason": "숫자 결과(12)"
+      "value_reason": "숫자 결과(12)",
+      "check_reasons": []
     },
     {
       "raw_name": "Sulfate (SO4)",
@@ -98,7 +102,8 @@
         "h": 0.0111
       },
       "value_kind": "number",
-      "value_reason": "숫자 결과(26)"
+      "value_reason": "숫자 결과(26)",
+      "check_reasons": []
     },
     {
       "raw_name": "Sodium (Na)",
@@ -116,7 +121,8 @@
         "h": 0.0111
       },
       "value_kind": "number",
-      "value_reason": "숫자 결과(10)"
+      "value_reason": "숫자 결과(10)",
+      "check_reasons": []
     },
     {
       "raw_name": "Potassium (K)",
@@ -134,7 +140,8 @@
         "h": 0.0111
       },
       "value_kind": "number",
-      "value_reason": "숫자 결과(7.8)"
+      "value_reason": "숫자 결과(7.8)",
+      "check_reasons": []
     },
     {
       "raw_name": "Calcium (Ca)",
@@ -152,7 +159,8 @@
         "h": 0.0111
       },
       "value_kind": "number",
-      "value_reason": "숫자 결과(19.1)"
+      "value_reason": "숫자 결과(19.1)",
+      "check_reasons": []
     },
     {
       "raw_name": "Magnesium (Mg)",
@@ -170,7 +178,8 @@
         "h": 0.0111
       },
       "value_kind": "number",
-      "value_reason": "숫자 결과(2.3)"
+      "value_reason": "숫자 결과(2.3)",
+      "check_reasons": []
     },
     {
       "raw_name": "Iron (Fe)",
@@ -188,7 +197,8 @@
         "h": 0.0111
       },
       "value_kind": "number",
-      "value_reason": "숫자 결과(1.4)"
+      "value_reason": "숫자 결과(1.4)",
+      "check_reasons": []
     },
     {
       "raw_name": "Copper (Cu)",
@@ -206,7 +216,8 @@
         "h": 0.0111
       },
       "value_kind": "number",
-      "value_reason": "숫자 결과(0.28)"
+      "value_reason": "숫자 결과(0.28)",
+      "check_reasons": []
     },
     {
       "raw_name": "Manganese (Mn)",
@@ -224,7 +235,8 @@
         "h": 0.0111
       },
       "value_kind": "number",
-      "value_reason": "숫자 결과(1.1)"
+      "value_reason": "숫자 결과(1.1)",
+      "check_reasons": []
     },
     {
       "raw_name": "Silicon (Si)",
@@ -242,7 +254,8 @@
         "h": 0.0111
       },
       "value_kind": "number",
-      "value_reason": "숫자 결과(12)"
+      "value_reason": "숫자 결과(12)",
+      "check_reasons": []
     },
     {
       "raw_name": "Nickel (Ni)",
@@ -260,7 +273,8 @@
         "h": 0.0111
       },
       "value_kind": "number",
-      "value_reason": "숫자 결과(0.7)"
+      "value_reason": "숫자 결과(0.7)",
+      "check_reasons": []
     },
     {
       "raw_name": "Chromium (Cr)",
@@ -278,7 +292,8 @@
         "h": 0.0111
       },
       "value_kind": "number",
-      "value_reason": "숫자 결과(0.6)"
+      "value_reason": "숫자 결과(0.6)",
+      "check_reasons": []
     },
     {
       "raw_name": "Zinc (Zn)",
@@ -296,7 +311,8 @@
         "h": 0.0111
       },
       "value_kind": "number",
-      "value_reason": "숫자 결과(2.4)"
+      "value_reason": "숫자 결과(2.4)",
+      "check_reasons": []
     },
     {
       "raw_name": "Magnetic impurities",
@@ -314,7 +330,8 @@
         "h": 0.0111
       },
       "value_kind": "number",
-      "value_reason": "숫자 결과(9)"
+      "value_reason": "숫자 결과(9)",
+      "check_reasons": []
     },
     {
       "raw_name": "Particle size D10",
@@ -332,7 +349,8 @@
         "h": 0.0111
       },
       "value_kind": "number",
-      "value_reason": "숫자 결과(2.7)"
+      "value_reason": "숫자 결과(2.7)",
+      "check_reasons": []
     },
     {
       "raw_name": "Particle size D50",
@@ -350,7 +368,8 @@
         "h": 0.0111
       },
       "value_kind": "number",
-      "value_reason": "숫자 결과(10.9)"
+      "value_reason": "숫자 결과(10.9)",
+      "check_reasons": []
     },
     {
       "raw_name": "Particle size D90",
@@ -368,7 +387,8 @@
         "h": 0.0111
       },
       "value_kind": "number",
-      "value_reason": "숫자 결과(24.0)"
+      "value_reason": "숫자 결과(24.0)",
+      "check_reasons": []
     }
   ]
 }

@@ -15,7 +15,7 @@ from tests.fake_llm import FakeLLM
 
 INPUT_FIELDS = {"supplier", "lot_no", "test_date", "origin", "applied_standard", "items"}
 ITEM_FIELDS = {"raw_name", "normalized_name", "mapping_source", "raw_value", "raw_spec", "unit", "confidence", "bbox",
-               "value_kind", "value_reason"}  # 뒤의 두 칸은 팀 제안 (서버는 아직 무시)
+               "value_kind", "value_reason", "check_reasons"}  # 뒤의 세 칸은 팀 제안 (서버는 아직 무시)
 
 
 def test_synthetic_a(fixture_pdf):
@@ -253,3 +253,15 @@ def test_llm_suggestion_duplicating_dictionary_item_is_dropped(fixture_pdf):
                        confidence=0.95)]
     r = extract(fixture_pdf("COA_A_0007.pdf"), material_code="LI2CO3", llm=FakeLLM({"name": "순도"}), table_parser=parser)
     assert [(i.normalized_name, i.mapping_source) for i in r.items] == [("순도", "dictionary"), ("Traceable to", "ai")]
+
+
+def test_self_check_flags_suspicious_item(fixture_pdf):
+    def parser(pages):
+        box = Box(0, 0, 59.5, 84.2)
+        return [RawRow(page=1, name="Lead (Pb)", value="40.0 ppm 0|", spec="40.0 ppm 0|", unit=None, value_box=None,
+                       row_box=box, confidence=0.95),
+                RawRow(page=1, name="Sodium (Na)", value="12 ppm", spec="≤ 50 ppm", unit=None, value_box=None,
+                       row_box=box, confidence=0.95)]
+    pb, na = extract(fixture_pdf("COA_A_0007.pdf"), material_code="LI2CO3", table_parser=parser).items
+    assert pb.confidence == 0.75 and pb.check_reasons == ["값에 스캔 잡음으로 보이는 글자가 있음('0|')"]
+    assert na.confidence == 0.95 and na.check_reasons == []
