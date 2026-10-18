@@ -2,6 +2,7 @@
 
 누락 항목은 mapping_source=spec 이고 raw_name, raw_value, confidence, bbox 가 null 이다.
 item_id 는 spec-001, spec-002 ... 순서로 붙인다.
+필수가 아닌 규격 항목(is_required=False)은 CoA 에 없어도 누락으로 만들지 않는다 (v1.4안).
 """
 from collections.abc import Iterable
 
@@ -12,7 +13,7 @@ from app.services.judgement.spec_rule import SpecRule, name_key
 
 def build_missing_items(items: Iterable[ExtractedItem], specs: Iterable[SpecRule]) -> list[ExtractedItem]:
     present = {name_key(i.normalized_name) for i in items}
-    missing = [s for s in specs if name_key(s.item_name) not in present]
+    missing = [s for s in specs if s.is_required and name_key(s.item_name) not in present]
     return [
         ExtractedItem(
             item_id=f"spec-{n:03d}",

@@ -44,6 +44,8 @@ class DocumentDetail(BaseModel):
     origin: str | None
     applied_standard: str | None
     spec_grade: str | None
+    spec_set_code: str | None = None  # v1.4안: 판정에 쓴 규격 세트 (예: LI2CO3-D1-2023)
+    spec_version: str | None = None   # v1.4안: 규격 버전 (예: YS/T 582-2023)
     status: DocumentStatus
     lot_recommendation: LotRecommendation | None
     final_decision: FinalDecision | None

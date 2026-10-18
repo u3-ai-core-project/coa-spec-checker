@@ -6,6 +6,11 @@ from app.api.v1.router import api_router
 from app.core.config import settings
 from app.core.errors import register_exception_handlers
 from app.core.response import ok
+from app.services.judgement.cross_rules import validate_rule_names
+from app.services.judgement.policy import default_policy
+
+# 판정 정책 설정(.env)이 잘못됐으면 요청을 받기 전에 앱 시작 단계에서 바로 알린다 (ValueError)
+validate_rule_names(default_policy().cross_rules)
 
 app = FastAPI(title="CoA 검수 시스템 API", version="1.3.0")
 

@@ -7,14 +7,14 @@ from datetime import datetime
 from sqlalchemy import DateTime, ForeignKey, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.core.enums import ReviewAction
+from app.core.enums import ReviewAction, ValueSource
 from app.db.base import Base, enum_check, str_enum
 from app.models.user import User
 
 
 class ReviewLog(Base):
     __tablename__ = "review_logs"
-    __table_args__ = (enum_check("action", ReviewAction),)
+    __table_args__ = (enum_check("action", ReviewAction), enum_check("value_source", ValueSource))
 
     id: Mapped[int] = mapped_column(primary_key=True)
     document_id: Mapped[str] = mapped_column(
@@ -24,6 +24,8 @@ class ReviewLog(Base):
     action: Mapped[ReviewAction] = mapped_column(str_enum(ReviewAction, "review_action"), nullable=False)
     before_value: Mapped[str | None] = mapped_column(Text)
     after_value: Mapped[str | None] = mapped_column(Text)
+    # 값 수정(edit)일 때 입력값의 출처 (v1.4안, 명세 2.5 표에는 없음). 확인·항목명 수정이면 null
+    value_source: Mapped[ValueSource | None] = mapped_column(str_enum(ValueSource, "value_source"))
     reviewer_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
     reviewed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 

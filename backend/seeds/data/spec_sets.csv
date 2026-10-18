@@ -1,0 +1,2 @@
+code,material_code,material_name,grade,version,source,is_default,description
+LI2CO3-D1-2023,LI2CO3,탄산리튬,D1,YS/T 582-2023,YS/T 582-2023 D1 공개 해설 기반 (임시값),true,임시 시드. 소성훈 님 규격 CSV를 받으면 교체

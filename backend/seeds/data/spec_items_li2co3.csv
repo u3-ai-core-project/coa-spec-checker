@@ -1,0 +1,13 @@
+spec_set_code,item_name,unit,lsl,usl,spec_type,is_required,source
+LI2CO3-D1-2023,순도,%,99.5,,정량,true,YS/T 582-2023 D1 (임시)
+LI2CO3-D1-2023,Na,ppm,,50,정량,true,YS/T 582-2023 D1 (임시)
+LI2CO3-D1-2023,K,ppm,,10,정량,true,YS/T 582-2023 D1 (임시)
+LI2CO3-D1-2023,Fe,ppm,,5,정량,true,YS/T 582-2023 D1 (임시)
+LI2CO3-D1-2023,Ca,ppm,,20,정량,true,YS/T 582-2023 D1 (임시)
+LI2CO3-D1-2023,Mg,ppm,,10,정량,true,YS/T 582-2023 D1 (임시)
+LI2CO3-D1-2023,Pb,ppm,,3,정량,true,기획안 v2 7.2 (임시)
+LI2CO3-D1-2023,염화물,ppm,,20,정량,true,YS/T 582-2023 D1 (임시)
+LI2CO3-D1-2023,황산염,ppm,,400,정량,true,YS/T 582-2023 D1 (임시)
+LI2CO3-D1-2023,자성이물,ppb,,50,정량,true,YS/T 582-2023 D1 (임시)
+LI2CO3-D1-2023,중금속 총량,ppm,,,정량,false,교차 규칙용 (범위 없음. 값 해석·신뢰도 검사만 받게 등록)
+LI2CO3-D1-2023,외관,,,,정성,false,참고

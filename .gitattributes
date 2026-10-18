@@ -1,0 +1,7 @@
+# 줄바꿈을 LF 로 통일한다. Windows(core.autocrlf=true)에서 받으면 전체 파일이 수정됨으로 보이는 문제 방지
+* text=auto eol=lf
+*.pdf binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.xlsx binary

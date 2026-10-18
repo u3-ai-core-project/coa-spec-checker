@@ -5,6 +5,7 @@ from app.models.extraction_result import ExtractionResult
 from app.models.item_mapping import ItemMapping
 from app.models.review_log import ReviewLog
 from app.models.spec_item import SpecItem
+from app.models.spec_set import SpecSet
 from app.models.user import User
 
-__all__ = ["User", "SpecItem", "ItemMapping", "Document", "ExtractionResult", "ReviewLog", "ApprovalLog"]
+__all__ = ["User", "SpecSet", "SpecItem", "ItemMapping", "Document", "ExtractionResult", "ReviewLog", "ApprovalLog"]

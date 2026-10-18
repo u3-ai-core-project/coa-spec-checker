@@ -15,6 +15,7 @@ class SpecRule:
     lsl: float | None = None
     usl: float | None = None
     spec_type: SpecType = SpecType.QUANTITATIVE
+    is_required: bool = True  # False 면 CoA 에 없어도 누락 항목을 만들지 않는다 (v1.4안, DEMO-R 의 별도 성적서 항목)
 
     @property
     def is_quantitative(self) -> bool:
@@ -23,7 +24,8 @@ class SpecRule:
     @classmethod
     def from_model(cls, spec) -> "SpecRule":
         """app.models.SpecItem (또는 같은 속성을 가진 객체) 에서 생성."""
-        return cls(spec.item_name, spec.unit, spec.lsl, spec.usl, SpecType(spec.spec_type))
+        return cls(spec.item_name, spec.unit, spec.lsl, spec.usl, SpecType(spec.spec_type),
+                   bool(getattr(spec, "is_required", True)))
 
 
 def name_key(name: str | None) -> str:
