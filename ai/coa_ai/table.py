@@ -66,6 +66,7 @@ _HIDDEN_NAME_RE = re.compile(r"^Type:\s*(?P<analyte>.+?)\s+measure\b\s*(?P<rest>
 _SPACED_CAPS_RE = re.compile(r"^(?:[A-Z]{1,3}\s)+[A-Z]{1,3}$")  # 'A S S AY', 'T R A C E M E TA L S'
 _SYMBOL_RE = re.compile(r"^[A-Z][a-z]?$")
 _CJK_ONLY = re.compile(r"^[一-鿿]+$")
+_ROW_NO_RE = re.compile(r"^\d{1,3}[.)]?$")
 _GRID_OPS = {"<", ">", "≤", "≥", "<=", ">=", "=<", "=>", "＜", "＞"}
 GRID_MIN_PAIRS = 3  # 기호·값 짝이 이만큼 있는 줄은 앞뒤 줄 없이 혼자서도 격자로 본다
 
@@ -287,8 +288,11 @@ def _rows(lines: list[Line], idx: list[int], cols: list[Column], pitch: float) -
         by_role: dict[str, list[Word]] = {}
         for w in lines[i].words:
             col = _column_of(w, cols)
-            if col.role:
-                by_role.setdefault(col.role, []).append(w)
+            role = col.role
+            if role == "no" and not _ROW_NO_RE.match(w.text):
+                role = "item"  # 흐린 스캔본에서 번호와 왼쪽 정렬 항목명이 한 열로 붙음. 번호 열엔 숫자만 온다
+            if role:
+                by_role.setdefault(role, []).append(w)
         if by_role:
             split.append((lines[i].baseline, by_role))
 

@@ -209,6 +209,17 @@ def test_header_without_item_title(make_pdf):
     ]
 
 
+def test_names_merged_into_row_number_column(make_pdf):
+    # 생성기 v2 양식 B 흐림: 행 번호와 왼쪽 정렬 항목명이 한 열로 붙어 '번호' 열이 됐다. 번호 열의 글자는 항목명
+    path = make_pdf([
+        [(46, "No."), (124, "Test Item"), (231, "Unit"), (293, "Specification"), (406, "Result")],
+        [(50, "2"), (58, "Sodium"), (234, "%"), (299, "<0.025"), (413, "0.0044")],
+        [(50, "3"), (58, "Potassium"), (234, "%"), (299, "<0.0050"), (413, "0.00052")],
+    ])
+    rows = parse_tables(read_pages(path))
+    assert [(r.name, r.value) for r in rows] == [("Sodium", "0.0044"), ("Potassium", "0.00052")]
+
+
 def test_ocr_unit_misreads_stay_in_unit_column(make_pdf):
     # 스캔본 OCR 이 '% w/w' 를 '% ww'·'% wiw' 로, 'mg/kg' 를 'mgkg' 로 읽었다. 항목명에 붙이면 이름을 못 알아본다
     path = make_pdf([

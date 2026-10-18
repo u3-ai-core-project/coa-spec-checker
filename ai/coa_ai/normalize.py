@@ -56,6 +56,8 @@ _ROW_NO = re.compile(r"^\s*\d{1,2}[.)]?\s+(?=\S)")  # 스캔본에서 번호 칸
 _OCR_JUNK = re.compile(r"[{}_^]")
 _OCR_I = re.compile(r"(?<=[A-Z])I(?![a-z])")        # 'CI' → 'Cl', 'AI' → 'Al'
 _OCR_ZERO = re.compile(r"(?<=[A-Z])0(?=\d)")       # 'S04' → 'SO4'
+_OCR_LI = re.compile(r"\bL[I1l|(/]?(?=2\s*C)")      # 'LI2CO3'·'L2CO3'·'L(2CO3' → 'Li2CO3' (원소 기호 L 은 없다)
+_OCR_D0 = re.compile(r"(?<=[Dd])([159])[DdOo](?![0-9A-Za-z])")  # 'D1D'·'D5O' → 'D10'·'D50'
 _LATIN_WORD = re.compile(r"[a-z]+")
 GUESS_CUTOFF = 0.85  # 스캔본 짐작에서 앞 단어 유사도 기준 ('suffate' ~ 'sulfate' 0.857)
 
@@ -157,11 +159,12 @@ class Normalizer:
     def _ocr_retry(self, raw: str) -> str | None:
         """스캔본 잡음을 걷어 낸 이름으로 규칙을 다시 본다. 결과는 사전·규칙에 있는 이름뿐이라 새 항목을 만들지 않는다."""
         cleaned = _OCR_JUNK.sub("", _ROW_NO.sub("", raw, count=1))
+        cleaned = _OCR_D0.sub(r"\g<1>0", _OCR_LI.sub("Li", cleaned))
         cleaned = _OCR_ZERO.sub("O", _OCR_I.sub("l", cleaned))
         if not cleaned.strip():
             return None
         if cleaned != raw:
-            code = self._exact(cleaned) or self._rules(cleaned) or self._alias(re.split(r"[(（]", cleaned)[0])
+            code = self._exact(cleaned) or self._rules(cleaned) or self._resolve(re.split(r"[(（]", cleaned)[0])
             if code:
                 return code
         # 한자·한글 이름 뒤의 잡음('钾κ', '水分1.0', '外观 一'): 앞의 한자·한글 이름만 본다

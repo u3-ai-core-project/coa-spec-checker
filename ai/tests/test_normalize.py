@@ -139,6 +139,11 @@ def test_text_helpers():
     ("LIOH", "Sulfate (SO{4{2})}", "황산염"),
     ("LI2CO3", "Fe{2O3", "Fe"),
     ("LI2CO3", "Li2CO_3", "순도"),
+    # 생성기 v2 양식 D 저해상도·흐림: Li 의 i 를 I·( 로 읽거나 놓침, D10 의 0 을 D 로 읽음
+    ("LI2CO3", "LI2CO3 (as LI2CO3)", "순도"),
+    ("LI2CO3", "L2CO3 (as L2CO3)", "순도"),
+    ("LI2CO3", "LI2CO3 (as LI2COd)", "순도"),
+    ("LI2CO3", "Particle size D1D", "입도 D10"),
 ])
 def test_ocr_noise_in_names(material, raw, expected):
     m = Normalizer(material).map(raw)
