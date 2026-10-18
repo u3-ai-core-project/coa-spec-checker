@@ -90,3 +90,21 @@ def test_duplicates_on_different_pages_are_fine():
 def test_reason_quotes_whole_junk_token():
     (r,) = reasons(item("Pb", "2000 ppm 0|σ"))
     assert r == ["값에 스캔 잡음으로 보이는 글자가 있음('0|σ')"]
+
+
+def test_particle_size_order_broken():
+    # 저해상도 스캔본이 소수점을 놓쳐 D10 1.7 → 17 (생성기 v2 양식 D). 어느 값이 틀렸는지 몰라 셋 다 확인
+    r = reasons(item("Particle size D10", "17", normalized="입도 D10"), item("Particle size D50", "5.8", normalized="입도 D50"),
+                item("Particle size D90", "13.2", normalized="입도 D90"))
+    assert all(len(x) == 1 and "D10 ≤ D50 ≤ D90" in x[0] for x in r)
+
+
+@pytest.mark.parametrize("values", [("1.7", "5.8", "13.2"), ("1.8", "Report", "13.2"), ("<2", "5.8", "13.2")])
+def test_particle_size_order_fine_or_not_comparable(values):
+    # 순서가 맞거나, 숫자가 아니거나 부등호가 붙어 비교할 수 없으면 걸지 않는다
+    items = [item(f"D{n}", v, normalized=f"입도 D{n}") for n, v in zip((10, 50, 90), values)]
+    assert reasons(*items) == [[], [], []]
+
+
+def test_particle_sizes_on_different_pages_are_not_compared():
+    assert reasons(item("D10", "17", normalized="입도 D10", page=1), item("D50", "5.8", normalized="입도 D50", page=2)) == [[], []]
