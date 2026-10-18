@@ -23,6 +23,7 @@ pip install -e "../ai[dev]"
 cd ai
 python -m coa_ai tests/fixtures/COA_A_0007.pdf --material LIOH        # 추출 결과 JSON
 python -m coa_ai data/raw/real/*.pdf --material LI2CO3                # 여러 파일 점검표
+python -m coa_ai tests/fixtures/COA_D_0007.pdf --material LIOH --llm-url http://127.0.0.1:8090   # LLM 단계 포함
 ```
 
 ## 테스트
@@ -44,8 +45,10 @@ COA_REAL_DIR=data/raw/real pytest -q        # 실물 CoA 까지
 | 2 | `fields.py`, `dates.py` | 머리글 필드(로트, 시험일, 원산지, 협력사, 적용 규격)와 날짜(YYYY-MM-DD) |
 | 3 | `classify.py` | 문서 유형: CoA·규격서·웹페이지·기타. CoA가 아니면 사유와 함께 실패 |
 | 4 | `table.py` | 표 머리글 → 열(빈 세로 띠) → 행. 머리글이 없으면 '이름 값' 목록·'기호 값' 격자 |
-| 5 | `normalize.py`, `vocab.json` | 항목명 정규화: DB 매핑 → 사전 → 규칙 → 유사도 |
-| 6 | `pipeline.py` | 단계 연결, 신뢰도·좌표 계산. 표 구조화 함수는 교체 가능 |
+| 5 | `normalize.py`, `vocab.json` | 항목명 정규화: DB 매핑 → 사전 → 규칙 → 유사도 → (LLM 제안) |
+| 6 | `meaning.py` | 결과 칸 의미: 숫자·부등호·검출 안 됨·규격 복사·합격 문구·서술 + 근거 한 줄 |
+| 7 | `pipeline.py` | 단계 연결, 신뢰도·좌표 계산. 표 구조화 함수는 교체 가능 |
+| - | `llm.py`, `inquiry.py` | LLM 서버 클라이언트, 공급사 문의 초안 (아래 'LLM 기능') |
 
 ## 표준 항목명 (normalized_name)
 
@@ -71,7 +74,7 @@ COA_REAL_DIR=data/raw/real pytest -q        # 실물 CoA 까지
 | 머리글 있는 표, 깨끗한 행, 사전 매핑 | 0.95 |
 | 칸 보정(단위 칸의 글을 항목명으로 되돌림), 결과 값이 여러 줄 | 0.85 |
 | 머리글 없는 목록·격자 | 0.7 |
-| 유사도 매핑, 매핑 못 함 | 0.6 이하 |
+| 유사도 매핑, LLM 제안, 매핑 못 함 | 0.6 이하 |
 | 스캔본·이미지(OCR)로 읽은 항목 | 0.75 이하 |
 
 OCR은 글자를 틀릴 수 있고(모델 테스트에서 값 일치율 약 90%), 틀린 글자도 OCR 점수가 높게 나와 가려낼 수 없습니다. 그래서 OCR로 읽은 항목은 모두 '확인 필요'로 보내 담당자가 원본과 대조하게 합니다. 한 문서 안에서도 글자 있는 쪽은 위 표대로, OCR로 읽은 쪽만 0.75 이하가 됩니다.
@@ -82,11 +85,46 @@ OCR은 글자를 틀릴 수 있고(모델 테스트에서 값 일치율 약 90%)
 
 - 한글 스캔본: OCR 인식 모델에 한국어가 없어 '이하'를 '0|'처럼 읽습니다. 한국어 모델로 다시 읽는 단계를 넣을 예정입니다(모델 테스트에서 대정화금 7/7 확인).
 - 90°·180° 돌아간 스캔과 5°를 넘는 기울기는 확인하지 않았습니다.
-- LLM 기능: 정규화 보완, 결과 의미 보조, 공급사 문의 초안
 - 웹페이지 캡처(Nanotrun)는 지금은 CoA가 아닌 것으로 막습니다. 팀에서 받기로 하면 `classify.py`의 `ACCEPTED_DOC_TYPES`에 `"web_page"`를 넣습니다.
 - 월·연도만 있는 날짜(08-2025)는 읽지 않습니다. 시험일 라벨이 없는 양식은 `test_date`가 null입니다.
+
+## LLM 기능 (선택)
+
+LLM 서버를 띄우면 규칙이 못 읽은 것만 LLM에 묻습니다. 띄우지 않아도 모든 기능이 규칙·템플릿으로 돌아갑니다.
+
+| 기능 | LLM 이 하는 일 | 규칙·코드가 하는 일 | LLM 이 없거나 실패하면 |
+| --- | --- | --- | --- |
+| 항목명 정규화 (★4) | 사전·규칙·유사도가 못 찾은 항목명에 표준 항목명 제안. 후보 목록 + '없음' 중 하나만 고를 수 있음 | 사전·규칙·유사도. 표준 목록 밖 원소 기호 하나(`Ti`, `Co²⁺`)는 묻지 않고 그대로 둠 | 원문 항목명 그대로 |
+| 결과 의미 분류 (★3) | 규칙 표에 없는 열린 문장(`Satisfactory`, `approx. 12 ppm (ICP)`)의 종류 | 부등호 단어(max, NMT, 이하, 不大于 …)·검출 안 됨 표기(BDL, < LOD, 未检出 …) 읽기, 규격 복사 여부 비교 | 숫자 없는 글은 서술, 못 읽은 숫자 표기는 `null` |
+| 공급사 문의 초안 (★8) | 서버 판정 결과의 요청 목록으로 메일 초안 작성 | 입력에 없는 숫자, 빠진 로트·항목·요청 수치, 표, 처분 단정 표현 검사 | 백엔드가 템플릿 초안으로 대신함 (`source=template_fallback`) |
+
+- LLM 제안 항목명은 신뢰도 0.6 이하라 항상 '확인 필요'입니다. 잘못 제안해도 자동으로 확정되지 않고, 담당자가 확정하면 매핑 사전에 쌓여 다음부터는 사전으로 바로 잡힙니다.
+- LLM은 부등호 단어 대응과 숫자 비교를 하지 않습니다. 모델 테스트에서 Gemma가 "max"를 "≥"로 바꾸는 등 틀렸기 때문입니다. LLM이 답한 숫자는 원문에 글자 그대로 있을 때만 받아들입니다.
+- LLM이 정한 의미의 근거(`value_reason`)는 "AI 판단: "으로 시작합니다.
+
+**띄우는 법** (모델: Gemma 4 E2B QAT q4_0, 3.3GB, 모델 테스트 결과는 `bench/README.md`)
+```bash
+hf download google/gemma-4-E2B-it-qat-q4_0-gguf gemma-4-E2B_q4_0-it.gguf --local-dir ~/.cache/coa-bench/models
+docker compose -f ai/docker-compose.llm.yml up -d      # 포트 8090, CPU 4스레드, 메모리 약 2GB
+```
+백엔드 `.env`에 `LLM_BASE_URL=http://127.0.0.1:8090`을 넣고, AI 문의 초안을 쓰려면 `INQUIRY_DRAFTER=ai`도 넣습니다. 백엔드를 Docker로 띄울 때는 주소를 `http://host.docker.internal:8090`이나 compose 서비스 이름으로 바꿉니다. 모델 파일을 다른 곳에 두었다면 `COA_LLM_MODELS=폴더 docker compose ...`로 지정합니다.
+
+**시간**: 맥 Docker CPU 4스레드 기준 처음 보는 항목명·열린 문장 1개에 약 3~18초, 문의 초안 1통에 약 40초입니다. 문서 1건에서 LLM에 묻는 횟수는 최대 12번이고, 넘으면 나머지는 규칙 결과만 씁니다. 같은 질문은 기억해서 다시 묻지 않습니다. 서버에 연결할 수 없으면 60초 동안 묻지 않고 바로 규칙으로 진행합니다.
+
+### 팀 제안: 항목 칸 2개 추가 (`value_kind`, `value_reason`)
+
+AI 결과 항목에 아래 두 칸을 추가로 넣고 있습니다. 서버 `ExtractedItem`은 모르는 칸을 버리므로(`extra="ignore"`) 지금은 판정에 영향이 없습니다. 팀에서 받기로 하면 스키마에 두 칸을 넣으면 됩니다.
+
+| 칸 | 값 | 예 |
+| --- | --- | --- |
+| `value_kind` | `number` 숫자 결과 / `bound` 부등호 결과 / `nd` 검출 안 됨 / `spec_copy` 결과 칸에 규격 조건을 다시 적음 / `pass_text` 합격 문구 / `description` 서술 / `null` 읽지 못함 | 결과 "Max 20 ppm", 규격 "≤ 20 ppm" → `spec_copy` |
+| `value_reason` | 근거 한 줄 | "규격 칸과 같은 조건(<= 20 ppm)을 결과 칸에 다시 적음" |
+
+- 받으면 좋은 점: 서버 규격 복사 판정(`SPEC_COPIED`)은 지금 글자가 같을 때만 잡습니다. `value_kind=spec_copy`를 쓰면 "Max 20 ppm"과 "≤ 20 ppm", "NMT 20 ppm"처럼 표기만 다른 복사도 잡을 수 있습니다. 검수 화면에서는 근거 문장을 그대로 보여 줄 수 있습니다.
+- 공급사용 요청 문구(`inquiry_draft.SUPPLIER_REQUEST`)가 없는 사유코드는 담당자용 해결 조건이 메일에 그대로 들어갑니다. 문구를 채우면 템플릿과 AI 초안이 함께 좋아집니다.
 
 ## 라이선스
 
 PDF 처리에 쓰는 PyMuPDF는 AGPL-3.0입니다. 외부에 공개하는 서비스로 배포하면 소스 공개 의무가 생깁니다.
 OCR에 쓰는 RapidOCR과 PP-OCR 모델은 Apache-2.0, ONNX Runtime은 MIT입니다.
+LLM 기능에 쓰는 Gemma 4 E2B는 Apache-2.0, llama.cpp는 MIT입니다.

@@ -101,6 +101,7 @@ EXTRACTOR=ai
 - 글자가 있는 PDF는 글자를 그대로 읽고, 이미지(PNG·JPG)와 스캔 PDF는 OCR로 읽습니다. OCR로 읽은 항목은 신뢰도가 0.75 이하라 모두 '원본 확인'으로 판정되고 로트는 보류됩니다.
 - 스캔본을 처음 읽을 때 OCR 모델 파일을 내려받으므로 인터넷이 필요합니다.
 - AI 패키지 설명과 표준 항목명 표는 `ai/README.md`에 있습니다.
+- LLM 기능(선택): `ai/docker-compose.llm.yml`로 LLM 서버를 띄우고 `.env`에 `LLM_BASE_URL=http://127.0.0.1:8090`을 넣으면, 처음 보는 항목명에 표준 항목명을 제안합니다(항상 확인 필요). `INQUIRY_DRAFTER=ai`를 넣으면 follow-ups의 문의 초안을 LLM이 쓰고, 검사에 걸리거나 서버가 없으면 템플릿으로 대신합니다(`source=template_fallback`). 비워 두면 지금처럼 동작합니다.
 
 ### 판정 정책 설정 (v1.4안)
 
