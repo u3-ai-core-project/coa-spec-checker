@@ -50,6 +50,10 @@ COA_REAL_DIR=data/raw/real pytest -q        # 실물 CoA 까지
 | 7 | `pipeline.py` | 단계 연결, 신뢰도·좌표 계산. 표 구조화 함수는 교체 가능 |
 | - | `llm.py`, `inquiry.py` | LLM 서버 클라이언트, 공급사 문의 초안 (아래 'LLM 기능') |
 
+결과에는 `ExtractionInput` 필드 외에 서버가 아직 쓰지 않는 칸도 들어 있습니다. 서버는 이 칸들을 버립니다(`extra="ignore"`).
+- 문서: `doc_type`, `product_name`, `issue_date`, `expiry_date`, `retest_date`(Suggested retest date·复检日期·재시험일). 날짜 칸은 PR #5가 요청한 날짜 충돌 탐지(`DATE_CONFLICT`)용입니다.
+- 항목: `value_kind`, `value_reason` (아래 '팀 제안')
+
 ## 표준 항목명 (normalized_name)
 
 서버는 `normalized_name`이 사내 규격 `spec_items.item_name`과 같을 때만 판정합니다. 규격 시드를 만들 때 아래 이름을 그대로 써 주세요.

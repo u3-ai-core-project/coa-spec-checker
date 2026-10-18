@@ -57,3 +57,19 @@ def test_bare_lot_and_batch_labels(make_pdf, label):
 def test_size_labels_are_not_lot_numbers(make_pdf, label):
     path = make_pdf([[(50, label), (200, "500kg")]])
     assert extract_fields(read_pages(path))["lot_no"] is None
+
+
+@pytest.mark.parametrize("label", ["Suggested retest date", "Retest Date:", "Re-test date"])
+def test_retest_date(make_pdf, label):
+    """재시험일 (PR #5 요청: 서버가 날짜 충돌을 찾는 데 쓴다). 시험일 라벨과 섞이지 않아야 한다."""
+    path = make_pdf([[(50, "Lot Number"), (200, "A0421609")],
+                     [(50, "Quality Test / Release Date"), (200, "08/18/2020")],
+                     [(50, label), (200, "08/18/2025")]])
+    f = extract_fields(read_pages(path))
+    assert (f["test_date"], f["retest_date"]) == ("2020-08-18", "2025-08-18")
+
+
+@pytest.mark.parametrize("label", ["复检日期", "复验日期", "재시험일", "재시험 일자"])
+def test_retest_date_labels_cjk(label):
+    from coa_ai.fields import _COMPILED
+    assert any(p.match(label) for p in _COMPILED["retest_date"])

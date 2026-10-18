@@ -29,6 +29,8 @@ LABELS: dict[str, list[str]] = {
                    r"签\s*发\s*日\s*期", r"발행\s*일(?:자)?"],
     "expiry_date": [r"expiry\s*date", r"expiration\s*date", r"exp\.?\s*date", r"保\s*质\s*期", r"有\s*效\s*期",
                     r"유효\s*기간", r"사용\s*기한"],
+    "retest_date": [r"(?:suggested\s+)?re-?test\s*date", r"re-?test\s+by", r"复\s*[检验]\s*日\s*期",
+                    r"재\s*시험\s*일(?:\s*자)?"],
     "origin": [r"country\s+of\s+origin", r"origin", r"原\s*产\s*地", r"원\s*산\s*지"],
     "product_name": [r"product\s*name", r"产\s*品\s*名\s*称", r"제\s*품\s*명", r"품\s*명", r"description", r"product"],
     "supplier": [r"supplier", r"manufacturer", r"vendor", r"供\s*应\s*商", r"生\s*产\s*厂\s*家", r"제조사", r"공급사"],
@@ -39,7 +41,7 @@ LABELS: dict[str, list[str]] = {
 }
 _COMPILED = {f: [re.compile(rf"^(?:{p})(?=$|[\s:：])", re.IGNORECASE) for p in pats] for f, pats in LABELS.items()}
 
-_INLINE_FIELDS = {"lot_no", "test_date", "issue_date", "expiry_date"}  # 값 검사가 있어 콜론 없이 붙어도 된다
+_INLINE_FIELDS = {"lot_no", "test_date", "issue_date", "expiry_date", "retest_date"}  # 값 검사가 있어 콜론 없이 붙어도 된다
 _INLINE_LABEL = re.compile(r"^conforms\s+to\s", re.IGNORECASE)  # 'Conforms to CVL-SPEC-…'
 _LOT_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9\-_/.]{2,}$")
 # 제품 규격 계열만 (ISO 9001 같은 품질 시스템, ASTM 시험법 번호는 적용 규격이 아님)
@@ -111,7 +113,7 @@ def _valid(field: str, value: str | None) -> str | None:
     if field == "lot_no":
         token = value.split()[0]
         return token if _LOT_RE.match(token) and re.search(r"\d", token) else None
-    if field in ("test_date", "issue_date", "expiry_date"):
+    if field in ("test_date", "issue_date", "expiry_date", "retest_date"):
         dates = find_dates(value)
         if not dates:
             return None
@@ -123,7 +125,7 @@ def extract_fields(pages: list[Page]) -> dict[str, str | None]:
     """첫 페이지(없으면 다음 페이지)에서 머리글 필드를 읽는다."""
     out: dict[str, str | None] = {k: None for k in
                                   ("supplier", "lot_no", "test_date", "origin", "applied_standard",
-                                   "product_name", "issue_date", "expiry_date")}
+                                   "product_name", "issue_date", "expiry_date", "retest_date")}
     page = next((p for p in pages if p.lines), None)
     if page is None:
         return out
@@ -142,7 +144,7 @@ def extract_fields(pages: list[Page]) -> dict[str, str | None]:
         if value and lab.field not in found:
             found[lab.field] = (lab.rank, value)
 
-    for key in ("lot_no", "test_date", "issue_date", "expiry_date", "origin", "product_name"):
+    for key in ("lot_no", "test_date", "issue_date", "expiry_date", "retest_date", "origin", "product_name"):
         if key in found:
             out[key] = found[key][1]
     out["supplier"] = found.get("supplier", (0, None))[1] or _supplier(page, all_phrases, customer_values)

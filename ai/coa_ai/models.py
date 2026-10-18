@@ -138,6 +138,7 @@ class Extraction:
     product_name: str | None = None  # API v1.4 대비 (현재 서버는 무시)
     issue_date: str | None = None    # API v1.4 대비
     expiry_date: str | None = None   # API v1.4 대비
+    retest_date: str | None = None   # PR #5 요청 (서버 날짜 충돌 탐지용, 현재 서버는 무시)
     items: list[Item] = field(default_factory=list)
 
     def to_dict(self) -> dict:
