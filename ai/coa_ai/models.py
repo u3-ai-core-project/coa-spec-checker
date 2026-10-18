@@ -5,6 +5,7 @@
 """
 from __future__ import annotations
 
+import math
 from collections.abc import Iterable
 from dataclasses import asdict, dataclass, field
 
@@ -82,6 +83,18 @@ class Page:
     width: float
     height: float
     lines: list[Line]
+    skew: float = 0.0  # OCR 로 바로 세운 각도(라디안, 쪽 가운데 기준). 텍스트 PDF 는 0
+    ocr: bool = False  # 스캔본·이미지를 OCR 로 읽은 쪽
+
+    def to_image_box(self, box: Box) -> Box:
+        """바로 세운 좌표의 상자 → 원본 이미지 좌표의 상자 (기울기를 되돌린 네 꼭짓점을 감싸는 상자)."""
+        if not self.skew:
+            return box
+        cx, cy = self.width / 2, self.height / 2
+        cos, sin = math.cos(self.skew), math.sin(self.skew)
+        pts = [(cx + (x - cx) * cos - (y - cy) * sin, cy + (x - cx) * sin + (y - cy) * cos)
+               for x, y in ((box.x0, box.y0), (box.x1, box.y0), (box.x1, box.y1), (box.x0, box.y1))]
+        return Box(min(p[0] for p in pts), min(p[1] for p in pts), max(p[0] for p in pts), max(p[1] for p in pts))
 
 
 @dataclass

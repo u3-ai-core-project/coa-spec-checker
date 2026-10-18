@@ -42,5 +42,5 @@ def test_db_mappings_are_passed(monkeypatch):
 def test_failure_becomes_extraction_error(extractor, tmp_path):
     image = tmp_path / "scan.png"
     image.write_bytes(b"\x89PNG\r\n\x1a\n")
-    with pytest.raises(ExtractionError, match="이미지·스캔본"):
+    with pytest.raises(ExtractionError, match="이미지 파일을 열 수 없습니다"):
         extractor.extract(image, material_code="LIOH")

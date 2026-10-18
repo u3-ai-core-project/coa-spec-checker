@@ -91,14 +91,15 @@ python -m uvicorn app.main:app --reload
 
 **8. AI 추출기 연결 (선택)**
 
-기본값은 목업 추출기(`EXTRACTOR=mock`)로, `app/pipeline/mock_data`의 JSON을 추출 결과로 씁니다. 실제 CoA PDF를 읽으려면 같은 가상환경에 AI 패키지를 설치하고 `.env`에 `EXTRACTOR=ai`를 넣습니다.
+기본값은 목업 추출기(`EXTRACTOR=mock`)로, `app/pipeline/mock_data`의 JSON을 추출 결과로 씁니다. 실제 CoA를 읽으려면 같은 가상환경에 AI 패키지를 설치하고 `.env`에 `EXTRACTOR=ai`를 넣습니다.
 ```bash
 pip install -e ../ai
 ```
 ```
 EXTRACTOR=ai
 ```
-- 현재 글자가 있는 PDF만 읽습니다. 이미지·스캔본은 "이미지·스캔본 추출은 아직 지원하지 않습니다"로 실패합니다.
+- 글자가 있는 PDF는 글자를 그대로 읽고, 이미지(PNG·JPG)와 스캔 PDF는 OCR로 읽습니다. OCR로 읽은 항목은 신뢰도가 0.75 이하라 모두 '원본 확인'으로 판정되고 로트는 보류됩니다.
+- 스캔본을 처음 읽을 때 OCR 모델 파일을 내려받으므로 인터넷이 필요합니다.
 - AI 패키지 설명과 표준 항목명 표는 `ai/README.md`에 있습니다.
 
 ### 판정 정책 설정 (v1.4안)

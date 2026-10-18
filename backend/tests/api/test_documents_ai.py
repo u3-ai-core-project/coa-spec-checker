@@ -67,11 +67,30 @@ def test_upload_synthetic_coa_is_extracted_and_judged(auth_client, lioh_specs, a
     assert doc.lot_recommendation == "reject"
 
 
-def test_upload_image_fails_with_reason(auth_client, lioh_specs, ai_mode, db, tmp_path):
+def test_upload_scanned_image_is_extracted_and_sent_to_review(auth_client, lioh_specs, ai_mode, db, tmp_path):
+    """스캔본은 OCR 로 읽고, OCR 값은 모두 '원본 확인'으로 보내 로트를 보류한다 (숨은 불합격도 확인 뒤 판정)."""
+    import pymupdf
+    image = tmp_path / "scan.png"
+    with pymupdf.open(FIXTURES / "COA_A_0007.pdf") as pdf:
+        pdf[0].get_pixmap(dpi=200).save(image)
+    r = upload(auth_client, image)
+    doc = db.get(Document, r.json()["data"]["document_id"])
+    db.refresh(doc)
+    assert doc.status == "extracted", doc.error_message
+    assert doc.lot_no == "SL25-0008"
+
+    by_name = {i["normalized_name"]: i for i in doc.extraction.result["items"]}
+    assert by_name["탄산"]["judgement"] == "check"
+    assert by_name["탄산"]["judgement_reason"].startswith("추출 신뢰도 낮음")
+    assert by_name["Na"]["bbox"]["page"] == 1
+    assert doc.lot_recommendation == "hold"
+
+
+def test_upload_broken_image_fails_with_reason(auth_client, lioh_specs, ai_mode, db, tmp_path):
     image = tmp_path / "scan.png"
     image.write_bytes(b"\x89PNG\r\n\x1a\n" + b"0" * 100)
     r = upload(auth_client, image)
     doc = db.get(Document, r.json()["data"]["document_id"])
     db.refresh(doc)
     assert doc.status == "failed"
-    assert doc.error_message.startswith("이미지·스캔본 추출은 아직 지원하지 않습니다")
+    assert doc.error_message.startswith("이미지 파일을 열 수 없습니다")
