@@ -6,8 +6,11 @@
   3. 규칙: 중금속, 입도 D10/D50/D90, 'Type: X measure', '(as X)', '(Na)',
      '钠Na' 처럼 한자·한글 이름 + 기호, 이름 전체가 화학식('Na₂O')          → dictionary
      못 찾으면 스캔본(OCR) 잡음을 걷어 내고 한 번 더: 앞에 붙은 행 번호('4 钠Na'),
-     첨자를 읽은 괄호·밑줄('Fe{2O3', 'Li2CO_3'), l·O 를 I·0 으로 읽은 기호('CI', 'S04')
+     첨자를 읽은 괄호·밑줄('Fe{2O3', 'Li2CO_3'), l·O 를 I·0 으로 읽은 기호('CI', 'S04'),
+     한자·한글 이름 뒤에 붙은 잡음('钾κ', '水分1.0')
   4. 유사도 (6자 이상 별칭, 0.88 이상)                                       → ai, 신뢰도 상한 0.6
+     스캔본 짐작: 앞 1~3 단어가 별칭과 같거나 비슷함(옆 칸 글자가 붙은 'Moisture % ww',
+     오타 'Suffate'), 한자 원소명 뒤 기호를 비슷한 한자로 읽음('硼日'). 합산 줄('Na+K')은 짐작하지 않는다
   5. 이름 전체가 표준 목록 밖 원소 기호 하나('Ti', 'Co²⁺'): 원문 그대로        → ai, 신뢰도 상한 0.6
   6. LLM 제안 (llm 을 넘겼을 때만, 후보 목록 + '없음' 중 하나로 답을 강제)     → ai, 신뢰도 상한 0.6
      단, 다른 원자재 전용 항목의 별칭(수산화리튬의 'Assay')은 일부러 매핑하지 않은 것이라 묻지 않는다
@@ -53,6 +56,8 @@ _ROW_NO = re.compile(r"^\s*\d{1,2}[.)]?\s+(?=\S)")  # 스캔본에서 번호 칸
 _OCR_JUNK = re.compile(r"[{}_^]")
 _OCR_I = re.compile(r"(?<=[A-Z])I(?![a-z])")        # 'CI' → 'Cl', 'AI' → 'Al'
 _OCR_ZERO = re.compile(r"(?<=[A-Z])0(?=\d)")       # 'S04' → 'SO4'
+_LATIN_WORD = re.compile(r"[a-z]+")
+GUESS_CUTOFF = 0.85  # 스캔본 짐작에서 앞 단어 유사도 기준 ('suffate' ~ 'sulfate' 0.857)
 
 
 @dataclass(frozen=True)
@@ -140,6 +145,9 @@ class Normalizer:
         close = difflib.get_close_matches(base, self._fuzzy_keys, n=1, cutoff=0.88) if len(base) >= 6 else []
         if close:
             return Mapping(self.names[self.aliases[close[0]]], "ai", AI_CAP)
+        guess = self._ocr_guess(raw, base)
+        if guess:
+            return Mapping(self.names[guess], "ai", AI_CAP)
         if self.llm is not None and not self._element_only(raw) and not self._other_material(raw):
             suggested = self._ask_llm(raw)
             if suggested:
@@ -150,9 +158,33 @@ class Normalizer:
         """스캔본 잡음을 걷어 낸 이름으로 규칙을 다시 본다. 결과는 사전·규칙에 있는 이름뿐이라 새 항목을 만들지 않는다."""
         cleaned = _OCR_JUNK.sub("", _ROW_NO.sub("", raw, count=1))
         cleaned = _OCR_ZERO.sub("O", _OCR_I.sub("l", cleaned))
-        if cleaned == raw or not cleaned.strip():
+        if not cleaned.strip():
             return None
-        return self._exact(cleaned) or self._rules(cleaned) or self._alias(re.split(r"[(（]", cleaned)[0])
+        if cleaned != raw:
+            code = self._exact(cleaned) or self._rules(cleaned) or self._alias(re.split(r"[(（]", cleaned)[0])
+            if code:
+                return code
+        # 한자·한글 이름 뒤의 잡음('钾κ', '水分1.0', '外观 一'): 앞의 한자·한글 이름만 본다
+        m = re.match(rf"\s*([{_CJK}]+)", cleaned)
+        return self._alias(m.group(1)) if m else None
+
+    def _ocr_guess(self, raw: str, base: str) -> str | None:
+        """확정은 못 하지만 짐작할 수 있는 스캔본 이름 (map 이 ai·신뢰도 상한 0.6 으로 낸다)."""
+        if "+" in raw:  # 'Sodium + Potassium (Na+K)' 를 앞 단어만 보고 Na 로 붙이지 않는다
+            return None
+        words = _LATIN_WORD.findall(base)
+        for n in range(min(3, len(words)), 0, -1):
+            phrase = " ".join(words[:n])
+            if len(phrase) < 5:
+                continue
+            close = difflib.get_close_matches(phrase, self._fuzzy_keys, n=1, cutoff=GUESS_CUTOFF)
+            code = self.aliases.get(phrase) or (self.aliases[close[0]] if close else None)
+            if code:
+                return code
+        # '硼日': 한자 원소명 뒤의 기호 B 를 비슷한 한자로 읽음. 한 글자 원소명일 때만
+        m = re.match(rf"\s*([{_CJK}])[{_CJK}](?![{_CJK}])", raw)
+        code = self._alias(m.group(1)) if m else None
+        return code if code and self.names[code] in ELEMENTS else None
 
     def candidates(self) -> list[tuple[str, str]]:
         """LLM 에 주는 후보: (표준 항목명, 뜻). 이 원자재에서 쓰는 이름만."""
@@ -203,9 +235,9 @@ class Normalizer:
     def _rules(self, raw: str) -> str | None:
         c = canon(raw)
 
-        # 입도 D10·D50·D90
+        # 입도 D10·D50·D90 ('度' 는 粒度 를 粮度·检度 로 잘못 읽은 스캔본도 받으려고)
         m = _PARTICLE_RE.search(c)
-        if m and (c.strip() in {"d10", "d50", "d90"} or any(k in c for k in ("particle", "粒度", "입도", "psd", "size"))):
+        if m and (c.strip() in {"d10", "d50", "d90"} or any(k in c for k in ("particle", "度", "입도", "psd", "size"))):
             code = f"d{m.group(1)}"
             if code in self.names:
                 return code

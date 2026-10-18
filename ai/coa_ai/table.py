@@ -52,7 +52,8 @@ _STOP_WORDS = ("notes", "note:", "remark", "conclusion", "备注", "检验结论
                "productsareprocessed", "referenceorstandard", "检验员", "审核", "批准")
 
 _UNIT_RE = re.compile(
-    r"^(%|%\s*w/w|w/w\s*%|wt\s*%|w/w|ppm|ppb|ppt|mg/kg|mg/l|g/kg|g/l|μg/kg|µg/kg|ug/kg|μg/g|µg/g|ug/g|"
+    # '% ww'·'% wiw'·'mgkg' 는 스캔본 OCR 이 '% w/w'·'mg/kg' 의 빗금을 놓치거나 i 로 읽은 것
+    r"^(%|%\s*w[/il1|]{0,2}w|w/w\s*%|wt\s*%|w/w|ppm|ppb|ppt|mg\s*/?\s*kg|mg/l|g/kg|g/l|μg/kg|µg/kg|ug/kg|μg/g|µg/g|ug/g|"
     r"μm|µm|um|nm|mm|g/ml|g/cm3|g/cm³|kg/m3|°c|ºc|℃|mpa·s|ms/cm|μs/cm|ph|—|–|-|n/a|na|%\(m/m\)|mass%)$",
     re.IGNORECASE)
 _NUMERIC_RE = re.compile(r"^[<>≤≥=＜＞]{0,2}\s*[-+]?\d+(?:[.,]\d+)?\s*(?:[%a-zA-Zμµ/°º℃]+)?$")
@@ -217,11 +218,16 @@ def _columns(lines: list[Line], idx: list[int], header: Header) -> list[Column]:
                 blocks.append([x, x + 1])
     cols = [Column(None, b[0] + lo, b[1] + lo) for b in blocks]
 
+    # 머리글에서 항목 열 제목만 빠진 경우(흐린 스캔본이 'Parameter' 를 놓침): 머리글 칸들보다 왼쪽 열이 항목명
+    no_item_title = header.roles.isdisjoint({"item"})
+    header_left = min(box.x0 for _, box in header.cells)
     for col in cols:
         overlaps = [(box.x_overlap(col.x0, col.x1), role) for role, box in header.cells]
         overlaps = [o for o in overlaps if o[0] > 0]
         if overlaps:
             col.role = max(overlaps)[1]
+        elif no_item_title and col.x1 <= header_left:
+            col.role = "item"
         else:
             mid = (col.x0 + col.x1) / 2
             near = min(header.cells, key=lambda rc: abs((rc[1].x0 + rc[1].x1) / 2 - mid))

@@ -193,6 +193,32 @@ def test_non_unit_text_in_unit_column_goes_back_to_name(make_pdf):
     ]
 
 
+def test_header_without_item_title(make_pdf):
+    # 흐린 스캔본(생성기 v2 양식 D)에서 머리글의 항목 열 제목 'Parameter' 만 OCR 이 놓쳤다.
+    # 다른 머리글 칸은 있으니, 머리글 칸들보다 왼쪽에 있는 열을 항목명 열로 본다
+    path = make_pdf([
+        [(200, "Method"), (300, "Unit"), (360, "Min"), (410, "Max"), (460, "Result"), (520, "Status")],
+        [(50, "Sodium (Na)"), (200, "ICP-OES"), (300, "mg/kg"), (410, "250"), (460, "231"), (520, "Pass")],
+        [(50, "Potassium (K)"), (200, "ICP-OES"), (300, "mg/kg"), (410, "30"), (460, "4.3"), (520, "Pass")],
+    ])
+    rows = parse_tables(read_pages(path))
+    assert [(r.name, r.value, r.spec, r.unit) for r in rows] == [
+        ("Sodium (Na)", "231", "≤ 250", "mg/kg"), ("Potassium (K)", "4.3", "≤ 30", "mg/kg"),
+    ]
+
+
+def test_ocr_unit_misreads_stay_in_unit_column(make_pdf):
+    # 스캔본 OCR 이 '% w/w' 를 '% ww'·'% wiw' 로, 'mg/kg' 를 'mgkg' 로 읽었다. 항목명에 붙이면 이름을 못 알아본다
+    path = make_pdf([
+        [(50, "Parameter"), (200, "Unit"), (300, "Max"), (380, "Result")],
+        [(50, "Moisture"), (200, "% ww"), (300, "0.25"), (380, "0.09")],
+        [(50, "Purity"), (200, "% wiw"), (300, "99.9"), (380, "99.84")],
+        [(50, "Chloride (Cl)"), (200, "mgkg"), (300, "40"), (380, "18")],
+    ])
+    rows = parse_tables(read_pages(path))
+    assert [(r.name, r.unit) for r in rows] == [("Moisture", "% ww"), ("Purity", "% wiw"), ("Chloride (Cl)", "mgkg")]
+
+
 def test_symbol_value_grid(make_pdf):
     # Puratronic: 한 줄에 '기호 값' 쌍이 여러 개 (머리글 없음)
     grid = [["Al", "7", "Sb", "ND"], ["Fe", "1", "Pb", "ND"], ["Na", "ND", "Si", "1"]]

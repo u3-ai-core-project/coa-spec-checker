@@ -13,7 +13,8 @@ def test_rule_hits_do_not_ask_llm():
 
 def test_llm_suggestion_is_ai_with_cap():
     llm = FakeLLM({"name": "Na"})
-    assert Normalizer("LI2CO3", llm=llm).map("Natrium content") == Mapping("Na", "ai", AI_CAP)
+    # 'Natrium content' 는 이제 스캔본 짐작(앞 단어 natrium = Na 별칭)이 LLM 보다 먼저 잡는다
+    assert Normalizer("LI2CO3", llm=llm).map("Na-Gehalt") == Mapping("Na", "ai", AI_CAP)
     assert len(llm.calls) == 1
 
 
@@ -57,11 +58,11 @@ def test_candidates_are_per_material():
 def test_prompt_has_material_and_enum():
     llm = FakeLLM({"name": NONE})
     n = Normalizer("LI2CO3", llm=llm)
-    n.map("Natrium content")
+    n.map("Na-Gehalt")
     call = llm.calls[0]
     assert call["schema"]["properties"]["name"]["enum"] == [name for name, _ in n.candidates()] + [NONE]
     assert "원자재: 탄산리튬" in call["user"]
-    assert "Natrium content" in call["user"]
+    assert "Na-Gehalt" in call["user"]
     assert "중금속 총량" in call["system"]
 
 

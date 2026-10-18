@@ -148,3 +148,37 @@ def test_ocr_noise_in_names(material, raw, expected):
 @pytest.mark.parametrize("raw", ["2 Theta", "10 Lot Size", "1", "Ti"])
 def test_ocr_cleanup_does_not_invent_items(raw):
     assert Normalizer("LI2CO3").map(raw).source == "ai"
+
+
+@pytest.mark.parametrize("raw, expected", [
+    # 생성기 v2 양식 B(중·영) 흐림·저해상도: 한자 이름 뒤의 기호·옆 칸을 잡음으로 읽음. 한자 이름만으로 확실하다
+    ("钾κ", "K"),
+    ("钾×", "K"),
+    ("水分1.0", "수분"),
+    ("外观 一", "외관"),
+    ("粮度 D50 Panicde Su", "입도 D50"),  # 粒度 를 粮度 로 읽음. D50 과 '度' 로 입도
+])
+def test_cjk_name_with_ocr_noise(raw, expected):
+    m = Normalizer("LI2CO3").map(raw)
+    assert (m.name, m.source) == (expected, "dictionary")
+
+
+@pytest.mark.parametrize("raw, expected", [
+    ("硼日", "B"),                                            # 硼 B 의 B 를 비슷한 한자 日 로 읽음
+    ("Moisture (105 °C) % ww", "수분"),                        # 단위 칸 글자가 붙음 (양식 D 흐림)
+    ("Appearance Vsu 一", "외관"),                             # 시험 방법 칸이 붙음
+    ("Magnetic impurties Magnetic sep /IP-OES ppb", "자성이물"),
+    ("Suffate (SO,2)", "황산염"),                              # OCR 오타
+    ("Nckel (N)", "Ni"),
+    ("Lithum Carbonate (as", "순도"),
+])
+def test_ocr_guesses_need_review(raw, expected):
+    # 앞 단어만 맞추거나 오타를 짐작한 것이라 확정하지 않고 담당자 확인으로 넘긴다
+    m = Normalizer("LI2CO3").map(raw)
+    assert (m.name, m.source, m.cap) == (expected, "ai", AI_CAP)
+
+
+@pytest.mark.parametrize("raw", ["Sodium + Potassium (Na+K)", "销", "Tesi tom Unn", "Na and K"])
+def test_ocr_guess_does_not_split_combined_or_unknown(raw):
+    # 합산 줄을 앞 단어(Sodium)만 보고 Na 로 붙이면 안 된다. 모르는 글자는 원문 그대로
+    assert Normalizer("LI2CO3").map(raw).name == raw

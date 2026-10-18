@@ -73,15 +73,16 @@ def _one_row(name, value, spec=None):
 
 def test_llm_is_used_per_document(fixture_pdf):
     llm = FakeLLM(None)
-    extract(fixture_pdf("COA_A_0007.pdf"), material_code="LIOH", llm=llm, table_parser=_one_row("Natrium content", "12 ppm"))
+    extract(fixture_pdf("COA_A_0007.pdf"), material_code="LIOH", llm=llm, table_parser=_one_row("Na-Gehalt", "12 ppm"))
     assert llm.documents == 1
 
 
 def test_unknown_name_gets_llm_suggestion(fixture_pdf):
     llm = FakeLLM({"name": "Na"})
     r = extract(fixture_pdf("COA_A_0007.pdf"), material_code="LIOH", llm=llm,
-                table_parser=_one_row("Natrium content", "12 ppm", "≤ 30 ppm"))
+                table_parser=_one_row("Na-Gehalt", "12 ppm", "≤ 30 ppm"))
     item = r.items[0]
+    assert len(llm.calls) == 1  # 규칙·짐작으로 못 찾은 이름이라 LLM 에 물었다
     assert (item.normalized_name, item.mapping_source, item.value_kind) == ("Na", "ai", "number")
     assert item.confidence <= 0.6
 
