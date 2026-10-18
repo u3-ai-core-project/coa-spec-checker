@@ -108,6 +108,7 @@ class ProductEngine:
     def __init__(self):
         from coa_ai.ocr import load_engine
         load_engine()
+        load_engine("korean")  # 한글 문서를 다시 읽는 모델 (Docker 이미지에 미리 받아 둔다)
 
     def run(self, image: Path, material: str, dpi: int) -> dict:
         from coa_ai import extract

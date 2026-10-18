@@ -15,7 +15,7 @@ pip install -e "../ai[dev]"
 
 백엔드에서 실제 추출기를 쓰려면 `backend/.env`에 `EXTRACTOR=ai`를 넣습니다. 기본값은 목업(`mock`)입니다.
 
-스캔본·이미지를 처음 읽을 때 OCR 모델 파일을 내려받으므로 인터넷이 필요합니다. Docker 이미지를 만들 때는 `python -c "from coa_ai.ocr import load_engine; load_engine()"`로 미리 받아 두세요.
+스캔본·이미지를 처음 읽을 때 OCR 모델 파일을 내려받으므로 인터넷이 필요합니다. Docker 이미지를 만들 때는 `python -c "from coa_ai.ocr import load_engine; load_engine(); load_engine('korean')"`로 미리 받아 두세요. 두 번째는 한글 문서를 다시 읽는 한국어 인식 모델입니다.
 
 ## 실행
 
@@ -41,7 +41,7 @@ COA_REAL_DIR=data/raw/real pytest -q        # 실물 CoA 까지
 | 단계 | 파일 | 하는 일 |
 | --- | --- | --- |
 | 1 | `pdf_text.py` | 글자 좌표로 줄을 다시 만들고, 첨자를 `Li₂CO₃`·`SO₄²⁻`처럼 복원 |
-| 1 | `ocr.py` | 이미지 파일과 글자 없는 PDF 쪽(스캔본)은 OCR(RapidOCR, PP-OCRv6 small ONNX)로 읽어 같은 줄 구조로 바꿈. 기울어진 스캔은 바로 세워 읽음 |
+| 1 | `ocr.py` | 이미지 파일과 글자 없는 PDF 쪽(스캔본)은 OCR(RapidOCR, PP-OCRv6 small ONNX)로 읽어 같은 줄 구조로 바꿈. 기울어진 스캔은 바로 세워 읽음. 한글을 못 읽은 흔적('0|')이 3개 이상인 쪽은 한국어 인식 모델로 다시 읽어 한글 글줄만 바꿈 |
 | 2 | `fields.py`, `dates.py` | 머리글 필드(로트, 시험일, 원산지, 협력사, 적용 규격)와 날짜(YYYY-MM-DD) |
 | 3 | `classify.py` | 문서 유형: CoA·규격서·웹페이지·기타. CoA가 아니면 사유와 함께 실패 |
 | 4 | `table.py` | 표 머리글 → 열(빈 세로 띠) → 행. 머리글이 없으면 '이름 값' 목록·'기호 값' 격자 |
@@ -89,7 +89,6 @@ OCR은 글자를 틀릴 수 있고(모델 테스트 152장에서 값 일치율 �
 
 ## 아직 못 하는 것 (다음 단계)
 
-- 한글 스캔본: OCR 인식 모델에 한국어가 없어 '이하'를 '0|'처럼 읽습니다. 한국어 모델로 다시 읽는 단계를 넣을 예정입니다(모델 테스트에서 대정화금 7/7 확인).
 - 90°·180° 돌아간 스캔과 5°를 넘는 기울기는 확인하지 않았습니다.
 - 웹페이지 캡처(Nanotrun)는 지금은 CoA가 아닌 것으로 막습니다. 팀에서 받기로 하면 `classify.py`의 `ACCEPTED_DOC_TYPES`에 `"web_page"`를 넣습니다.
 - 월·연도만 있는 날짜(08-2025)는 읽지 않습니다. 시험일 라벨이 없는 양식은 `test_date`가 null입니다.

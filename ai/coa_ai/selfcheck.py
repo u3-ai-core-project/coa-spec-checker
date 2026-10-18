@@ -23,7 +23,8 @@ from coa_ai.models import Item
 SELF_CHECK_CAP = 0.75  # 서버 LOW_CONFIDENCE_THRESHOLD(0.8) 미만
 HUGE_RATIO = 50  # 소수점이 빠지면(0.36 → 36) 상한의 수십~수백 배가 된다. 실제 불합격은 상한의 몇 배 수준
 
-_JUNK = re.compile(r"[|σ¦]|(?<![A-Za-z0-9])\d[\d.,]*[lIOo](?![A-Za-z])")
+# 스캔 잡음 글자. 기본 OCR 인식 모델은 한글이 없어 '이하'를 '0|'·'0l' 로 읽는다 (coa_ai.ocr 도 이 정규식을 쓴다)
+OCR_JUNK = re.compile(r"[|σ¦]|(?<![A-Za-z0-9])\d[\d.,]*[lIOo](?![A-Za-z])")
 _PARENS = re.compile(r"[(（][^)）]*[)）]")
 _UNIT_KIND = {u: "질량 분율" for u in ("%", "wt%", "ppm", "ppb", "mg/kg", "ug/g", "ug/kg", "g/kg")}
 _UNIT_KIND.update({u: "길이" for u in ("um", "nm", "mm")})
@@ -56,7 +57,7 @@ def _item_reasons(it: Item) -> list[str]:
         return []
     out = []
     outside = _PARENS.sub(" ", value)
-    m = _JUNK.search(outside)
+    m = OCR_JUNK.search(outside)
     if m:
         token = re.search(r"\S*$", outside[:m.start()]).group(0) + re.match(r"\S*", outside[m.start():]).group(0)
         out.append(f"값에 스캔 잡음으로 보이는 글자가 있음('{token}')")

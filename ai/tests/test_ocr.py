@@ -52,3 +52,21 @@ def test_empty_text_is_skipped():
 @pytest.mark.parametrize("width_px, dpi", [(1654, 200), (827, 100), (2480, 300)])
 def test_dpi_is_estimated_from_a4_width(width_px, dpi):
     assert estimate_dpi(width_px) == pytest.approx(dpi, rel=0.01)
+
+
+def test_hangul_traces_counts_unread_korean():
+    from coa_ai.ocr import hangul_traces
+    assert hangul_traces(["40.0 ppm 0|", "500 ppm 0l", "(Mg)", "LOT NO. : L0049ZH1"]) == 2
+    assert hangul_traces(["< 0.10 ppm", "100.5 % (Li2CO3)", "Conforms"]) == 0
+
+
+def test_merge_korean_replaces_overlapping_boxes_with_hangul_reading():
+    from coa_ai.ocr import merge_korean
+    boxes = [rect(0, 0, 100, 20), rect(200, 0, 300, 20), rect(0, 40, 100, 60)]
+    texts = ["LOT NO. : L0049ZH1", "40.0 ppm 0|", "(Mg)"]
+    k_boxes = [rect(0, 0, 100, 20), rect(201, 1, 299, 19), rect(-30, 40, 100, 60), rect(0, 80, 90, 100)]
+    k_texts = ["LOT NO.: LO049ZH1", "40.0 ppm 이하", "마그네슘(Mg)", "한도내"]
+    got_boxes, got_texts = merge_korean(boxes, texts, k_boxes, k_texts)
+    # 한글이 없는 상자는 기본 엔진 글(로트 번호의 숫자 0)을 지키고, 한글 상자만 한국어 모델 글로 바꾼다
+    assert sorted(got_texts) == sorted(["LOT NO. : L0049ZH1", "40.0 ppm 이하", "마그네슘(Mg)", "한도내"])
+    assert got_boxes[got_texts.index("한도내")] == k_boxes[3]  # 기본 엔진이 버린 한글 상자는 더한다
