@@ -122,3 +122,29 @@ def test_unmapped_keeps_raw_name(raw):
 def test_text_helpers():
     assert strip_charges("SO₄²⁻") == "SO4"
     assert canon("  Sulfate  (SO₄²⁻) ") == "sulfate (so4)"
+
+
+@pytest.mark.parametrize("material, raw, expected", [
+    # 스캔본(OCR)에서 행 번호 칸이 항목명에 붙음 (가상 B 저해상도, Piochem)
+    ("LIOH", "4 钠Na", "Na"),
+    ("LIOH", "1 外观 Appearance", "외관"),
+    ("LIOH", "2 氢氧化锂 LiOH", "LiOH 함량"),
+    ("LIOH", "13 硫酸根 SO2-", "황산염"),
+    ("LIOH", "7 Iron", "Fe"),
+    # 소문자 l 을 대문자 I 로 읽음 (Fisher 양식 A, 대정화금)
+    ("LI2CO3", "Trace analysis (Type: CI measure)", "염화물"),
+    ("LI2CO3", "Trace analysis (Type: AI measure)", "Al"),
+    ("LI2CO3", "Sulfate (S04)", "황산염"),
+    # OCR 이 첨자를 괄호·밑줄로 읽음 (가상 A, Alfa 13418)
+    ("LIOH", "Sulfate (SO{4{2})}", "황산염"),
+    ("LI2CO3", "Fe{2O3", "Fe"),
+    ("LI2CO3", "Li2CO_3", "순도"),
+])
+def test_ocr_noise_in_names(material, raw, expected):
+    m = Normalizer(material).map(raw)
+    assert (m.name, m.source) == (expected, "dictionary")
+
+
+@pytest.mark.parametrize("raw", ["2 Theta", "10 Lot Size", "1", "Ti"])
+def test_ocr_cleanup_does_not_invent_items(raw):
+    assert Normalizer("LI2CO3").map(raw).source == "ai"

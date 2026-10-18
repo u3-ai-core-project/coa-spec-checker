@@ -5,6 +5,8 @@
   2. 사전 별칭 (괄호 밖 이름: 'Sodium (Na)' → sodium)                       → dictionary
   3. 규칙: 중금속, 입도 D10/D50/D90, 'Type: X measure', '(as X)', '(Na)',
      '钠Na' 처럼 한자·한글 이름 + 기호, 이름 전체가 화학식('Na₂O')          → dictionary
+     못 찾으면 스캔본(OCR) 잡음을 걷어 내고 한 번 더: 앞에 붙은 행 번호('4 钠Na'),
+     첨자를 읽은 괄호·밑줄('Fe{2O3', 'Li2CO_3'), l·O 를 I·0 으로 읽은 기호('CI', 'S04')
   4. 유사도 (6자 이상 별칭, 0.88 이상)                                       → ai, 신뢰도 상한 0.6
   5. 이름 전체가 표준 목록 밖 원소 기호 하나('Ti', 'Co²⁺'): 원문 그대로        → ai, 신뢰도 상한 0.6
   6. LLM 제안 (llm 을 넘겼을 때만, 후보 목록 + '없음' 중 하나로 답을 강제)     → ai, 신뢰도 상한 0.6
@@ -47,6 +49,10 @@ _SUPERSCRIPTS = "⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻"
 _SUBSCRIPT_DIGITS = str.maketrans("₀₁₂₃₄₅₆₇₈₉", "0123456789")
 _CJK = r"一-鿿㐀-䶿가-힣"
 _PARTICLE_RE = re.compile(r"(?<![a-z0-9])d\s?(10|50|90)(?![0-9])")
+_ROW_NO = re.compile(r"^\s*\d{1,2}[.)]?\s+(?=\S)")  # 스캔본에서 번호 칸이 항목명에 붙음
+_OCR_JUNK = re.compile(r"[{}_^]")
+_OCR_I = re.compile(r"(?<=[A-Z])I(?![a-z])")        # 'CI' → 'Cl', 'AI' → 'Al'
+_OCR_ZERO = re.compile(r"(?<=[A-Z])0(?=\d)")       # 'S04' → 'SO4'
 
 
 @dataclass(frozen=True)
@@ -126,7 +132,7 @@ class Normalizer:
         if canon(raw) in self.mappings_ci:
             return Mapping(self.mappings_ci[canon(raw)], "dictionary", 1.0)
 
-        code = self._exact(raw) or self._rules(raw)
+        code = self._exact(raw) or self._rules(raw) or self._ocr_retry(raw)
         if code:
             return Mapping(self.names[code], "dictionary", 1.0)
 
@@ -139,6 +145,14 @@ class Normalizer:
             if suggested:
                 return Mapping(suggested, "ai", AI_CAP, by_llm=True)
         return Mapping(raw, "ai", AI_CAP)
+
+    def _ocr_retry(self, raw: str) -> str | None:
+        """스캔본 잡음을 걷어 낸 이름으로 규칙을 다시 본다. 결과는 사전·규칙에 있는 이름뿐이라 새 항목을 만들지 않는다."""
+        cleaned = _OCR_JUNK.sub("", _ROW_NO.sub("", raw, count=1))
+        cleaned = _OCR_ZERO.sub("O", _OCR_I.sub("l", cleaned))
+        if cleaned == raw or not cleaned.strip():
+            return None
+        return self._exact(cleaned) or self._rules(cleaned) or self._alias(re.split(r"[(（]", cleaned)[0])
 
     def candidates(self) -> list[tuple[str, str]]:
         """LLM 에 주는 후보: (표준 항목명, 뜻). 이 원자재에서 쓰는 이름만."""
