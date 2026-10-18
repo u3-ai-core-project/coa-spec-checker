@@ -1,10 +1,27 @@
-function App() {
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
+import AppLayout from './components/layout/AppLayout'
+import { NAV_ITEMS } from './navigation'
+
+export default function App() {
   return (
-    <div className="p-8">
-      <h1 className="text-2xl font-bold text-blue-700">CoA Inspector</h1>
-      <p className="mt-2 text-gray-600">개발 환경 세팅 확인</p>
-    </div>
+    <BrowserRouter>
+      <Routes>
+        <Route element={<AppLayout />}>
+          <Route path="/" element={<Navigate to="/dashboard" replace />} />
+          {NAV_ITEMS.map((item) => (
+            <Route
+              key={item.path}
+              path={item.path}
+              element={
+                <div className="rounded-xl border border-line bg-white p-6 text-sm text-ink-sub">
+                  {item.label} 화면은 아직 구현 전입니다.
+                </div>
+              }
+            />
+          ))}
+        </Route>
+        <Route path="/login" element={<div className="p-6">로그인</div>} />
+      </Routes>
+    </BrowserRouter>
   )
 }
-
-export default App
