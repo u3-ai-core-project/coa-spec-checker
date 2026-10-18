@@ -162,7 +162,11 @@ def _supplier(page: Page, all_phrases: list[Phrase], customer_values: set[str]) 
     if not hits:
         return None
     latin = [ph for ph in hits if re.search(r"[A-Za-z]{3}", ph.text)]
-    return _norm((latin or hits)[0].text)
+    text = (latin or hits)[0].text
+    m = _SUFFIX_RE.search(text)
+    if m.start() > 0:  # 회사명은 법인 접미사에서 끝난다 (흐린 스캔본에서 제목이 붙음). '주식회사 …' 처럼 앞에 오면 그대로
+        text = text[: m.end()]
+    return _norm(text)
 
 
 def _standard(found: dict[str, tuple[int, str]], page: Page, all_phrases: list[Phrase]) -> str | None:

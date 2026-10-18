@@ -43,9 +43,14 @@ def _from_match(m: re.Match) -> str | None:
     return _build(y, int(g["m"]), int(g["d"]))
 
 
+_GLUED = re.compile(r"(\d{1,2}([-/.])\d{1,2}\2\d{4}|\d{4}([-/.])\d{1,2}\3\d{1,2})/(?=\d)")
+
+
 def find_dates(text: str) -> list[str]:
     """글에 나온 날짜를 나온 순서대로. 겹치는 후보는 먼저 시작하는(같으면 긴) 쪽을 쓴다."""
-    matches = sorted(((m.start(), -m.end(), m) for pat in _PATTERNS for m in pat.finditer(text or "")),
+    # 스캔본 OCR 이 'a / b' 의 공백을 놓쳐 붙은 두 날짜('10/18/2025/10/19/2025')를 떼어 놓는다
+    text = _GLUED.sub(r"\1 / ", text or "")
+    matches = sorted(((m.start(), -m.end(), m) for pat in _PATTERNS for m in pat.finditer(text)),
                      key=lambda t: (t[0], t[1]))
     out: list[str] = []
     taken_until = -1

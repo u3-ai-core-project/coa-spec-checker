@@ -29,3 +29,9 @@ def test_parse_date_none(text):
 
 def test_find_dates_keeps_order():
     assert find_dates("03/04/2026 / 03/05/2026") == ["2026-03-04", "2026-03-05"]
+
+
+@pytest.mark.parametrize("text", ["10/18/2025/10/19/2025", "2025-10-18/2025-10-19"])
+def test_glued_dates_are_both_found(text):
+    # 스캔본 OCR 이 'Sampled / Tested  a / b' 의 빗금 양옆 공백을 놓쳐 두 날짜가 붙었다 (생성기 v2 양식 D)
+    assert find_dates(text) == ["2025-10-18", "2025-10-19"]

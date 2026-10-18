@@ -35,6 +35,19 @@ def test_inline_colon_values_and_customer(make_pdf):
         ("L0049ZH1", "2025-08-19", "Acme Lithium Co., Ltd.", "Extra Pure")
 
 
+def test_supplier_ends_at_company_suffix(make_pdf):
+    # 흐린 스캔본에서 회사명과 문서 제목 사이 간격이 사라져 한 구로 붙었다 (생성기 v2 양식 D)
+    path = make_pdf(["Corvane Lithium Refining Pty Ltd CERTIFICATE OF ANALYSIS", [(50, "Batch / Lot"), (200, "KC25-290-01")]])
+    assert extract_fields(read_pages(path))["supplier"] == "Corvane Lithium Refining Pty Ltd"
+
+
+def test_supplier_with_leading_korean_suffix_is_kept(make_pdf):
+    path = make_pdf(["Hanbit Lithium Inc. Seoul Plant", [(50, "Lot No"), (200, "HB2601")]])
+    assert extract_fields(read_pages(path))["supplier"] == "Hanbit Lithium Inc."
+    from coa_ai.fields import _SUFFIX_RE
+    assert _SUFFIX_RE.search("주식회사 한빛리튬").start() == 0  # 접미사가 앞에 오면 자르지 않는 경우
+
+
 def test_lot_size_is_not_a_lot_number(make_pdf):
     path = make_pdf([[(50, "Lot Size"), (200, "16,000 kg")]])
     assert extract_fields(read_pages(path))["lot_no"] is None
