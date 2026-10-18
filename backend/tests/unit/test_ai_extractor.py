@@ -44,3 +44,20 @@ def test_failure_becomes_extraction_error(extractor, tmp_path):
     image.write_bytes(b"\x89PNG\r\n\x1a\n")
     with pytest.raises(ExtractionError, match="이미지 파일을 열 수 없습니다"):
         extractor.extract(image, material_code="LIOH")
+
+
+@pytest.mark.parametrize("url, has_llm", [(None, False), ("http://127.0.0.1:9", True)])
+def test_llm_client_is_passed(extractor, monkeypatch, url, has_llm):
+    import coa_ai
+
+    captured = {}
+
+    def fake_extract(path, **kwargs):
+        captured.update(kwargs)
+        raise coa_ai.ExtractionFailed("확인용")
+
+    monkeypatch.setattr(settings, "LLM_BASE_URL", url)
+    monkeypatch.setattr(coa_ai, "extract", fake_extract)
+    with pytest.raises(ExtractionError):
+        extractor.extract(FIXTURES / "COA_A_0007.pdf", material_code="LIOH")
+    assert isinstance(captured["llm"], coa_ai.LLMClient) is has_llm

@@ -1,6 +1,7 @@
 """[담당: 고도영] AI 추출기 어댑터 — ai/ 의 coa_ai 패키지를 Extractor 인터페이스에 연결한다.
 
 사용: backend 가상환경에서 `pip install -e ../ai` 후 .env 에 EXTRACTOR=ai
+LLM_BASE_URL 이 있으면 규칙이 못 읽은 항목명·결과 칸만 LLM 에 묻는다 (없거나 실패해도 추출은 된다).
 매핑 사전(item_mappings)은 문서마다 DB 에서 읽어 넘긴다. 담당자가 항목명을 고치면(source=manual) 다음 문서부터 반영된다.
 """
 from pathlib import Path
@@ -11,13 +12,15 @@ from sqlalchemy import select
 from app.db.session import SessionLocal
 from app.models import ItemMapping
 from app.pipeline.extractor import ExtractionError
+from app.pipeline.llm_client import get_llm
 from app.schemas.extraction import ExtractionInput
 
 
 class AIExtractor:
     def extract(self, file_path: Path, *, material_code: str, original_name: str | None = None) -> ExtractionInput:
         try:
-            result = coa_ai.extract(file_path, material_code=material_code, mappings=self.load_mappings(material_code))
+            result = coa_ai.extract(file_path, material_code=material_code, mappings=self.load_mappings(material_code),
+                                    llm=get_llm())
         except coa_ai.ExtractionFailed as e:
             raise ExtractionError(str(e)) from e
         return ExtractionInput.model_validate(result.to_dict())
