@@ -7,7 +7,7 @@ pytest.importorskip("coa_ai")
 
 from app.core.config import settings  # noqa: E402
 from app.core.enums import SpecType  # noqa: E402
-from app.models import Document, SpecItem  # noqa: E402
+from app.models import Document, SpecItem, SpecSet  # noqa: E402
 
 FIXTURES = Path(__file__).parents[3] / "ai" / "tests" / "fixtures"
 Q, QL = SpecType.QUANTITATIVE, SpecType.QUALITATIVE
@@ -16,9 +16,10 @@ Q, QL = SpecType.QUANTITATIVE, SpecType.QUALITATIVE
 @pytest.fixture
 def lioh_specs(db):
     """수산화리튬 가상 사내 규격 일부 (소성훈 님 규격 DB 값). 테스트용이며 실제 시드가 아니다."""
-    rows = [
-        SpecItem(material_code="LIOH", material_name="수산화리튬", item_name=name, unit=unit, lsl=lsl, usl=usl,
-                 spec_type=kind, grade="D1", source="test")
+    spec_set = SpecSet(code="LIOH-T", material_code="LIOH", material_name="수산화리튬", grade="D1",
+                       source="test", is_default=True)
+    spec_set.items = [
+        SpecItem(item_name=name, unit=unit, lsl=lsl, usl=usl, spec_type=kind)
         for name, unit, lsl, usl, kind in [
             ("외관", None, None, None, QL),
             ("LiOH 함량", "%", 56.5, 57.5, Q),
@@ -29,9 +30,9 @@ def lioh_specs(db):
             ("입도 D50", "μm", 5.0, 15.0, Q),
         ]
     ]
-    db.add_all(rows)
+    db.add(spec_set)
     db.commit()
-    return rows
+    return spec_set.items
 
 
 @pytest.fixture
