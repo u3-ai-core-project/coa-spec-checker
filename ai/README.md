@@ -44,10 +44,9 @@ python tools/degrade.py a.pdf --out out --levels levels.json --format png       
 ```bash
 cd ai
 pytest -q                                   # 단위 테스트 + 가상 CoA 3장
-COA_REAL_DIR=data/raw/real pytest -q        # 실물 CoA 까지
 ```
 
-실물 CoA는 라이선스 문제로 저장소에 올리지 않습니다. 노션 「CoA 레퍼런스 추가 조사」에 첨부된 `CoA_데이터_정리본.zip`의 PDF를 `ai/data/raw/real/`에 한 폴더로 풀어 쓰세요. 이 폴더는 `.gitignore` 대상입니다.
+실물 CoA는 라이선스 문제로 저장소에 올리지 않습니다. PDF도, 실물에서 옮긴 값을 정답으로 적은 테스트도 넣지 않습니다. 모델 테스트(`bench/`)에서 실물을 쓰려면 노션 「CoA 레퍼런스 추가 조사」에 첨부된 `CoA_데이터_정리본.zip`의 PDF를 `ai/data/raw/real/`에 한 폴더로 풀어 쓰세요. 이 폴더는 `.gitignore` 대상입니다.
 
 ## 처리 흐름
 
