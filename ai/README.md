@@ -65,7 +65,7 @@ COA_REAL_DIR=data/raw/real pytest -q        # 실물 CoA 까지
 | - | `llm.py`, `inquiry.py` | LLM 서버 클라이언트, 공급사 문의 초안 (아래 'LLM 기능') |
 
 결과에는 `ExtractionInput` 필드 외에 서버가 아직 쓰지 않는 칸도 들어 있습니다. 서버는 이 칸들을 버립니다(`extra="ignore"`).
-- 문서: `doc_type`, `product_name`, `issue_date`, `expiry_date`, `retest_date`(Suggested retest date·复检日期·재시험일). 날짜 칸은 PR #5가 요청한 날짜 충돌 탐지(`DATE_CONFLICT`)용입니다.
+- 문서: `doc_type`, `product_name`, `issue_date`, `expiry_date`, `retest_date`(Suggested retest date·复检日期·재시험일). `doc_type` 을 뺀 넷은 PR #5가 요청한 제품 불일치·날짜 충돌(`DATE_CONFLICT`) 탐지용으로, 서버 `ExtractionInput` 의 같은 이름 칸으로 들어갑니다(서버 칸은 별도 PR `feat/ai/doc-fields`).
 - 항목: `value_kind`, `value_reason`, `check_reasons` (아래 '팀 제안')
 
 ## 표준 항목명 (normalized_name)

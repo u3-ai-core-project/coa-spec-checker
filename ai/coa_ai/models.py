@@ -137,10 +137,11 @@ class Extraction:
     test_date: str | None = None  # YYYY-MM-DD
     origin: str | None = None
     applied_standard: str | None = None
-    product_name: str | None = None  # API v1.4 대비 (현재 서버는 무시)
-    issue_date: str | None = None    # API v1.4 대비
-    expiry_date: str | None = None   # API v1.4 대비
-    retest_date: str | None = None   # PR #5 요청 (서버 날짜 충돌 탐지용, 현재 서버는 무시)
+    # 아래 넷은 PR #5 요청 (제품 불일치·날짜 충돌 탐지용). 서버 ExtractionInput 의 같은 이름 칸으로 들어간다
+    product_name: str | None = None
+    issue_date: str | None = None
+    expiry_date: str | None = None
+    retest_date: str | None = None
     items: list[Item] = field(default_factory=list)
 
     def to_dict(self) -> dict:
