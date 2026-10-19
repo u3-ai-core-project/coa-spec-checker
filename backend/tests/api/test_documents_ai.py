@@ -68,7 +68,7 @@ def test_upload_synthetic_coa_is_extracted_and_judged(auth_client, lioh_specs, a
     assert doc.lot_recommendation == "reject"
 
 
-@pytest.mark.skipif("issue_date" not in ExtractionResult.model_fields, reason="서버 칸은 feat/ai/doc-fields PR")
+@pytest.mark.skipif("issue_date" not in ExtractionResult.model_fields, reason="서버 칸은 feat/backend/extraction-doc-fields PR")
 def test_document_dates_are_kept_in_the_result(auth_client, lioh_specs, ai_mode, db):
     # 판정 결과(JSON)에 남아 GET /extraction 으로 나가야 서버의 날짜 충돌·제품 불일치 검사가 읽을 수 있다
     r = upload(auth_client, FIXTURES / "COA_B_0005.pdf")

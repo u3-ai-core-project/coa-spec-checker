@@ -34,7 +34,7 @@ def test_extract_returns_extraction_input(extractor):
     assert co3.bbox is not None and co3.bbox.page == 1
 
 
-@pytest.mark.skipif("issue_date" not in ExtractionInput.model_fields, reason="서버 칸은 feat/ai/doc-fields PR")
+@pytest.mark.skipif("issue_date" not in ExtractionInput.model_fields, reason="서버 칸은 feat/backend/extraction-doc-fields PR")
 def test_document_dates_and_product_name_reach_the_server(extractor):
     # 장수민 님 PR #5 요청: 날짜 충돌·제품 불일치(document_issues) 탐지에 쓸 문서 필드
     b = extractor.extract(FIXTURES / "COA_B_0005.pdf", material_code="LIOH")
