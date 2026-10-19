@@ -1,4 +1,5 @@
 """[담당: 고도영] AI 추출기 어댑터 (DB 불필요). ai/ 패키지가 설치돼 있지 않으면 건너뛴다."""
+from datetime import date
 from pathlib import Path
 
 import pytest
@@ -31,6 +32,16 @@ def test_extract_returns_extraction_input(extractor):
     co3 = next(i for i in result.items if i.normalized_name == "탄산")
     assert (co3.raw_value, co3.raw_spec, co3.mapping_source, co3.confidence) == ("0.36 %", "≤ 0.40 %", "dictionary", 0.95)
     assert co3.bbox is not None and co3.bbox.page == 1
+
+
+@pytest.mark.skipif("issue_date" not in ExtractionInput.model_fields, reason="서버 칸은 feat/ai/doc-fields PR")
+def test_document_dates_and_product_name_reach_the_server(extractor):
+    # 장수민 님 PR #5 요청: 날짜 충돌·제품 불일치(document_issues) 탐지에 쓸 문서 필드
+    b = extractor.extract(FIXTURES / "COA_B_0005.pdf", material_code="LIOH")
+    assert (b.issue_date, b.expiry_date, b.retest_date) == (date(2026, 2, 26), date(2027, 2, 21), None)
+    assert "Lithium Hydroxide Monohydrate" in b.product_name
+    d = extractor.extract(FIXTURES / "COA_D_0007.pdf", material_code="LIOH")
+    assert (d.retest_date, d.product_name) == (date(2027, 3, 4), "Lithium Hydroxide Monohydrate")
 
 
 def test_db_mappings_are_passed(monkeypatch):

@@ -8,6 +8,7 @@ pytest.importorskip("coa_ai")
 from app.core.config import settings  # noqa: E402
 from app.core.enums import SpecType  # noqa: E402
 from app.models import Document, SpecItem, SpecSet  # noqa: E402
+from app.schemas.extraction import ExtractionResult  # noqa: E402
 
 FIXTURES = Path(__file__).parents[3] / "ai" / "tests" / "fixtures"
 Q, QL = SpecType.QUANTITATIVE, SpecType.QUALITATIVE
@@ -65,6 +66,19 @@ def test_upload_synthetic_coa_is_extracted_and_judged(auth_client, lioh_specs, a
     assert by_name["외관"]["judgement_reason"] == "정성 항목, 판정 제외"
     assert by_name["Na"]["bbox"]["page"] == 1
     assert doc.lot_recommendation == "reject"
+
+
+@pytest.mark.skipif("issue_date" not in ExtractionResult.model_fields, reason="서버 칸은 feat/ai/doc-fields PR")
+def test_document_dates_are_kept_in_the_result(auth_client, lioh_specs, ai_mode, db):
+    # 판정 결과(JSON)에 남아 GET /extraction 으로 나가야 서버의 날짜 충돌·제품 불일치 검사가 읽을 수 있다
+    r = upload(auth_client, FIXTURES / "COA_B_0005.pdf")
+    doc = db.get(Document, r.json()["data"]["document_id"])
+    db.refresh(doc)
+    result = doc.extraction.result
+    assert (result["issue_date"], result["expiry_date"], result["retest_date"]) == ("2026-02-26", "2027-02-21", None)
+    assert "Lithium Hydroxide Monohydrate" in result["product_name"]
+    got = auth_client.get(f"/api/v1/documents/{doc.id}/extraction").json()["data"]
+    assert got["issue_date"] == "2026-02-26"
 
 
 def test_upload_scanned_image_is_extracted_and_sent_to_review(auth_client, lioh_specs, ai_mode, db, tmp_path):
