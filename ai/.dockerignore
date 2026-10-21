@@ -1,0 +1,6 @@
+# [담당: 고도영] bench Docker 이미지 빌드 때 가상환경·데이터는 넣지 않는다
+bench/.venv*
+data/
+tests/
+**/__pycache__
+*.egg-info

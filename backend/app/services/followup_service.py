@@ -40,10 +40,9 @@ class Drafter(Protocol):
 def get_drafter() -> Drafter:
     if settings.INQUIRY_DRAFTER == "template":
         return TemplateDrafter()
-    # AI 모듈 연결 예:
-    # if settings.INQUIRY_DRAFTER == "ai":
-    #     from app.pipeline.ai_drafter import AIDrafter
-    #     return AIDrafter()
+    if settings.INQUIRY_DRAFTER == "ai":
+        from app.pipeline.ai_drafter import AIDrafter  # ai/ 패키지가 필요해서 지연 import
+        return AIDrafter()
     raise ValueError(f"알 수 없는 INQUIRY_DRAFTER 설정: {settings.INQUIRY_DRAFTER}")
 
 

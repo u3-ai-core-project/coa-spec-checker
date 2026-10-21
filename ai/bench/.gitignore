@@ -1,0 +1,2 @@
+# 모델 테스트 엔진별 가상환경 (.venv-paddle, .venv-easyocr, .venv-surya)
+.venv*/
