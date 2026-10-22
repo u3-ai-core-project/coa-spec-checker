@@ -51,6 +51,8 @@ export function SpecsPage() {
   }
 
   const updated = latestUpdate(current.items);
+  // [v1.4안] 규격 버전. 한 원자재 안에서 항목마다 다르면 모두 보여 줍니다.
+  const versions = [...new Set(current.items.map((item) => item.version).filter((version): version is string => version !== null && version !== undefined))];
 
   return (
     <>
@@ -67,6 +69,7 @@ export function SpecsPage() {
                 </h3>
                 <span className="text-[12px] tabular-nums text-[#5B616A]">
                   시험 항목 {`${current.items.length}개`}
+                  {versions.length > 0 ? ` · 규격 버전 ${versions.join(', ')}` : ''}
                   {updated ? ` · 최종 수정 ${formatDate(updated.at)}${updated.by ? ` · ${updated.by}` : ''}` : ''}
                 </span>
               </div>
@@ -101,7 +104,13 @@ export function SpecsPage() {
                 <tbody>
                   {current.items.map((item) => (
                     <tr key={item.id} className="spec-row border-t border-[#E3E5E8]">
-                      <td className="px-5 py-3 text-[14px] font-semibold">{item.item_name}</td>
+                      <td className="px-5 py-3 text-[14px] font-semibold">
+                        {item.item_name}
+                        {/* [v1.4안] 필수가 아닌 시험 항목만 "선택"으로 표시합니다. */}
+                        {item.is_required === false && (
+                          <span className="spec-optional ml-1.5 rounded bg-[#EEF0F3] px-1 text-[10px] font-semibold leading-[14px] text-[#5B616A]">선택</span>
+                        )}
+                      </td>
                       <td className="px-3 py-3 text-[13px] tabular-nums text-[#5B616A]">{item.unit}</td>
                       <td className="px-3 py-3 text-right text-[14px] font-semibold tabular-nums">{formatLimit(item.lsl)}</td>
                       <td className="px-3 py-3 text-right text-[14px] font-semibold tabular-nums">{formatLimit(item.usl)}</td>

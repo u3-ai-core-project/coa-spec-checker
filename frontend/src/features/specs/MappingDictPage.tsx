@@ -39,7 +39,13 @@ export function MappingDictPage() {
   const user = useCurrentUser();
   const [params] = useSearchParams();
   const specs = useAsync(() => api.listSpecs(), []);
-  const group = useMemo(() => groupByMaterial(specs.data ?? [])[0], [specs.data]);
+  // [v1.4안] 매핑 사전은 material_code별입니다. 주소의 ?material=LIOH처럼 원자재를 고르고, 없으면 첫 원자재입니다.
+  // TODO(디자인 협의): 원자재를 바꾸는 선택 UI는 시안에 없어 만들지 않았습니다.
+  const materialParam = params.get('material');
+  const group = useMemo(() => {
+    const groups = groupByMaterial(specs.data ?? []);
+    return groups.find((entry) => entry.code === materialParam) ?? groups[0];
+  }, [specs.data, materialParam]);
   const code = group?.code ?? null;
 
   const mappings = useAsync(() => (code ? api.listMappings(code) : Promise.resolve([])), [code]);

@@ -50,6 +50,10 @@ export function SpecEditPage() {
   const [reason, setReason] = useState('');
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  // [v1.4안] 저장 후 처분 전 문서를 새 규격으로 다시 판정할지. 켜면 마지막 PATCH에 rejudge를 보냅니다.
+  const [rejudge, setRejudge] = useState(false);
+  /** 재판정을 켜고 저장했을 때 판정이 바뀐 문서 id. null이면 아직 저장하지 않았거나 재판정을 쓰지 않은 것입니다. */
+  const [rejudged, setRejudged] = useState<string[] | null>(null);
 
   const header = (
     <Header
@@ -88,7 +92,7 @@ export function SpecEditPage() {
   const errors = draftErrors(drafts);
   const hasErrors = Object.keys(errors).length > 0;
   const mappingCount = (spec: SpecItem) => (mappings.data ?? []).filter((entry) => entry.standardName === spec.item_name).length;
-  const canSave = changes.length > 0 && reason.trim().length > 0 && !hasErrors && !saving;
+  const canSave = changes.length > 0 && reason.trim().length > 0 && !hasErrors && !saving && rejudged === null;
   const pendingTitles = changes.flatMap((change) => change.descriptions);
 
   function update(spec: SpecItem, patch: Partial<SpecDraft>) {
@@ -101,9 +105,12 @@ export function SpecEditPage() {
     setSaving(true);
     setSaveError(null);
     try {
-      for (const change of changes) {
+      let changedDocuments: string[] = [];
+      for (const [index, change] of changes.entries()) {
         // 서버가 하한/상한 범위를 다시 검증합니다(400 INVALID_SPEC_RANGE).
-        await api.patchSpec(change.spec.id, change.body);
+        // 재판정은 모든 항목을 저장한 뒤 한 번만 하도록 마지막 PATCH에만 붙입니다.
+        const result = await api.patchSpec(change.spec.id, { ...change.body, rejudge: rejudge && index === changes.length - 1 });
+        if (result.rejudged_documents) changedDocuments = result.rejudged_documents.map((entry) => entry.document_id);
         for (const description of change.descriptions) {
           // TODO(백엔드 협의): 변경 이력과 사유는 API가 없어 화면(목업) 쪽에만 남깁니다.
           await api.addSpecHistory({
@@ -115,7 +122,8 @@ export function SpecEditPage() {
           });
         }
       }
-      navigate('/specs');
+      if (rejudge) setRejudged(changedDocuments);
+      else navigate('/specs');
     } catch (failure) {
       setSaveError(errorMessage(failure));
       specsQuery.reload();
@@ -260,11 +268,25 @@ export function SpecEditPage() {
                 value={reason}
                 onChange={(event) => setReason(event.target.value)}
               />
+              <label className="spec-rejudge mt-1 flex items-center gap-2 text-[12px] text-[#5B616A]">
+                <input
+                  type="checkbox"
+                  checked={rejudge}
+                  disabled={saving || rejudged !== null}
+                  onChange={(event) => setRejudge(event.target.checked)}
+                />
+                저장 후 처분 전 문서를 새 규격으로 다시 판정합니다.
+              </label>
             </div>
           </div>
           <div className="spec-form-actions flex items-center justify-between border-t border-[#E3E5E8] px-5 py-3.5">
             <span className={`spec-change-summary text-[12px] ${saveError ? 'text-[#C0342E]' : 'text-[#5B616A]'}`}>
-              {saveError ?? `변경 ${changes.length}건 · 이후 업로드 건부터 적용됩니다.`}
+              {saveError ??
+                (rejudged !== null
+                  ? rejudged.length > 0
+                    ? `저장했습니다. 다시 판정해 판정이 바뀐 문서 ${rejudged.length}건: ${rejudged.join(', ')}`
+                    : '저장했습니다. 다시 판정했고 판정이 바뀐 문서는 없습니다.'
+                  : `변경 ${changes.length}건 · ${rejudge ? '처분 전 문서도 새 규격으로 다시 판정합니다.' : '이후 업로드 건부터 적용됩니다.'}`)}
             </span>
             <div className="flex gap-2">
               <button
@@ -272,7 +294,7 @@ export function SpecEditPage() {
                 onClick={() => navigate('/specs')}
                 className="btn-cancel h-10 rounded-lg border border-[#D0D4DA] bg-white px-5 text-[14px] font-semibold"
               >
-                취소
+                {rejudged !== null ? '확인' : '취소'}
               </button>
               <button
                 type="button"
