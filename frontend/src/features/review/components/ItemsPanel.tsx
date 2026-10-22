@@ -92,6 +92,8 @@ function DocInfo({ data, collapsed, onToggle }: { data: ReviewData; collapsed: b
   const { doc } = data;
   const grade = `협력사 ${doc.applied_standard ?? '-'} · 사내 ${doc.spec_grade ?? '-'}`;
   // 협력사 적용 규격과 사내 등급이 다르면 안내합니다(명세 4.6).
+  // 업로드할 때 입력한 입고 로트번호가 CoA의 로트번호와 다르면 "발주 정보와 일치" 대신 안내합니다(문서 수준 문제 LOT_MISMATCH와 같은 기준).
+  const lotMismatch = doc.received_lot_no !== null && doc.lot_no !== null && doc.received_lot_no !== doc.lot_no;
   const gradeDiffers = doc.applied_standard !== null && doc.spec_grade !== null && !doc.applied_standard.endsWith(doc.spec_grade);
 
   if (collapsed) {
@@ -120,7 +122,16 @@ function DocInfo({ data, collapsed, onToggle }: { data: ReviewData; collapsed: b
         <Icon name="chev_up" size={14} />
       </button>
       <div className="doc-info flex flex-col border-b border-[#E3E5E8] px-5 pb-2 pt-0">
-        <InfoLine label="Lot No" extra={doc.po_no ? <Check>발주 정보와 일치</Check> : undefined}>
+        <InfoLine
+          label="Lot No"
+          extra={
+            lotMismatch ? (
+              <span className="doc-info-notice text-[11px] font-semibold text-[#9A5B00]">{`입고 로트번호(${doc.received_lot_no})와 다릅니다.`}</span>
+            ) : doc.po_no ? (
+              <Check>발주 정보와 일치</Check>
+            ) : undefined
+          }
+        >
           {doc.lot_no ?? '-'}
         </InfoLine>
         <InfoLine label="시험일자" extra={doc.test_date ? <Check>유효</Check> : undefined}>

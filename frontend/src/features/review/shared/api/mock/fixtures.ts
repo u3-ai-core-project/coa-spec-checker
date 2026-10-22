@@ -634,6 +634,14 @@ export function createMockState(options: MockOptions = {}): MockState {
     buildDoc({ lot: 'A0340850', supplier: '대흥리튬', po: 'PO-2026-1074', testDate: '2026-09-24', uploadedAt: '2026-10-01T15:12:00+09:00', status: 'failed', errorMessage: '문서에서 시험 항목을 찾을 수 없습니다.', fileSize: 120_000 }, null),
   ];
 
+  // 시나리오 'issues'의 경고 문구(로트 불일치, 날짜 충돌)와 문서 데이터가 맞도록 입고 로트번호와 발행일을 같이 바꿉니다.
+  if (options.scenario === 'issues') {
+    const target = docs.find((entry) => entry.detail.document_id === 'A0390221');
+    if (target) {
+      target.detail.received_lot_no = 'A0390222';
+      if (target.extraction) target.extraction.issue_date = '2026-09-28';
+    }
+  }
   const specSets = createSpecSets();
   if (options.scenario === 'sets') {
     const extra = createExtraLi2co3Set(specs);
