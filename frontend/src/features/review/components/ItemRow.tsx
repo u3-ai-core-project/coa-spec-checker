@@ -28,6 +28,8 @@ export interface ItemRowProps {
   editor?: ReactNode;
   /** 판정 불가·누락 항목의 후속 조치 줄 */
   followUp?: ReactNode;
+  /** [v1.4안] 선택한 항목의 사유 코드와 해결 조건 */
+  exception?: ReactNode;
   onSelect(): void;
   onEdit?(): void;
   onVerify?(): void;
@@ -74,7 +76,7 @@ function ConfidenceText({ item, resolved }: { item: ExtractionItem; resolved: bo
 }
 
 /** 시험 항목 한 줄 (시안 2-1 등). 판정과 이탈 폭은 서버 응답을 그대로 표시합니다. */
-export function ItemRow({ item, logs, readonly, flags, editor, followUp, onSelect, onEdit, onVerify, onMap }: ItemRowProps) {
+export function ItemRow({ item, logs, readonly, flags, editor, followUp, exception, onSelect, onEdit, onVerify, onMap }: ItemRowProps) {
   const kind = processedKind(item.item_id, logs);
   const resolved = kind !== null;
   const lowPending = item.judgement === 'check' && isLowConfidence(item) && !resolved;
@@ -227,6 +229,7 @@ export function ItemRow({ item, logs, readonly, flags, editor, followUp, onSelec
           </div>
         ))}
 
+        {exception}
         {editor}
       </div>
     </li>
@@ -241,6 +244,7 @@ export function MissingRow({
   item,
   readonly,
   followUp,
+  exception,
   editor,
   onSelect,
   onEdit,
@@ -248,6 +252,7 @@ export function MissingRow({
   item: ExtractionItem;
   readonly: boolean;
   followUp?: ReactNode;
+  exception?: ReactNode;
   editor?: ReactNode;
   onSelect(): void;
   onEdit?(): void;
@@ -279,6 +284,7 @@ export function MissingRow({
           <JudgementBadge judgement="missing" fixedWidth />
         </div>
         {followUp}
+        {exception}
         {editor}
       </div>
     </li>

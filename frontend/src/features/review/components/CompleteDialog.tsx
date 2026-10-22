@@ -4,6 +4,7 @@ import { errorMessage, isApiError } from '../shared/api/errors';
 import type { DocumentDetail, ExtractionResult, HoldFollowUp, LotRecommendation } from '../shared/api/types';
 import { Icon } from '../shared/components/Icon';
 import { RecommendationBadge } from '../shared/components/badges';
+import { DOCUMENT_ISSUE_LABEL } from '../shared/domain/exceptions';
 import { sumSummary, JUDGEMENT_META, JUDGEMENT_ORDER } from '../shared/domain/judgement';
 import {
   DISPOSITION_META,
@@ -30,7 +31,11 @@ interface CompleteDialogProps {
   onStale(): void;
 }
 
-function ResultText({ recommendation }: { recommendation: LotRecommendation }) {
+/**
+ * [v1.4안] 문서 수준 문제(document_issues)가 있으면 항목에 문제가 없어도 보류 권고입니다.
+ * issueCount는 문서 수준 문제 수, itemIssues는 판정 불가, 누락, 확인 필요 항목이 있는지입니다.
+ */
+function ResultText({ recommendation, issueCount, itemIssues }: { recommendation: LotRecommendation; issueCount: number; itemIssues: boolean }) {
   if (recommendation === 'reject') {
     return (
       <>
@@ -39,9 +44,15 @@ function ResultText({ recommendation }: { recommendation: LotRecommendation }) {
     );
   }
   if (recommendation === 'hold') {
+    const cause =
+      issueCount > 0 && !itemIssues
+        ? '문서 수준 문제가 있어'
+        : issueCount > 0
+          ? '판정 불가, 누락 또는 확인 필요 항목과 문서 수준 문제가 있어'
+          : '판정 불가, 누락 또는 확인 필요 항목이 있어';
     return (
       <>
-        판정 불가, 누락 또는 확인 필요 항목이 있어 이 로트는 <b className="font-semibold text-[#5B616A]">보류</b>를 권고합니다.
+        {cause} 이 로트는 <b className="font-semibold text-[#5B616A]">보류</b>를 권고합니다.
       </>
     );
   }
@@ -88,6 +99,8 @@ export function CompleteDialog({ doc, extraction, pending, initialFollowUp, onCl
   const canSubmit = !approvalLocked && !busy && reasonOk && (!isHold || followUp !== null);
   const meta = DISPOSITION_META[disposition];
   const sentence = followUpSentence(summary.undetermined, summary.missing);
+  const issues = extraction.document_issues ?? [];
+  const itemIssues = summary.undetermined + summary.missing + summary.check > 0;
 
   /** 확인 필요 항목이 남아 있으면 "승인"만 고를 수 없습니다. 조건부 승인, 불합격, 보류는 어떤 순서로든 바꿀 수 있습니다(완료는 막힘). */
   const isChoiceBlocked = (candidate: Disposition) => blocked && candidate === 'accept';
@@ -173,9 +186,14 @@ export function CompleteDialog({ doc, extraction, pending, initialFollowUp, onCl
           <RecommendationBadge recommendation={recommendation} />
         </div>
         <p className="modal-result text-[#1F2328]">
-          <ResultText recommendation={recommendation} />
+          <ResultText recommendation={recommendation} issueCount={issues.length} itemIssues={itemIssues} />
         </p>
         {sentence && <p className="modal-followup text-[12px] text-[#5B616A]">{sentence}</p>}
+        {issues.length > 0 && (
+          <p className="modal-issues text-[12px] text-[#5B616A]">
+            {`문서 수준 문제 ${issues.length}건: ${issues.map((issue) => DOCUMENT_ISSUE_LABEL[issue.code] ?? issue.code).join(', ')}`}
+          </p>
+        )}
       </div>
 
       <div className={`modal-disposition flex flex-col gap-1.5${dim}`}>

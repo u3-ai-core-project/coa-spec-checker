@@ -5,11 +5,12 @@ import { DispositionBadge, RecommendationBadge } from '../shared/components/badg
 import { formatDate } from '../shared/domain/format';
 import { splitItems } from '../shared/domain/items';
 import { JUDGEMENT_META, JUDGEMENT_ORDER } from '../shared/domain/judgement';
+import { DOCUMENT_ISSUE_LABEL } from '../shared/domain/exceptions';
 import { dispositionOf } from '../shared/domain/recommendation';
 import type { ReviewData } from '../hooks/useReviewData';
 import { ItemRow, type ItemRowProps, MissingRow } from './ItemRow';
 
-type RowExtras = Pick<ItemRowProps, 'editor' | 'followUp' | 'onEdit' | 'onVerify' | 'onMap'>;
+type RowExtras = Pick<ItemRowProps, 'editor' | 'followUp' | 'exception' | 'onEdit' | 'onVerify' | 'onMap'>;
 
 interface ItemsPanelProps {
   data: ReviewData;
@@ -157,7 +158,12 @@ export function ItemsPanel({
   const { tests, missing } = splitItems(extraction.items, specs.map((spec) => spec.item_name));
   const flagsOf = (item: ExtractionItem) =>
     anomalies.filter((anomaly) => anomaly.item_name === item.normalized_name).map((anomaly) => anomaly.message);
-  const docFlags = anomalies.filter((anomaly) => anomaly.item_name === null).map((anomaly) => anomaly.message);
+  // [v1.4안] 문서 수준 문제(document_issues)는 시안에 없어, 문서 단위 이상 패턴 경고와 같은 경고 상자 모양으로 먼저 보여 줍니다.
+  const issueFlags = (extraction.document_issues ?? []).map((issue) => `${DOCUMENT_ISSUE_LABEL[issue.code] ?? issue.code} · ${issue.message}`);
+  const docFlags = [
+    ...issueFlags,
+    ...anomalies.filter((anomaly) => anomaly.item_name === null).map((anomaly) => anomaly.message),
+  ];
 
   return (
     <section className="items-panel flex min-h-0 w-[480px] shrink-0 flex-col rounded-xl border border-[#E3E5E8] bg-white">

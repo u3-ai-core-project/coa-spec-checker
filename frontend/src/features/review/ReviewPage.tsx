@@ -4,6 +4,7 @@ import { ActionBar } from './components/ActionBar';
 import { ApprovalCancelDialog } from './components/ApprovalCancelDialog';
 import { ApprovalSummary } from './components/ApprovalSummary';
 import { CompleteDialog } from './components/CompleteDialog';
+import { ExceptionInfo } from './components/ExceptionInfo';
 import { FollowUpRow } from './components/FollowUpRow';
 import { HistoryCard } from './components/HistoryCard';
 import { ItemEditor, type ItemEditSubmit } from './components/ItemEditor';
@@ -151,6 +152,7 @@ function ReviewScreen({ documentId }: { documentId: string }) {
     editingId !== null ||
     followUpKinds.size > 0 ||
     data.anomalies.length > 0 ||
+    (data.extraction.document_issues ?? []).length > 0 ||
     completeOpen ||
     cancelOpen ||
     mappingId !== null;
@@ -259,6 +261,8 @@ function ReviewScreen({ documentId }: { documentId: string }) {
             onEdit: canEdit && !busy ? () => openEditor(item) : undefined,
             onVerify: canEdit && !busy ? () => void verify(item) : undefined,
             onMap: canEdit && !busy ? () => { select(item); setMappingId(item.item_id); } : undefined,
+            // [v1.4안] 사유 코드와 해결 조건은 선택한 항목 아래에서만 보여 줍니다.
+            exception: selectedId === item.item_id ? <ExceptionInfo item={item} /> : undefined,
             followUp:
               canEdit && hasFollowUp(item) && followUpKinds.has(item.judgement) ? (
                 <FollowUpRow item={item} onRequest={requestFollowUp} />
