@@ -162,11 +162,7 @@ export function MappingDialog({ doc, item, specs, page, onClose, onDone, onStale
         >
           {accumulate && <Icon name="check" size={12} />}
         </span>
-        <span>
-          {accumulate
-            ? '수정 내용을 매핑 사전에 누적합니다. 이후 업로드 건부터 적용됩니다.'
-            : '이 문서의 항목명만 바꾸고 매핑 사전에는 누적하지 않습니다.'}
-        </span>
+        <span>수정 내용을 매핑 사전에 누적합니다. 이후 업로드 건부터 적용됩니다.</span>
       </button>
 
       {error && <p className="text-[12px] text-[#C0342E]">{error}</p>}
