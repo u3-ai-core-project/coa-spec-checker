@@ -8,7 +8,7 @@ const SUB = 'col-start-2 col-span-3';
  * 선택한 항목 아래에서만 보여 줍니다(기본 화면이 시안에서 벗어나지 않게).
  * 서버가 보낸 코드가 이 화면의 이름 목록에 없으면 코드 그대로 보여 줍니다.
  */
-export function ExceptionInfo({ item }: { item: Pick<ExtractionItem, 'reason_code' | 'resolution'> }) {
+export function ExceptionInfo({ item }: { item: Pick<ExtractionItem, 'reason_code' | 'resolution' | 'normalized_name'> }) {
   const { reason_code: code, resolution } = item;
   if (!code && !resolution) return null;
   return (
@@ -22,6 +22,7 @@ export function ExceptionInfo({ item }: { item: Pick<ExtractionItem, 'reason_cod
         <span className="item-resolution">
           해결 조건: {RESOLUTION_TYPE_LABEL[resolution.type] ?? resolution.type}
           {resolution.condition ? ` · ${resolution.condition}` : ''}
+          {resolution.target_item && resolution.target_item !== item.normalized_name ? ` (값을 받을 항목: ${resolution.target_item})` : ''}
         </span>
       )}
     </div>

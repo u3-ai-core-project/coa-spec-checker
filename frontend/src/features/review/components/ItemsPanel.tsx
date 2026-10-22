@@ -8,6 +8,7 @@ import { JUDGEMENT_META, JUDGEMENT_ORDER } from '../shared/domain/judgement';
 import { DOCUMENT_ISSUE_LABEL } from '../shared/domain/exceptions';
 import { dispositionOf } from '../shared/domain/recommendation';
 import type { ReviewData } from '../hooks/useReviewData';
+import { FollowUpPanel } from './FollowUpPanel';
 import { ItemRow, type ItemRowProps, MissingRow } from './ItemRow';
 
 type RowExtras = Pick<ItemRowProps, 'editor' | 'followUp' | 'exception' | 'onEdit' | 'onVerify' | 'onMap'>;
@@ -89,9 +90,9 @@ function InfoLine({ label, children, extra }: { label: string; children: ReactNo
 
 function DocInfo({ data, collapsed, onToggle }: { data: ReviewData; collapsed: boolean; onToggle(): void }) {
   const { doc } = data;
-  const grade = `협력사 ${doc.applied_standard ?? '-'} · 사내 ${doc.spec_grade}`;
+  const grade = `협력사 ${doc.applied_standard ?? '-'} · 사내 ${doc.spec_grade ?? '-'}`;
   // 협력사 적용 규격과 사내 등급이 다르면 안내합니다(명세 4.6).
-  const gradeDiffers = doc.applied_standard !== null && !doc.applied_standard.endsWith(doc.spec_grade);
+  const gradeDiffers = doc.applied_standard !== null && doc.spec_grade !== null && !doc.applied_standard.endsWith(doc.spec_grade);
 
   if (collapsed) {
     return (
@@ -231,6 +232,7 @@ export function ItemsPanel({
             </ul>
           </>
         )}
+        {data.followUps && <FollowUpPanel followUps={data.followUps} />}
       </div>
       <div className="action-bar flex items-center justify-between gap-3 border-t border-[#E3E5E8] px-5 py-2">{actionBar}</div>
     </section>

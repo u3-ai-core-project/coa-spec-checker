@@ -24,6 +24,8 @@ interface CompleteDialogProps {
   pending: number;
   /** 후속 조치 버튼에서 열 때의 시작 값(보류 + 후속 조치 선택) */
   initialFollowUp?: HoldFollowUp;
+  /** [v1.4] 서버가 추천한 보류 후속 조치(GET follow-ups의 suggested_follow_up). 보류를 고르면 기본으로 선택합니다. */
+  suggestedFollowUp?: HoldFollowUp | null;
   onClose(): void;
   /** 처분 또는 보류가 성공했을 때. 완료한 처분(보류 포함)을 알려 줍니다. */
   onDone(completed: Disposition): void;
@@ -76,14 +78,14 @@ function followUpSentence(undetermined: number, missing: number): string | null 
  * 검수 완료 확인 다이얼로그 (시안 2-2, 2-2b, 2-2c).
  * 판정 집계와 AI 권고는 서버 응답을 그대로 보여 주고, 담당자가 처분(승인, 조건부 승인, 불합격) 또는 보류를 선택합니다.
  */
-export function CompleteDialog({ doc, extraction, pending, initialFollowUp, onClose, onDone, onStale }: CompleteDialogProps) {
+export function CompleteDialog({ doc, extraction, pending, initialFollowUp, suggestedFollowUp = null, onClose, onDone, onStale }: CompleteDialogProps) {
   const recommendation = extraction.lot_recommendation;
   const aiDisposition = dispositionForRecommendation(recommendation);
   /** 신뢰도 낮음 항목이 남아 있으면 처분(/approve)은 서버가 거절합니다. 보류(/hold)에는 이 제한이 없습니다. */
   const blocked = pending > 0;
 
   const [disposition, setDisposition] = useState<Disposition>(initialFollowUp ? 'hold' : aiDisposition);
-  const [followUp, setFollowUp] = useState<HoldFollowUp | null>(initialFollowUp ?? null);
+  const [followUp, setFollowUp] = useState<HoldFollowUp | null>(initialFollowUp ?? (aiDisposition === 'hold' ? suggestedFollowUp : null));
   const [reason, setReason] = useState(() => (!initialFollowUp && !blocked && aiDisposition === 'reject' ? suggestRejectReason(extraction.items) : ''));
   const [reasonTouched, setReasonTouched] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -108,6 +110,8 @@ export function CompleteDialog({ doc, extraction, pending, initialFollowUp, onCl
   function choose(next: Disposition) {
     if (isChoiceBlocked(next) || isDispositionLocked(next, recommendation)) return;
     setDisposition(next);
+    // 보류를 고르고 후속 조치를 아직 정하지 않았으면 서버가 추천한 것을 기본으로 선택합니다.
+    if (next === 'hold' && followUp === null && suggestedFollowUp) setFollowUp(suggestedFollowUp);
     // 사용자가 직접 쓰지 않은 사유는 제안 문구이므로, 처분을 바꾸면 그에 맞게 다시 채우거나 비웁니다.
     // 확인 필요가 남은 동안에는 처음 열 때와 같게 비워 둡니다.
     if (!reasonTouched) setReason(next === 'reject' && !blocked ? suggestRejectReason(extraction.items) : '');
@@ -281,6 +285,7 @@ export function CompleteDialog({ doc, extraction, pending, initialFollowUp, onCl
                   }`}
                 >
                   {FOLLOW_UP_LABEL[option]}
+                  {option === suggestedFollowUp && <span className="ml-1 text-[10px] font-semibold text-[#2B4FCB]">추천</span>}
                 </button>
               );
             })}

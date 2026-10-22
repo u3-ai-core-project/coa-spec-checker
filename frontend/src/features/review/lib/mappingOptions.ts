@@ -11,7 +11,7 @@ export const EXTRA_MAPPING_OPTIONS: readonly MappingOption[] = USE_MOCK ? MOCK_M
  */
 export function buildMappingOptions(specs: SpecItem[], query: string, extra: readonly MappingOption[] = EXTRA_MAPPING_OPTIONS): MappingOption[] {
   const needle = query.trim().toLowerCase();
-  const fromSpecs: MappingOption[] = specs.map((spec) => ({ name: spec.item_name, note: spec.unit }));
+  const fromSpecs: MappingOption[] = specs.map((spec) => ({ name: spec.item_name, note: spec.unit ?? '' }));
   const specNames = new Set(fromSpecs.map((option) => option.name));
   const candidates = extra.filter((option) => !specNames.has(option.name));
   const matches = (option: MappingOption) =>

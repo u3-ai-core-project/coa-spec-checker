@@ -3,6 +3,7 @@ import type { ExtractionItem, ReviewLog } from '../shared/api/types';
 import { Chem } from '../shared/components/Chem';
 import { Icon } from '../shared/components/Icon';
 import { AiMappingBadge, JudgementBadge } from '../shared/components/badges';
+import { VALUE_SOURCE_LABEL } from '../shared/domain/exceptions';
 import { formatDateTime } from '../shared/domain/format';
 import {
   confidenceLevel,
@@ -78,7 +79,7 @@ function ConfidenceText({ item, resolved }: { item: ExtractionItem; resolved: bo
 /** 시험 항목 한 줄 (시안 2-1 등). 판정과 이탈 폭은 서버 응답을 그대로 표시합니다. */
 export function ItemRow({ item, logs, readonly, flags, editor, followUp, exception, onSelect, onEdit, onVerify, onMap }: ItemRowProps) {
   const kind = processedKind(item.item_id, logs);
-  const resolved = kind !== null;
+  const resolved = item.reviewed || kind !== null;
   const lowPending = item.judgement === 'check' && isLowConfidence(item) && !resolved;
   const editLog = lastLog(item.item_id, logs, 'edit');
   const confirmLog = lastLog(item.item_id, logs, 'confirm');
@@ -190,6 +191,7 @@ export function ItemRow({ item, logs, readonly, flags, editor, followUp, excepti
         {editLog && (
           <div className={`item-edit-log ${SUB} text-[11px] text-[#8A9099]`}>
             수정: {editLog.reviewer_name} · {formatDateTime(editLog.reviewed_at)}
+            {editLog.value_source && editLog.value_source !== 'correction' ? ` · 출처: ${VALUE_SOURCE_LABEL[editLog.value_source]}` : ''}
             {editLog.reason ? ` · 사유: ${editLog.reason}` : ''}
           </div>
         )}

@@ -5,6 +5,7 @@ import type {
   ApprovalLog,
   DocumentDetail,
   ExtractionResult,
+  FollowUpsResponse,
   ReviewLog,
   SpecItem,
 } from '../shared/api/types';
@@ -14,9 +15,11 @@ export interface ReviewData {
   extraction: ExtractionResult;
   reviewLogs: ReviewLog[];
   approvalLogs: ApprovalLog[];
-  /** 문서의 원자재 구분에 해당하는 사내 규격. 항목 정렬(규격 순서)과 항목명 선택지에 씁니다. */
+  /** 문서에 연결된 규격 세트(spec_set_code)의 사내 규격. 항목 정렬(규격 순서)과 항목명 선택지에 씁니다. */
   specs: SpecItem[];
   anomalies: Anomaly[];
+  /** [v1.4] 후속 조치, 보류 후속 조치 추천, 문의 초안. 불러오지 못하면 null이라 검수 화면은 그대로 씁니다. */
+  followUps: FollowUpsResponse | null;
 }
 
 interface State {
@@ -27,15 +30,16 @@ interface State {
 
 async function fetchReviewData(documentId: string): Promise<ReviewData> {
   const doc = await api.getDocument(documentId);
-  const [extraction, reviewLogs, approvalLogs, specs, anomalies] = await Promise.all([
+  const [extraction, reviewLogs, approvalLogs, specs, anomalies, followUps] = await Promise.all([
     api.getExtraction(documentId),
     api.getReviewLogs(documentId),
     api.getApprovalLogs(documentId),
-    api.listSpecs(doc.material_code),
+    api.listSpecs(doc.spec_set_code ? { spec_set_code: doc.spec_set_code } : { material_code: doc.material_code }),
     // 이상 패턴은 확장 기능이라 실패해도 검수 화면은 계속 보여 줍니다.
     api.getAnomalies(documentId).catch((): Anomaly[] => []),
+    api.getFollowUps(documentId).catch((): FollowUpsResponse | null => null),
   ]);
-  return { doc, extraction, reviewLogs, approvalLogs, specs, anomalies };
+  return { doc, extraction, reviewLogs, approvalLogs, specs, anomalies, followUps };
 }
 
 /**

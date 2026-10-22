@@ -143,7 +143,7 @@ function ReviewScreen({ documentId }: { documentId: string }) {
   }
 
   const readonly = data.doc.status === 'approved';
-  const pending = pendingLowConfidenceCount(data.extraction.items, data.reviewLogs);
+  const pending = pendingLowConfidenceCount(data.extraction.items);
 
   const canEdit = isEditableStatus(data.doc.status);
   // 문서 정보는 사용자가 정하기 전에는 항목 영역이 더 필요한 상태(처분 완료, 편집, 후속 조치, 이상 패턴, 다이얼로그)에서 접습니다.
@@ -209,12 +209,19 @@ function ReviewScreen({ documentId }: { documentId: string }) {
     }
   }
 
-  async function submitEdit(item: ExtractionItem, { value, reason }: ItemEditSubmit) {
+  async function submitEdit(item: ExtractionItem, { value, reason, valueSource, notDetected }: ItemEditSubmit) {
     setBusy(true);
     setEditError(null);
     try {
       // 판정과 이탈 폭은 서버가 다시 계산합니다. 응답으로 다시 불러와 화면에 반영합니다.
-      await api.patchItem(documentId, item.item_id, { converted_value: value }, { reason });
+      await api.patchItem(
+        documentId,
+        item.item_id,
+        notDetected
+          ? { value_qualifier: 'not_detected', detection_limit: value, value_source: valueSource }
+          : { converted_value: value, value_source: valueSource },
+        { reason },
+      );
       await reload();
       setEditingId(null);
     } catch (failure) {
@@ -335,6 +342,7 @@ function ReviewScreen({ documentId }: { documentId: string }) {
           extraction={data.extraction}
           pending={pending}
           initialFollowUp={completeFollowUp}
+          suggestedFollowUp={data.followUps?.suggested_follow_up ?? null}
           onClose={() => setCompleteOpen(false)}
           onDone={(completed) => {
             setCompleteOpen(false);
