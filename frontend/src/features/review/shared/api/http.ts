@@ -1,13 +1,6 @@
 import { API_BASE } from '../config';
-import type {
-  Api,
-  MappingEntry,
-  PatchItemOptions,
-  SpecHistoryEntry,
-  UnitConversion,
-} from './Api';
+import type { Api } from './Api';
 import { ApiError } from './errors';
-import { LocalOnlyStore } from './localOnly';
 import { getToken, handleUnauthorized } from './session';
 import type {
   Anomaly,
@@ -27,14 +20,17 @@ import type {
   HoldBody,
   HoldResult,
   LoginResult,
+  MappingRecord,
   PatchItemBody,
   PatchItemResult,
   PatchSpecBody,
   PatchSpecResult,
   ReviewLog,
+  SpecChangeLog,
   SpecItem,
   SpecListQuery,
   SpecSet,
+  UnitConversion,
 } from './types';
 
 interface Envelope<T> {
@@ -100,10 +96,9 @@ function jsonBody(value: unknown): RequestInit {
 
 /**
  * 실제 백엔드 API 구현입니다.
- * 명세(v1.3)에 없는 기능(변경 이력, 매핑 사전, 단위 환산표)은 LocalOnlyStore에 위임합니다.
+ * TODO(백엔드 협의): 규격 변경 이력, 매핑 사전, 단위 환산표, 값 수정 사유는 서버 구현 전이라 요청 주소와 응답 모양이 가정입니다.
  */
 export class HttpApi implements Api {
-  private readonly local = new LocalOnlyStore();
 
   login(username: string, password: string): Promise<LoginResult> {
     return request<LoginResult>('/auth/login', jsonBody({ username, password }), false);
@@ -137,16 +132,12 @@ export class HttpApi implements Api {
     documentId: string,
     itemId: string,
     body: PatchItemBody,
-    options: PatchItemOptions = {},
+    // Api의 세 번째 인자 options.accumulate(사전 누적 끄기)는 보낼 필드가 없어 받지 않습니다(서버는 항상 누적).
   ): Promise<PatchItemResult> {
-    const result = await request<PatchItemResult>(
+    return request<PatchItemResult>(
       `/documents/${encodeURIComponent(documentId)}/extraction/${encodeURIComponent(itemId)}`,
       { method: 'PATCH', body: JSON.stringify(body) },
     );
-    // options.accumulate(사전 누적 끄기)도 보낼 필드가 없어 서버에는 반영되지 않습니다(서버는 항상 누적).
-    // 사유는 서버로 보내지 않습니다. TODO(백엔드 협의): API에 사유 필드가 생기면 위 요청에 포함합니다.
-    if (options.reason) this.local.saveItemReason(documentId, itemId, options.reason);
-    return result;
   }
 
   confirmItem(documentId: string, itemId: string): Promise<ConfirmItemResult> {
@@ -156,9 +147,8 @@ export class HttpApi implements Api {
     );
   }
 
-  async getReviewLogs(documentId: string): Promise<ReviewLog[]> {
-    const logs = await request<ReviewLog[]>(`/documents/${encodeURIComponent(documentId)}/review-logs`);
-    return this.local.attachItemReasons(documentId, logs);
+  getReviewLogs(documentId: string): Promise<ReviewLog[]> {
+    return request<ReviewLog[]>(`/documents/${encodeURIComponent(documentId)}/review-logs`);
   }
 
   approve(documentId: string, body: ApproveBody): Promise<ApproveResult> {
@@ -197,41 +187,26 @@ export class HttpApi implements Api {
   }
 
   patchSpec(specId: number, body: PatchSpecBody): Promise<PatchSpecResult> {
-    // TODO(백엔드 협의): 서버에는 규격 재판정(rejudge)이 아직 없어 이 값은 보내지 않습니다(목업만 따릅니다).
-    const payload = { lsl: body.lsl, usl: body.usl, unit: body.unit };
-    return request<PatchSpecResult>(`/specs/${specId}`, { method: 'PATCH', body: JSON.stringify(payload) });
+    return request<PatchSpecResult>(`/specs/${specId}`, { method: 'PATCH', body: JSON.stringify(body) });
   }
 
-  // --- API 없음: LocalOnlyStore 위임 (TODO(백엔드 협의)) -----------------------
-
-  listSpecHistory(materialCode: string): Promise<SpecHistoryEntry[]> {
-    return Promise.resolve(this.local.listSpecHistory(materialCode));
+  listSpecChangeLogs(specId: number): Promise<SpecChangeLog[]> {
+    return request<SpecChangeLog[]>(`/specs/${specId}/change-logs`);
   }
 
-  addSpecHistory(entry: Omit<SpecHistoryEntry, 'id'>): Promise<void> {
-    this.local.addSpecHistory(entry);
-    return Promise.resolve();
+  // --- 매핑 사전 (5-2). 서버 구현 전이라 응답 모양은 가정입니다 ---------------
+
+  listMappings(materialCode: string): Promise<MappingRecord[]> {
+    return request<MappingRecord[]>(`/mappings${buildQuery({ material_code: materialCode })}`);
   }
 
-  listMappings(materialCode: string): Promise<MappingEntry[]> {
-    return Promise.resolve(this.local.listMappings(materialCode));
-  }
-
-  addMapping(entry: Omit<MappingEntry, 'id'>): Promise<MappingEntry> {
-    return Promise.resolve(this.local.addMapping(entry));
-  }
-
-  registerMapping(id: string, registeredBy: string): Promise<void> {
-    this.local.registerMapping(id, registeredBy);
-    return Promise.resolve();
-  }
-
-  deleteMapping(id: string): Promise<void> {
-    this.local.deleteMapping(id);
-    return Promise.resolve();
+  async deleteMapping(id: number): Promise<void> {
+    // 응답 본문이 비어 있을 수 있어 request() 대신 직접 보냅니다.
+    const response = await send(`/mappings/${id}`, { method: 'DELETE' });
+    if (!response.ok) throw await readError(response);
   }
 
   listUnitConversions(): Promise<UnitConversion[]> {
-    return Promise.resolve(this.local.listUnitConversions());
+    return request<UnitConversion[]>('/mappings/conversions');
   }
 }

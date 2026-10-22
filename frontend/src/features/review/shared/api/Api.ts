@@ -15,63 +15,20 @@ import type {
   HoldBody,
   HoldResult,
   LoginResult,
+  MappingRecord,
   PatchItemBody,
   PatchItemResult,
   PatchSpecBody,
   PatchSpecResult,
   ReviewLog,
+  SpecChangeLog,
   SpecItem,
   SpecListQuery,
   SpecSet,
+  UnitConversion,
 } from './types';
 
-// ---------------------------------------------------------------------------
-// 아래 세 타입은 백엔드 API에 아직 없는 화면(5-1 변경 이력, 5-2 매핑 사전·단위 환산표)용입니다.
-// TODO(백엔드 협의): API가 생기면 이 타입을 명세에 맞춰 바꾸고 localOnly 구현을 http 구현으로 교체합니다.
-// ---------------------------------------------------------------------------
-
-export interface SpecHistoryEntry {
-  id: string;
-  materialCode: string;
-  title: string;
-  by: string;
-  at: string;
-  reason: string | null;
-}
-
-export type MappingEntrySource = 'dictionary' | 'ai' | 'manual';
-
-export interface MappingEntry {
-  id: string;
-  materialCode: string;
-  /** 사내 표준 항목명 */
-  standardName: string;
-  /** 협력사가 CoA에 적은 표기 */
-  rawName: string;
-  /**
-   * 시안 5-2의 "협력사" 열(공통, Chengxin, -). 표시용 목업 값입니다.
-   * TODO(백엔드 협의): 매핑 사전은 material_code + raw_name 기준이라 협력사 필드가 없습니다. API가 정해지면 맞춥니다.
-   */
-  supplier: string;
-  source: MappingEntrySource;
-  conversion: string | null;
-  registeredBy: string;
-  registeredAt: string;
-}
-
-export interface UnitConversion {
-  id: string;
-  label: string;
-  formula: string;
-  factor: string;
-}
-
 export interface PatchItemOptions {
-  /**
-   * 수정 사유. API에 필드가 없어 서버로 보내지 않고 화면 쪽 저장소에만 둡니다.
-   * TODO(백엔드 협의): 사유 필드가 생기면 PATCH 요청에 포함합니다(서버에 아직 없습니다).
-   */
-  reason?: string;
   /**
    * 항목명을 고칠 때 매핑 사전에 누적할지(기본 true). false이면 이 문서의 항목명만 바꾸고 사전에는 남기지 않습니다.
    * TODO(백엔드 협의): API(PATCH normalized_name)는 항상 사전에 누적하고 끄는 필드가 없어, 목업만 이 값을 따릅니다.
@@ -119,14 +76,14 @@ export interface Api {
   listSpecSets(materialCode?: string): Promise<SpecSet[]>;
   patchSpec(specId: number, body: PatchSpecBody): Promise<PatchSpecResult>;
 
-  // --- API 없음: 목업 (TODO(백엔드 협의)) ----------------------------------
-  listSpecHistory(materialCode: string): Promise<SpecHistoryEntry[]>;
-  addSpecHistory(entry: Omit<SpecHistoryEntry, 'id'>): Promise<void>;
-  listMappings(materialCode: string): Promise<MappingEntry[]>;
-  addMapping(entry: Omit<MappingEntry, 'id'>): Promise<MappingEntry>;
-  /** AI 추정 표기를 사전에 등록합니다(source를 dictionary로 바꿉니다). */
-  registerMapping(id: string, registeredBy: string): Promise<void>;
-  deleteMapping(id: string): Promise<void>;
+  /** [백엔드 확정 답변] 규격 항목 하나의 변경 이력(변경 전후 값, 수정자, 사유, 시각). 서버 구현 전이라 응답 모양은 가정입니다. */
+  listSpecChangeLogs(specId: number): Promise<SpecChangeLog[]>;
+
+  // --- 매핑 사전 (5-2) ------------------------------------------------------
+  // [백엔드 확정 답변] GET /mappings?material_code=, DELETE /mappings/{id}(ADMIN만), GET /mappings/conversions(조회만).
+  // TODO(백엔드 협의): 서버 구현 전이라 응답 모양은 가정입니다. 표기 추가와 사전 등록 API는 없습니다.
+  listMappings(materialCode: string): Promise<MappingRecord[]>;
+  deleteMapping(id: number): Promise<void>;
   /** 환산 계수는 서버 설정값이므로 조회만 합니다. */
   listUnitConversions(): Promise<UnitConversion[]>;
 }

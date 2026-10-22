@@ -236,6 +236,11 @@ export interface PatchItemBody {
   normalized_name?: string;
   /** [v1.4] 입력값 출처. 값을 입력할 때만 보냅니다. 생략하면 correction입니다. */
   value_source?: ValueSource;
+  /**
+   * 수정 사유(백엔드 확정 답변). 값 수정은 필수이고 항목명만 수정할 때는 선택입니다. review_logs의 reason으로 돌아옵니다.
+   * TODO(백엔드 협의): 서버 구현 전이라 요청과 응답의 reason 필드 이름은 가정입니다.
+   */
+  reason?: string;
 }
 
 export interface ReviewLog {
@@ -247,10 +252,7 @@ export interface ReviewLog {
   value_source?: ValueSource | null;
   reviewer_name: string;
   reviewed_at: string;
-  /**
-   * 수정 사유. API에는 이 필드가 없어 화면(목업) 쪽에서만 붙입니다.
-   * TODO(백엔드 협의): 수정 사유 필드가 생기면 서버 응답을 그대로 씁니다.
-   */
+  /** 수정 사유(백엔드 확정 답변). 값 수정은 필수이고 항목명만 수정한 이력은 없을 수 있습니다. 서버 구현 전이라 필드 이름은 가정입니다. */
   reason?: string | null;
 }
 
@@ -381,19 +383,66 @@ export interface PatchSpecBody {
   usl: number | null;
   unit: string;
   /**
-   * 처분 전 문서를 새 규격으로 다시 판정할지(v1.4안 4.21).
-   * TODO(백엔드 협의): 서버(develop)에는 아직 없습니다. 규격 재판정은 범위 결정(안건 5) 후 추가한다고 되어 있어,
-   * 목업(MockApi)만 이 값을 따르고 HttpApi는 서버로 보내지 않습니다.
+   * 변경 사유(백엔드 확정 답변, 필수). 규격 변경 이력(change-logs)에 남습니다.
+   * TODO(백엔드 협의): 서버 구현 전이라 필드 이름은 가정입니다.
    */
-  rejudge?: boolean;
+  reason: string;
+}
+
+/** PATCH /specs/{id} 응답. 수정된 규격 항목입니다. 규격 재판정(rejudge)은 서버에 없어 뺐습니다. */
+export type PatchSpecResult = SpecItem;
+
+/** 규격 한 항목의 값(변경 전후 비교용) */
+export interface SpecValues {
+  lsl: number | null;
+  usl: number | null;
+  unit: string | null;
 }
 
 /**
- * PATCH /specs/{id} 응답. 수정된 규격 항목입니다.
- * TODO(백엔드 협의): 재판정(rejudge)이 서버에 생기면 "판정이 바뀐 문서 목록"의 응답 모양을 맞춥니다.
- * 지금은 목업이 document_id만 가정한 rejudged_documents를 돌려줍니다.
+ * GET /specs/{id}/change-logs 의 변경 이력 1건(백엔드 확정 답변: 변경 전후 값, 수정자, 사유, 시각).
+ * TODO(백엔드 협의): 서버 구현 전이라 필드 이름과 모양은 가정입니다.
  */
-export type PatchSpecResult = SpecItem & { rejudged_documents?: Array<{ document_id: string }> };
+export interface SpecChangeLog {
+  id: number;
+  spec_id: number;
+  item_name: string;
+  before: SpecValues;
+  after: SpecValues;
+  changed_by: string;
+  reason: string;
+  changed_at: string;
+}
+
+export type MappingRecordSource = 'seed' | 'manual';
+
+/**
+ * GET /mappings?material_code= 의 매핑 사전 1건(백엔드 확정 답변: 출처 seed/manual, 등록자, 등록일).
+ * 사전은 material_code + raw_name 기준이라 협력사 필드가 없습니다.
+ * TODO(백엔드 협의): 서버 구현 전이라 필드 이름과 모양은 가정입니다.
+ */
+export interface MappingRecord {
+  id: number;
+  material_code: string;
+  /** 협력사가 CoA에 적은 표기 */
+  raw_name: string;
+  /** 사내 표준 항목명 */
+  normalized_name: string;
+  source: MappingRecordSource;
+  created_by: string | null;
+  created_at: string | null;
+}
+
+/**
+ * GET /mappings/conversions 의 단위 환산표 1건(조회 전용, 백엔드 확정 답변).
+ * TODO(백엔드 협의): 서버 구현 전이라 필드 이름과 모양은 가정입니다.
+ */
+export interface UnitConversion {
+  id: number | string;
+  label: string;
+  formula: string;
+  factor: string;
+}
 
 /** [v1.4] GET /documents/{id}/follow-ups 응답의 후속 조치 1건. 예외 항목 1개 또는 문서 정합성 오류 1개입니다. */
 export interface FollowUpLine {

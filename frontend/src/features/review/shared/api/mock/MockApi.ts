@@ -1,6 +1,6 @@
 import { formatNumber } from '../../domain/format';
 import { pendingLowConfidenceCount } from '../../domain/items';
-import type { Api, MappingEntry, PatchItemOptions, SpecHistoryEntry, UnitConversion } from '../Api';
+import type { Api, PatchItemOptions } from '../Api';
 import { ApiError } from '../errors';
 import { LocalOnlyStore } from '../localOnly';
 import { getToken, handleUnauthorized, setToken } from '../session';
@@ -24,15 +24,19 @@ import type {
   HoldBody,
   HoldResult,
   LoginResult,
+  MappingRecord,
   PatchItemBody,
   PatchItemResult,
   PatchSpecBody,
   PatchSpecResult,
   ReviewedItem,
   ReviewLog,
+  SpecChangeLog,
   SpecItem,
   SpecListQuery,
   SpecSet,
+  SpecValues,
+  UnitConversion,
 } from '../types';
 import { type MockDoc, type MockState, type MockUser, createMockState } from './fixtures';
 import { getFollowUps } from './followUps';
@@ -155,8 +159,6 @@ export class MockApi implements Api {
 
   constructor(state: MockState = createMockState()) {
     this.state = state;
-    // 시안 2-5와 같은 수정 사유 시드
-    this.local.seedItemReason('A0355164', 'na', 'OCR 오인식 정정');
   }
 
   /** 목업 데이터를 통째로 바꿉니다. 개발용 화면(src/dev)이 시안 비교용 시작 상태를 만들 때만 씁니다. */
@@ -292,15 +294,19 @@ export class MockApi implements Api {
       throw new ApiError(400, 'VALIDATION_ERROR', 'converted_value, detection_limit, normalized_name 중 하나 이상 보내야 합니다');
     }
     if (body.value_source !== undefined && !hasValue) throw new ApiError(400, 'VALIDATION_ERROR', 'value_source는 값을 입력할 때만 보낼 수 있습니다');
+    // 수정 사유(백엔드 확정 답변): 값 수정은 필수이고, 항목명만 수정할 때는 선택입니다.
+    // TODO(백엔드 협의): 서버 구현 전이라 REASON_REQUIRED 적용 범위와 필드 이름은 가정입니다.
+    const reason = body.reason?.trim() || null;
+    if (hasValue && reason === null) throw new ApiError(400, 'REASON_REQUIRED', '값 수정은 사유가 필요합니다');
 
     // ---- 1) 항목명 수정 ----
     if (newName !== undefined && newName !== item.normalized_name) {
       const target = specOf(newName);
       if (!target) throw new ApiError(400, 'UNKNOWN_ITEM_NAME', '사내 규격에 없는 항목명');
       if (item.mapping_source === 'spec') throw new ApiError(400, 'VALIDATION_ERROR', '누락 항목은 항목명을 바꿀 수 없습니다');
-      if (doc.extraction.items.some((entry) => entry.item_id !== item.item_id && entry.normalized_name === target.item_name && !isUntouchedMissing(entry))) {
-        throw new ApiError(400, 'VALIDATION_ERROR', `이미 '${target.item_name}' 항목이 있습니다`);
-      }
+      // 백엔드는 이미 같은 이름의 항목이 있으면 400으로 거절하지만, 목업 규격(7개)은 문서 항목이 전부 차지하고 있어
+      // 화면의 매핑 수정 흐름(2-9)을 확인할 수 없어서 이 검사는 목업에서 뺐습니다.
+      // TODO(백엔드 협의): 목업 규격에 Pb, 중금속 총량이 생기면 이 검사를 되살립니다.
       newLogs.push({
         item_id: itemId,
         action: 'rename',
@@ -308,6 +314,7 @@ export class MockApi implements Api {
         after_value: target.item_name,
         reviewer_name: user.name,
         reviewed_at: now('rename'),
+        reason,
       });
       // 새 규격으로 다시 판정합니다(검수 상태는 유지).
       item = rejudgeItem({ ...item, normalized_name: target.item_name, mapping_source: 'manual' }, target);
@@ -315,17 +322,15 @@ export class MockApi implements Api {
       if (item.raw_name && options.accumulate !== false) {
         const existing = this.local
           .listMappings(target.material_code)
-          .find((entry) => entry.rawName === item.raw_name);
+          .find((entry) => entry.raw_name === item.raw_name);
         if (existing) this.local.deleteMapping(existing.id);
         this.local.addMapping({
-          materialCode: target.material_code,
-          standardName: target.item_name,
-          rawName: item.raw_name,
-          supplier: doc.detail.supplier,
+          material_code: target.material_code,
+          raw_name: item.raw_name,
+          normalized_name: target.item_name,
           source: 'manual',
-          conversion: null,
-          registeredBy: user.name,
-          registeredAt: todayText(),
+          created_by: user.name,
+          created_at: `${todayText()}T09:00:00+09:00`,
         });
       }
     }
@@ -344,13 +349,13 @@ export class MockApi implements Api {
         value_source: item.value_source,
         reviewer_name: user.name,
         reviewed_at: now('edit'),
+        reason,
       });
     }
 
     doc.reviewLogs.push(...newLogs);
     this.commitItem(doc, index, item);
     this.touchStatus(doc);
-    if (options.reason) this.local.saveItemReason(documentId, itemId, options.reason);
 
     return delay({
       item: toReviewedItem(item),
@@ -420,7 +425,7 @@ export class MockApi implements Api {
   async getReviewLogs(documentId: string): Promise<ReviewLog[]> {
     this.requireUser();
     const doc = this.findDoc(documentId);
-    return delay(this.local.attachItemReasons(documentId, structuredClone(doc.reviewLogs)));
+    return delay(structuredClone(doc.reviewLogs));
   }
 
   async approve(documentId: string, body: ApproveBody): Promise<ApproveResult> {
@@ -545,71 +550,51 @@ export class MockApi implements Api {
     const target = this.state.specs.find((entry) => entry.id === specId);
     if (!target) throw new ApiError(404, 'SPEC_NOT_FOUND', '존재하지 않는 규격 항목');
     if (checkSpecRange(body.lsl, body.usl)) throw new ApiError(400, 'INVALID_SPEC_RANGE', '규격 하한이 상한보다 큼');
-    // 서버처럼 rejudge가 없으면 이미 추출된 문서의 판정은 바꾸지 않고, 이후 업로드 건부터 적용됩니다.
+    // 변경 사유는 필수입니다(백엔드 확정 답변). TODO(백엔드 협의): 서버 구현 전이라 필드 이름은 가정입니다.
+    const reason = body.reason?.trim();
+    if (!reason) throw new ApiError(400, 'REASON_REQUIRED', '변경 사유가 필요합니다');
+    // 이미 추출된 문서의 판정은 바꾸지 않고, 이후 업로드 건부터 적용됩니다(규격 재판정은 서버에 없습니다).
+    const before: SpecValues = { lsl: target.lsl, usl: target.usl, unit: target.unit };
     target.lsl = body.lsl;
     target.usl = body.usl;
     target.unit = body.unit;
     target.updated_by = user.name;
     target.updated_at = now('spec');
-    // TODO(백엔드 협의): 규격 재판정(rejudge)은 서버(develop)에 아직 없습니다. 아래는 목업에서만 동작합니다.
-    // rejudge=true이면 처분 전 문서를 새 규격으로 다시 판정하고, 판정이 바뀐 문서 목록을 돌려줍니다.
-    if (body.rejudge) return delay({ ...target, rejudged_documents: this.rejudgeOpenDocuments(target.spec_set_code) });
+    this.local.addSpecChangeLog({
+      spec_id: target.id,
+      item_name: target.item_name,
+      before,
+      after: { lsl: target.lsl, usl: target.usl, unit: target.unit },
+      changed_by: user.name,
+      reason,
+      changed_at: target.updated_at,
+    });
     return delay({ ...target });
   }
 
-  /** 처분 전(approved가 아닌) 문서를 현재 규격 세트로 다시 판정하고, 항목 판정이나 로트 권고가 바뀐 문서를 돌려줍니다. */
-  private rejudgeOpenDocuments(specSetCode: string): Array<{ document_id: string }> {
-    const changed: Array<{ document_id: string }> = [];
-    const specs = this.state.specs.filter((entry) => entry.spec_set_code === specSetCode);
-    for (const doc of this.state.docs) {
-      const extraction = doc.extraction;
-      if (!extraction || doc.detail.spec_set_code !== specSetCode || !READY_STATUSES.includes(doc.detail.status)) continue;
-      if (doc.detail.status === 'approved') continue;
-      const before = JSON.stringify([extraction.items.map((item) => item.judgement), extraction.lot_recommendation]);
-      extraction.items = extraction.items.map((item) => {
-        const spec = specs.find((entry) => entry.item_name === item.normalized_name);
-        // 규격에 없는 이름의 항목(AI 추정 등)은 이 규격 변경과 관계가 없어 그대로 둡니다.
-        return spec ? rejudgeItem(item, spec) : item;
-      });
-      extraction.summary = summarize(extraction.items);
-      extraction.lot_recommendation = recommendLot(extraction.summary, extraction.document_issues.length);
-      doc.detail.lot_recommendation = extraction.lot_recommendation;
-      const after = JSON.stringify([extraction.items.map((item) => item.judgement), extraction.lot_recommendation]);
-      if (before !== after) changed.push({ document_id: doc.detail.document_id });
-    }
-    return changed;
+  async listSpecChangeLogs(specId: number): Promise<SpecChangeLog[]> {
+    this.requireUser();
+    if (!this.state.specs.some((entry) => entry.id === specId)) throw new ApiError(404, 'SPEC_NOT_FOUND', '존재하지 않는 규격 항목');
+    return delay(this.local.listSpecChangeLogs(specId));
   }
 
-  // --- API 없음: 목업 (TODO(백엔드 협의)) ----------------------------------
+  // --- 매핑 사전 (5-2) -------------------------------------------------------
+  // TODO(백엔드 협의): GET /mappings, DELETE /mappings/{id}, GET /mappings/conversions는 서버 구현 전이라 응답 모양이 가정입니다.
 
-  async listSpecHistory(materialCode: string): Promise<SpecHistoryEntry[]> {
-    return delay(this.local.listSpecHistory(materialCode));
-  }
-
-  async addSpecHistory(entry: Omit<SpecHistoryEntry, 'id'>): Promise<void> {
-    this.local.addSpecHistory(entry);
-    return delay(undefined);
-  }
-
-  async listMappings(materialCode: string): Promise<MappingEntry[]> {
+  async listMappings(materialCode: string): Promise<MappingRecord[]> {
+    this.requireUser();
     return delay(this.local.listMappings(materialCode));
   }
 
-  async addMapping(entry: Omit<MappingEntry, 'id'>): Promise<MappingEntry> {
-    return delay(this.local.addMapping(entry));
-  }
-
-  async registerMapping(id: string, registeredBy: string): Promise<void> {
-    this.local.registerMapping(id, registeredBy);
-    return delay(undefined);
-  }
-
-  async deleteMapping(id: string): Promise<void> {
+  async deleteMapping(id: number): Promise<void> {
+    const user = this.requireUser();
+    if (user.role !== 'ADMIN') throw new ApiError(403, 'FORBIDDEN', '권한 없음');
     this.local.deleteMapping(id);
     return delay(undefined);
   }
 
   async listUnitConversions(): Promise<UnitConversion[]> {
+    this.requireUser();
     return delay(this.local.listUnitConversions());
   }
 }

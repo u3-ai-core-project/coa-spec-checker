@@ -614,7 +614,7 @@ export function createMockState(options: MockOptions = {}): MockState {
       {
         paper: paperA(),
         reviewLogs: [
-          { item_id: 'na', action: 'edit', before_value: '25.6', after_value: '2.56', reviewer_name: '김OO', reviewed_at: '2026-10-05T14:32:00+09:00' },
+          { item_id: 'na', action: 'edit', before_value: '25.6', after_value: '2.56', value_source: 'correction', reviewer_name: '김OO', reviewed_at: '2026-10-05T14:32:00+09:00', reason: 'OCR 오인식 정정' },
           { item_id: 'fe', action: 'confirm', before_value: '3', after_value: '3', reviewer_name: '김OO', reviewed_at: '2026-10-05T14:35:00+09:00' },
         ],
         approvalLogs: [
