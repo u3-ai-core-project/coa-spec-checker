@@ -247,8 +247,8 @@ export class MockApi implements Api {
         reviewed_at: now('rename'),
       });
       item = { ...item, normalized_name: target.item_name, mapping_source: 'manual' };
-      // 서버는 item_mappings에 raw_name → normalized_name을 manual로 누적합니다.
-      if (item.raw_name) {
+      // 서버는 item_mappings에 raw_name → normalized_name을 manual로 누적합니다. 담당자가 누적을 끄면(accumulate=false) 남기지 않습니다.
+      if (item.raw_name && options.accumulate !== false) {
         const existing = this.local
           .listMappings(target.material_code)
           .find((entry) => entry.rawName === item.raw_name);

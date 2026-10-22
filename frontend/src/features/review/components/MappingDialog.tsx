@@ -31,6 +31,8 @@ export function MappingDialog({ doc, item, specs, page, onClose, onDone, onStale
   const [selected, setSelected] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // 수정 내용을 매핑 사전에 누적할지. 시안은 켜진 상태로 시작합니다.
+  const [accumulate, setAccumulate] = useState(true);
 
   const options = useMemo(() => buildMappingOptions(specs, query), [specs, query]);
   const hint = mappingHint(item.raw_name, [...specs, ...EXTRA_MAPPING_OPTIONS.map((option) => ({ item_name: option.name }))]);
@@ -41,7 +43,7 @@ export function MappingDialog({ doc, item, specs, page, onClose, onDone, onStale
     setBusy(true);
     setError(null);
     try {
-      await api.patchItem(doc.document_id, item.item_id, { normalized_name: selected });
+      await api.patchItem(doc.document_id, item.item_id, { normalized_name: selected }, { accumulate });
       onDone();
     } catch (failure) {
       setError(errorMessage(failure));
@@ -146,16 +148,26 @@ export function MappingDialog({ doc, item, specs, page, onClose, onDone, onStale
         </div>
       )}
 
-      <div className="map-accumulate flex items-start gap-2 text-[12px] text-[#5B616A]">
+      <button
+        type="button"
+        role="checkbox"
+        aria-checked={accumulate}
+        onClick={() => setAccumulate((value) => !value)}
+        className="map-accumulate flex items-start gap-2 text-left text-[12px] text-[#5B616A]"
+      >
         <span
-          className="mt-px flex h-4 w-4 shrink-0 items-center justify-center rounded bg-[#2B4FCB] text-white"
-          role="img"
-          aria-label="항상 적용됩니다"
+          className={`mt-px flex h-4 w-4 shrink-0 items-center justify-center rounded ${
+            accumulate ? 'bg-[#2B4FCB] text-white' : 'border-2 border-[#B6BBC4] bg-white'
+          }`}
         >
-          <Icon name="check" size={12} />
+          {accumulate && <Icon name="check" size={12} />}
         </span>
-        <span>수정 내용을 매핑 사전에 누적합니다. 이후 업로드 건부터 적용됩니다.</span>
-      </div>
+        <span>
+          {accumulate
+            ? '수정 내용을 매핑 사전에 누적합니다. 이후 업로드 건부터 적용됩니다.'
+            : '이 문서의 항목명만 바꾸고 매핑 사전에는 누적하지 않습니다.'}
+        </span>
+      </button>
 
       {error && <p className="text-[12px] text-[#C0342E]">{error}</p>}
 

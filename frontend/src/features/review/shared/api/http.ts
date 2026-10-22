@@ -140,6 +140,7 @@ export class HttpApi implements Api {
       `/documents/${encodeURIComponent(documentId)}/extraction/${encodeURIComponent(itemId)}`,
       { method: 'PATCH', body: JSON.stringify(body) },
     );
+    // options.accumulate(사전 누적 끄기)도 보낼 필드가 없어 서버에는 반영되지 않습니다(서버는 항상 누적).
     // 사유는 서버로 보내지 않습니다. TODO(백엔드 협의): API에 사유 필드가 생기면 위 요청에 포함합니다.
     if (options.reason) this.local.saveItemReason(documentId, itemId, options.reason);
     return result;
