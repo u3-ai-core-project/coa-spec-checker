@@ -3,6 +3,7 @@ import type {
   Anomaly,
   ApprovalLog,
   DocumentDetail,
+  DocumentIssue,
   DocumentStatus,
   ExtractionItem,
   ExtractionResult,
@@ -53,6 +54,11 @@ export const MOCK_USERS: MockUser[] = [
 const MATERIAL_NAME = '탄산리튬 Li2CO3';
 const D1 = 'YS/T 582-2023 D1';
 const AGREEMENT = 'Chengxin 납품 협약';
+/** [v1.4안] 규격 버전. 탄산리튬 초기값은 YS/T 582-2023 D1 기반입니다. */
+const VERSION = 'YS/T 582-2023';
+
+const LIOH_MATERIAL_CODE = 'LIOH';
+const LIOH_MATERIAL_NAME = '수산화리튬 LiOH';
 
 function spec(
   id: number,
@@ -74,9 +80,35 @@ function spec(
     usl,
     spec_type: '정량',
     grade: 'D1',
+    version: VERSION,
+    is_required: true,
     source,
     updated_by: updatedBy,
     updated_at: updatedAt,
+  };
+}
+
+/**
+ * [v1.4안] 수산화리튬(LIOH, 보조 원자재) 규격 자리표시. 초기값은 GB/T 26008-2020 D1 기반 소성훈 님 작성본인데 아직 받지 못해,
+ * 항목 이름과 단위만 두고 하한/상한은 비웠습니다. 한계값이 정해지지 않은 항목은 화면에 "-"로 보입니다.
+ * TODO(규격표 수령 후): 소성훈 님 작성본의 항목과 값으로 교체합니다.
+ */
+function liohSpec(id: number, itemName: string, unit: string): SpecItem {
+  return {
+    id,
+    material_code: LIOH_MATERIAL_CODE,
+    material_name: LIOH_MATERIAL_NAME,
+    item_name: itemName,
+    unit,
+    lsl: null,
+    usl: null,
+    spec_type: '정량',
+    grade: 'D1',
+    version: 'GB/T 26008-2020',
+    is_required: true,
+    source: 'GB/T 26008-2020 D1 (규격표 수령 전 자리표시)',
+    updated_by: null,
+    updated_at: null,
   };
 }
 
@@ -90,6 +122,9 @@ export function createSpecs(): SpecItem[] {
     spec(5, 'Ca', 'ppm', null, 20, D1, '2026-03-11T10:05:00+09:00', '이OO'),
     spec(6, 'Cl', 'ppm', null, 20, D1, '2026-03-11T10:05:00+09:00', '이OO'),
     spec(7, '황산염', 'ppm', null, 400, AGREEMENT, '2026-06-02T15:40:00+09:00', '박OO'),
+    liohSpec(8, '순도', '%'),
+    liohSpec(9, 'Na', 'ppm'),
+    liohSpec(10, 'K', 'ppm'),
   ];
 }
 
@@ -136,6 +171,8 @@ function makeItem(def: ItemDef, specs: SpecItem[], resolved = false): Extraction
     judgement: 'pass',
     judgement_reason: null,
     deviation: null,
+    reason_code: null,
+    resolution: null,
     confidence: def.confidence,
     bbox: null,
   };
@@ -167,6 +204,9 @@ function makeMissing(id: string, name: string, specs: SpecItem[], rawName: strin
     judgement: 'missing',
     judgement_reason: '사내 규격에 있으나 CoA에 없음',
     deviation: null,
+    // [v1.4안] 필수 항목이 CoA에 없으면 MISSING_REQUIRED, 해결은 자체 시험값입니다.
+    reason_code: specItem?.is_required ? 'MISSING_REQUIRED' : null,
+    resolution: { type: 'internal_test', condition: specItem?.usl != null ? `자체 시험값 ≤ ${specItem.usl} ${specItem.unit}` : null },
     confidence: null,
     bbox: null,
   };
@@ -236,6 +276,8 @@ function itemsB(specs: SpecItem[]): ExtractionItem[] {
     judgement: 'check',
     judgement_reason: '신뢰도가 기준값(0.8) 미만입니다.',
     deviation: null,
+    reason_code: 'LOW_CONFIDENCE',
+    resolution: { type: 'confirm', condition: null },
     confidence: 0.72,
     bbox: null,
   });
@@ -397,7 +439,7 @@ function buildDetail(meta: DocMeta, id: string, recommendation: ExtractionResult
 function buildDoc(
   meta: DocMeta,
   items: ExtractionItem[] | null,
-  options: { id?: string; hidden?: boolean; paper?: Paper; reviewLogs?: ReviewLog[]; approvalLogs?: ApprovalLog[]; anomalies?: Anomaly[] } = {},
+  options: { id?: string; hidden?: boolean; paper?: Paper; reviewLogs?: ReviewLog[]; approvalLogs?: ApprovalLog[]; anomalies?: Anomaly[]; documentIssues?: DocumentIssue[] } = {},
 ): MockDoc {
   const id = options.id ?? meta.lot;
   if (!items) {
@@ -415,7 +457,8 @@ function buildDoc(
   }
   const pdf = attachPdf(meta.lot, meta.testDate, items, options.paper ?? paperFromItems(items));
   const summary = summarize(items);
-  const recommendation = recommendLot(summary);
+  const documentIssues = options.documentIssues ?? [];
+  const recommendation = recommendLot(summary, documentIssues.length);
   const extraction: ExtractionResult = {
     document_id: id,
     supplier: meta.supplier,
@@ -424,6 +467,7 @@ function buildDoc(
     origin: '중국',
     applied_standard: 'D3',
     items,
+    document_issues: documentIssues,
     lot_recommendation: recommendation,
     summary,
     review_status: meta.status === 'approved' ? 'approved' : meta.status === 'on_hold' ? 'on_hold' : meta.status === 'in_review' ? 'in_review' : 'pending',
@@ -445,9 +489,18 @@ function buildDoc(
 export interface MockOptions {
   /** 문서가 하나도 없는 상태(시안 2-0) */
   empty?: boolean;
-  /** 'anomaly': A0266047이 이상 패턴(결과 칸이 규격 문구와 같음, 같은 값 반복)을 가진 상태(시안 2-10) */
-  scenario?: 'anomaly';
+  /**
+   * 'anomaly': A0266047이 이상 패턴(결과 칸이 규격 문구와 같음, 같은 값 반복)을 가진 상태(시안 2-10)
+   * 'issues': [v1.4안] 모든 항목이 적합한 A0390221에 문서 수준 문제(로트 불일치, 날짜 충돌)가 있어 로트 권고가 보류인 상태
+   */
+  scenario?: 'anomaly' | 'issues';
 }
+
+/** [v1.4안] 시나리오 'issues'에 쓰는 문서 수준 문제 예시 문구(목업) */
+const ISSUES_SAMPLE: DocumentIssue[] = [
+  { code: 'LOT_MISMATCH', message: 'CoA의 로트번호(A0390221)와 입고 로트번호(A0390222)가 다릅니다.' },
+  { code: 'DATE_CONFLICT', message: 'CoA 발행일(2026-09-28)이 시험일(2026-09-29)보다 이전입니다.' },
+];
 
 export function createMockState(options: MockOptions = {}): MockState {
   const specs = createSpecs();
@@ -469,7 +522,11 @@ export function createMockState(options: MockOptions = {}): MockState {
     buildDoc({ lot: 'A0511877', supplier: 'Chengxin', po: 'PO-2026-1128', testDate: '2026-10-04', uploadedAt: '2026-10-06T08:47:00+09:00', status: 'processing', fileSize: 388_000 }, null),
     docA,
     buildDoc({ lot: 'A0481544', supplier: 'Chengxin', po: 'PO-2026-1121', testDate: '2026-09-30', uploadedAt: '2026-10-05T15:41:00+09:00', status: 'extracted', fileSize: 497_000 }, itemsB(specs), { paper: paperB() }),
-    buildDoc({ lot: 'A0390221', supplier: '대흥리튬', po: 'PO-2026-1115', testDate: '2026-09-29', uploadedAt: '2026-10-05T14:10:00+09:00', status: 'extracted', fileSize: 455_000 }, itemsStandard(specs, 'allpass')),
+    buildDoc(
+      { lot: 'A0390221', supplier: '대흥리튬', po: 'PO-2026-1115', testDate: '2026-09-29', uploadedAt: '2026-10-05T14:10:00+09:00', status: 'extracted', fileSize: 455_000 },
+      itemsStandard(specs, 'allpass'),
+      { documentIssues: options.scenario === 'issues' ? ISSUES_SAMPLE : [] },
+    ),
     buildDoc({ lot: 'A0390188', supplier: '대흥리튬', po: 'PO-2026-1112', testDate: '2026-09-29', uploadedAt: '2026-10-05T11:36:00+09:00', status: 'extracted', fileSize: 462_000 }, itemsStandard(specs, 'hold')),
     buildDoc(
       { lot: 'A0377415', supplier: '서진소재', po: 'PO-2026-1108', testDate: '2026-09-27', uploadedAt: '2026-10-04T16:22:00+09:00', status: 'on_hold', fileSize: 431_000 },

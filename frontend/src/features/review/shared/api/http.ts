@@ -29,6 +29,7 @@ import type {
   PatchItemBody,
   PatchItemResult,
   PatchSpecBody,
+  PatchSpecResult,
   ReviewLog,
   SpecItem,
 } from './types';
@@ -123,8 +124,10 @@ export class HttpApi implements Api {
     return response.blob();
   }
 
-  getExtraction(documentId: string): Promise<ExtractionResult> {
-    return request<ExtractionResult>(`/documents/${encodeURIComponent(documentId)}/extraction`);
+  async getExtraction(documentId: string): Promise<ExtractionResult> {
+    const result = await request<ExtractionResult>(`/documents/${encodeURIComponent(documentId)}/extraction`);
+    // [v1.4안] document_issues가 응답에 없으면(문제 없음 또는 구버전 서버) 빈 배열로 둡니다.
+    return { ...result, document_issues: result.document_issues ?? [] };
   }
 
   async patchItem(
@@ -181,8 +184,8 @@ export class HttpApi implements Api {
     return request<SpecItem[]>(`/specs${buildQuery({ material_code: materialCode })}`);
   }
 
-  patchSpec(specId: number, body: PatchSpecBody): Promise<SpecItem> {
-    return request<SpecItem>(`/specs/${specId}`, { method: 'PATCH', body: JSON.stringify(body) });
+  patchSpec(specId: number, body: PatchSpecBody): Promise<PatchSpecResult> {
+    return request<PatchSpecResult>(`/specs/${specId}`, { method: 'PATCH', body: JSON.stringify(body) });
   }
 
   // --- API 없음: LocalOnlyStore 위임 (TODO(백엔드 협의)) -----------------------

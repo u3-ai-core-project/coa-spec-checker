@@ -27,18 +27,30 @@ export function dispositionForRecommendation(rec: LotRecommendation): Dispositio
   return 'hold';
 }
 
+/**
+ * 보류 후속 조치 이름. [v1.4안] request_single_value, request_reissue, request_correct_coa의 한글 이름은 시안에 없어
+ * 명세의 값 이름을 풀어쓴 임시 표기입니다.
+ * TODO(디자인 협의): 시안이 나오면 이름을 맞춥니다.
+ */
 export const FOLLOW_UP_LABEL: Record<HoldFollowUp, string> = {
   request_actual_value: '실측값 요청',
   request_detection_limit: '검출한계 요청',
   internal_test: '자체 시험',
   other: '기타',
+  request_single_value: '단일값 요청',
+  request_reissue: '재발행 요청',
+  request_correct_coa: 'CoA 정정 요청',
 };
 
+/** 시안의 네 가지 뒤에 새 후속 조치를 이어 붙입니다. "기타"는 시안 위치(네 번째)를 지킵니다. */
 export const FOLLOW_UP_ORDER: HoldFollowUp[] = [
   'request_actual_value',
   'request_detection_limit',
   'internal_test',
   'other',
+  'request_single_value',
+  'request_reissue',
+  'request_correct_coa',
 ];
 
 export function followUpLabel(value: string | null): string {

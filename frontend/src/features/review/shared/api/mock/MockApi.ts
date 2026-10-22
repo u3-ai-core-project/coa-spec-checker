@@ -26,6 +26,7 @@ import type {
   PatchItemBody,
   PatchItemResult,
   PatchSpecBody,
+  PatchSpecResult,
   ReviewLog,
   SpecItem,
 } from '../types';
@@ -350,7 +351,7 @@ export class MockApi implements Api {
   private commitItem(doc: MockDoc & { extraction: ExtractionResult }, index: number, item: ExtractionItem): void {
     doc.extraction.items[index] = item;
     doc.extraction.summary = summarize(doc.extraction.items);
-    doc.extraction.lot_recommendation = recommendLot(doc.extraction.summary);
+    doc.extraction.lot_recommendation = recommendLot(doc.extraction.summary, doc.extraction.document_issues.length);
     doc.detail.lot_recommendation = doc.extraction.lot_recommendation;
   }
 
@@ -470,19 +471,50 @@ export class MockApi implements Api {
     return delay(structuredClone(specs));
   }
 
-  async patchSpec(specId: number, body: PatchSpecBody): Promise<SpecItem> {
+  async patchSpec(specId: number, body: PatchSpecBody): Promise<PatchSpecResult> {
     const user = this.requireUser();
     if (user.role !== 'ADMIN') throw new ApiError(403, 'FORBIDDEN', '권한 없음');
     const target = this.state.specs.find((entry) => entry.id === specId);
     if (!target) throw new ApiError(404, 'SPEC_NOT_FOUND', '존재하지 않는 규격 항목');
     if (checkSpecRange(body.lsl, body.usl)) throw new ApiError(400, 'INVALID_SPEC_RANGE', '규격 하한이 상한보다 큼');
-    // 이미 추출된 문서의 판정은 바꾸지 않고, 이후 업로드 건부터 적용됩니다.
+    // rejudge가 없으면 이미 추출된 문서의 판정은 바꾸지 않고, 이후 업로드 건부터 적용됩니다.
     target.lsl = body.lsl;
     target.usl = body.usl;
     target.unit = body.unit;
     target.updated_by = user.name;
     target.updated_at = now('spec');
+    // [v1.4안] rejudge=true이면 처분 전 문서를 새 규격으로 다시 판정하고, 판정이 바뀐 문서 목록을 돌려줍니다.
+    if (body.rejudge) return delay({ ...target, rejudged_documents: this.rejudgeOpenDocuments(target.material_code) });
     return delay({ ...target });
+  }
+
+  /** 처분 전(approved가 아닌) 문서를 현재 규격으로 다시 판정하고, 항목 판정이나 로트 권고가 바뀐 문서를 돌려줍니다. */
+  private rejudgeOpenDocuments(materialCode: string): Array<{ document_id: string }> {
+    const changed: Array<{ document_id: string }> = [];
+    for (const doc of this.state.docs) {
+      const extraction = doc.extraction;
+      if (!extraction || doc.detail.material_code !== materialCode || !READY_STATUSES.includes(doc.detail.status)) continue;
+      if (doc.detail.status === 'approved') continue;
+      const resolvedIds = processedItemIds(doc.reviewLogs);
+      const before = JSON.stringify([extraction.items.map((item) => item.judgement), extraction.lot_recommendation]);
+      extraction.items = extraction.items.map((item) => {
+        const spec = this.state.specs.find((entry) => entry.material_code === materialCode && entry.item_name === item.normalized_name);
+        // 규격에 없는 이름의 항목(AI 추정 등)은 이 규격 변경과 관계가 없어 그대로 둡니다.
+        if (!spec) return item;
+        // 누락 항목은 값이 들어오기 전까지 누락 그대로 두고 규격 한계만 새 값으로 바꿉니다.
+        if (item.judgement === 'missing' && item.converted_value === null) {
+          return { ...item, spec_lsl: spec.lsl, spec_usl: spec.usl };
+        }
+        const edited = doc.reviewLogs.some((entry) => entry.item_id === item.item_id && entry.action === 'edit');
+        return rejudge(item, spec, resolvedIds.has(item.item_id), !edited && this.resultSameAsSpec(item));
+      });
+      extraction.summary = summarize(extraction.items);
+      extraction.lot_recommendation = recommendLot(extraction.summary, extraction.document_issues.length);
+      doc.detail.lot_recommendation = extraction.lot_recommendation;
+      const after = JSON.stringify([extraction.items.map((item) => item.judgement), extraction.lot_recommendation]);
+      if (before !== after) changed.push({ document_id: doc.detail.document_id });
+    }
+    return changed;
   }
 
   // --- API 없음: 목업 (TODO(백엔드 협의)) ----------------------------------

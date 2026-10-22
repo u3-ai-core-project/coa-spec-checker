@@ -17,6 +17,7 @@ import type {
   PatchItemBody,
   PatchItemResult,
   PatchSpecBody,
+  PatchSpecResult,
   ReviewLog,
   SpecItem,
 } from './types';
@@ -102,7 +103,7 @@ export interface Api {
 
   // --- 규격 -----------------------------------------------------------------
   listSpecs(materialCode?: string): Promise<SpecItem[]>;
-  patchSpec(specId: number, body: PatchSpecBody): Promise<SpecItem>;
+  patchSpec(specId: number, body: PatchSpecBody): Promise<PatchSpecResult>;
 
   // --- API 없음: 목업 (TODO(백엔드 협의)) ----------------------------------
   listSpecHistory(materialCode: string): Promise<SpecHistoryEntry[]>;
