@@ -23,11 +23,11 @@ import { errorMessage, isApiError } from './shared/api/errors';
 import type { ExtractionItem, HoldFollowUp } from './shared/api/types';
 import { ErrorNotice } from './shared/components/EmptyState';
 import { useCurrentUser } from './shared/currentUser';
-import { REVIEW_QUEUE_STATUS } from './shared/domain/constants';
+import { REVIEW_PATH, REVIEW_QUEUE_STATUS } from './shared/domain/constants';
 import { pendingLowConfidenceCount, processedKind } from './shared/domain/items';
 import { isEditableStatus } from './shared/domain/status';
 import { useAsync } from './shared/hooks/useAsync';
-import { Header } from './shell/Header';
+import { PageIntro } from './shell/PageIntro';
 
 /** 원본 위 하이라이트 색. 수정·확인을 마친 항목은 파랑, 그 외에는 판정 색에 맞춥니다(시안 2-1). */
 const HIGHLIGHT_FILL: Partial<Record<ExtractionItem['judgement'], string>> = {
@@ -37,7 +37,7 @@ const HIGHLIGHT_FILL: Partial<Record<ExtractionItem['judgement'], string>> = {
 };
 const RESOLVED_FILL = '#DCE5FB';
 
-/** 라우트 /review/:documentId. 문서를 바꾸면 화면 상태를 처음부터 다시 시작합니다. */
+/** 라우트 REVIEW_PATH/:documentId(/inspection/:documentId). 문서를 바꾸면 화면 상태를 처음부터 다시 시작합니다. */
 export function ReviewPage() {
   const { documentId = '' } = useParams();
   return <ReviewScreen key={documentId} documentId={documentId} />;
@@ -125,12 +125,12 @@ function ReviewScreen({ documentId }: { documentId: string }) {
   if (!data) {
     return (
       <>
-        <Header role={user.role} title="검수" />
-        <main className="body flex min-h-0 flex-1 flex-col items-center justify-center gap-4 p-6">
+        <PageIntro title="검수" />
+        <main className="body flex min-h-0 flex-1 flex-col items-center justify-center gap-4">
           {error ? (
             <>
               <ErrorNotice message={errorMessage(error)} onRetry={reload} />
-              <Link to="/review" className="text-[13px] font-semibold text-[#2B4FCB]">
+              <Link to={REVIEW_PATH} className="text-[13px] font-semibold text-[#2B4FCB]">
                 검수 목록으로 돌아가기
               </Link>
             </>
@@ -239,8 +239,8 @@ function ReviewScreen({ documentId }: { documentId: string }) {
 
   return (
     <>
-      <ReviewHeader doc={data.doc} role={user.role} queue={queue} onMove={(id) => navigate(`/review/${id}`)} />
-      <main className="body flex min-h-0 flex-1 gap-[18px] overflow-hidden p-6">
+      <ReviewHeader doc={data.doc} queue={queue} onMove={(id) => navigate(`${REVIEW_PATH}/${id}`)} />
+      <main className="body flex min-h-0 flex-1 gap-[18px] overflow-hidden">
         <PdfPanel
           documentId={documentId}
           page={page}
@@ -339,7 +339,7 @@ function ReviewScreen({ documentId }: { documentId: string }) {
           onDone={(completed) => {
             setCompleteOpen(false);
             // 보류로 완료하면 검수 목록으로 돌아갑니다. 처분(승인, 조건부 승인, 불합격)은 이 화면에서 처분 결과를 보여 줍니다.
-            if (completed === 'hold') navigate('/review');
+            if (completed === 'hold') navigate(REVIEW_PATH);
             else void reload();
           }}
           onStale={() => void reload()}

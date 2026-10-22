@@ -12,7 +12,8 @@ import { dispositionOf } from './shared/domain/recommendation';
 import { STATUS_META, STATUS_ORDER, type StatusKey, statusKey } from './shared/domain/status';
 import { readLastViewed } from './lib/lastViewed';
 import { useAsync } from './shared/hooks/useAsync';
-import { Header } from './shell/Header';
+import { PageIntro } from './shell/PageIntro';
+import { REVIEW_PATH } from './shared/domain/constants';
 
 type Filter = 'all' | StatusKey;
 
@@ -52,14 +53,14 @@ export function ReviewListPage() {
 
   const scopeLabel = user.role === 'USER' ? `${user.name} 담당 ${docs.length}건` : `전체 ${docs.length}건`;
   const header = (
-    <Header role={user.role} title="검수 목록" subtitle="업로드된 문서를 상태별로 확인하고 검수를 시작합니다." />
+    <PageIntro title="검수 목록" subtitle="업로드된 문서를 상태별로 확인하고 검수를 시작합니다." />
   );
 
   if (error && !data) {
     return (
       <>
         {header}
-        <main className="body flex min-h-0 flex-1 items-center justify-center p-6">
+        <main className="body flex min-h-0 flex-1 items-center justify-center">
           <ErrorNotice message={errorMessage(error)} onRetry={reload} />
         </main>
       </>
@@ -69,8 +70,8 @@ export function ReviewListPage() {
   if (!loading && docs.length === 0) {
     return (
       <>
-        <Header role={user.role} title="검수" />
-        <main className="body flex min-h-0 flex-1 items-center justify-center p-6">
+        <PageIntro title="검수" />
+        <main className="body flex min-h-0 flex-1 items-center justify-center">
           <EmptyState
             title="선택된 문서가 없습니다"
             message="업로드 화면에서 문서를 선택해 주십시오."
@@ -94,7 +95,7 @@ export function ReviewListPage() {
   return (
     <>
       {header}
-      <main className="body flex min-h-0 flex-1 flex-col gap-4 p-6">
+      <main className="body flex min-h-0 flex-1 flex-col gap-4">
         <div className="list-toolbar flex items-center justify-between">
           <div className="filter-tabs flex items-center gap-2">
             <FilterTab label="전체" count={counts.all} active={filter === 'all'} onClick={() => setFilter('all')} />
@@ -125,7 +126,7 @@ export function ReviewListPage() {
               </thead>
               <tbody>
                 {visible.map((doc, index) => (
-                  <DocRow key={doc.document_id} doc={doc} index={index} highlighted={doc.document_id === highlightId} onOpen={() => navigate(`/review/${doc.document_id}`)} />
+                  <DocRow key={doc.document_id} doc={doc} index={index} highlighted={doc.document_id === highlightId} onOpen={() => navigate(`${REVIEW_PATH}/${doc.document_id}`)} />
                 ))}
                 {visible.length === 0 && (
                   <tr>

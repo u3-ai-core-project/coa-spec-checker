@@ -1,6 +1,7 @@
 import type { RouteObject } from 'react-router-dom';
 import { ReviewListPage } from './ReviewListPage';
 import { ReviewPage } from './ReviewPage';
+import { REVIEW_PATH } from './shared/domain/constants';
 import { Screen } from './shell/Screen';
 
 /**
@@ -9,7 +10,7 @@ import { Screen } from './shell/Screen';
  */
 export const reviewRoutes: RouteObject[] = [
   {
-    path: '/review',
+    path: REVIEW_PATH,
     element: (
       <Screen>
         <ReviewListPage />
@@ -17,7 +18,7 @@ export const reviewRoutes: RouteObject[] = [
     ),
   },
   {
-    path: '/review/:documentId',
+    path: `${REVIEW_PATH}/:documentId`,
     element: (
       <Screen>
         <ReviewPage />

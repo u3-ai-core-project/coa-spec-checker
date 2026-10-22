@@ -14,7 +14,7 @@ import type { SpecItem } from '../review/shared/api/types';
 import { Chem } from '../review/shared/components/Chem';
 import { ErrorNotice } from '../review/shared/components/EmptyState';
 import { Icon } from '../review/shared/components/Icon';
-import { Header } from '../review/shell/Header';
+import { PageIntro } from '../review/shell/PageIntro';
 import { useCurrentUser } from '../review/shared/currentUser';
 import { formatDateTime } from '../review/shared/domain/format';
 import { useAsync } from '../review/shared/hooks/useAsync';
@@ -56,8 +56,7 @@ export function SpecEditPage() {
   const [rejudged, setRejudged] = useState<string[] | null>(null);
 
   const header = (
-    <Header
-      role={user.role}
+    <PageIntro
       title="규격 수정"
       subtitle="변경한 규격은 저장 후 새로 업로드되는 문서부터 적용됩니다."
       breadcrumb={`규격 관리 / ${group ? group.name.split(' ')[0] : ''} / 수정`}
@@ -68,7 +67,7 @@ export function SpecEditPage() {
     return (
       <>
         {header}
-        <main className="body flex min-h-0 flex-1 items-center justify-center p-6">
+        <main className="body flex min-h-0 flex-1 items-center justify-center">
           <ErrorNotice message={errorMessage(specsQuery.error)} onRetry={specsQuery.reload} />
         </main>
       </>
@@ -78,7 +77,7 @@ export function SpecEditPage() {
     return (
       <>
         {header}
-        <main className="body flex min-h-0 flex-1 items-center justify-center p-6">
+        <main className="body flex min-h-0 flex-1 items-center justify-center">
           <p className="text-[14px] text-[#5B616A]">{specsQuery.data ? '등록된 규격이 없습니다.' : '불러오는 중입니다.'}</p>
         </main>
       </>
@@ -135,7 +134,7 @@ export function SpecEditPage() {
   return (
     <>
       {header}
-      <main className="body flex min-h-0 flex-1 gap-[18px] overflow-hidden p-6">
+      <main className="body flex min-h-0 flex-1 gap-[18px] overflow-hidden">
         <section className="spec-form flex min-w-0 flex-1 flex-col rounded-xl border border-[#E3E5E8] bg-white">
           <div className="spec-form-header flex items-center justify-between border-b border-[#E3E5E8] px-5 py-3.5">
             <h3 className="spec-material text-[16px] font-bold">

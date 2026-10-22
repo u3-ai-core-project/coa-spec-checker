@@ -19,5 +19,11 @@ export const BBOX_UNIT = 'ratio' as const;
 /** 원자재 구분. 규격 관리와 검수 화면은 현재 탄산리튬만 다룹니다. */
 export const DEFAULT_MATERIAL_CODE = 'LI2CO3';
 
+/**
+ * 검수 화면의 주소 기준. 공통 레이아웃의 메뉴(src/navigation.ts)가 검수를 /inspection으로 정해 두어 같게 씁니다.
+ * 목록은 REVIEW_PATH, 상세는 REVIEW_PATH/:documentId입니다.
+ */
+export const REVIEW_PATH = '/inspection';
+
 /** 검수 화면의 이전/다음 이동 기준 목록 (API 명세 4.5). 완료된 문서는 이 목록에 없습니다. */
 export const REVIEW_QUEUE_STATUS = 'extracted,in_review,on_hold';

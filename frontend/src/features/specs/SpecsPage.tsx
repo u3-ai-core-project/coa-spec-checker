@@ -8,7 +8,7 @@ import { errorMessage } from '../review/shared/api/errors';
 import { Chem } from '../review/shared/components/Chem';
 import { ErrorNotice } from '../review/shared/components/EmptyState';
 import { Icon } from '../review/shared/components/Icon';
-import { Header } from '../review/shell/Header';
+import { PageIntro } from '../review/shell/PageIntro';
 import { useCurrentUser } from '../review/shared/currentUser';
 import { formatDate } from '../review/shared/domain/format';
 import { useAsync } from '../review/shared/hooks/useAsync';
@@ -26,14 +26,14 @@ export function SpecsPage() {
   const current = groups.find((group) => group.code === selected) ?? groups[0];
 
   const header = (
-    <Header role={user.role} title="규격 관리" subtitle="원자재별 시험 항목의 단위와 규격 한계(LSL/USL)를 조회합니다." />
+    <PageIntro title="규격 관리" subtitle="원자재별 시험 항목의 단위와 규격 한계(LSL/USL)를 조회합니다." />
   );
 
   if (error && !data) {
     return (
       <>
         {header}
-        <main className="body flex min-h-0 flex-1 items-center justify-center p-6">
+        <main className="body flex min-h-0 flex-1 items-center justify-center">
           <ErrorNotice message={errorMessage(error)} onRetry={reload} />
         </main>
       </>
@@ -43,7 +43,7 @@ export function SpecsPage() {
     return (
       <>
         {header}
-        <main className="body flex min-h-0 flex-1 items-center justify-center p-6">
+        <main className="body flex min-h-0 flex-1 items-center justify-center">
           <p className="text-[14px] text-[#5B616A]">{data ? '등록된 규격이 없습니다.' : '불러오는 중입니다.'}</p>
         </main>
       </>
@@ -57,7 +57,7 @@ export function SpecsPage() {
   return (
     <>
       {header}
-      <main className="body flex min-h-0 flex-1 flex-col gap-3 overflow-hidden p-6">
+      <main className="body flex min-h-0 flex-1 flex-col gap-3 overflow-hidden">
         {isAdmin && <SpecTabs active="specs" />}
         <div className="flex min-h-0 flex-1 gap-[18px]">
           <MaterialList groups={groups} selectedCode={current.code} onSelect={setSelected} />

@@ -9,7 +9,7 @@ import { errorMessage } from '../review/shared/api/errors';
 import { Chem } from '../review/shared/components/Chem';
 import { ErrorNotice } from '../review/shared/components/EmptyState';
 import { Icon } from '../review/shared/components/Icon';
-import { Header } from '../review/shell/Header';
+import { PageIntro } from '../review/shell/PageIntro';
 import { useCurrentUser } from '../review/shared/currentUser';
 import { useAsync } from '../review/shared/hooks/useAsync';
 
@@ -59,14 +59,14 @@ export function MappingDictPage() {
   const [error, setError] = useState<string | null>(null);
 
   const header = (
-    <Header role={user.role} title="규격 관리" subtitle="표준 항목별 협력사 표기와 단위 환산식을 관리합니다." />
+    <PageIntro title="규격 관리" subtitle="표준 항목별 협력사 표기와 단위 환산식을 관리합니다." />
   );
 
   if ((specs.error && !specs.data) || (mappings.error && !mappings.data)) {
     return (
       <>
         {header}
-        <main className="body flex min-h-0 flex-1 items-center justify-center p-6">
+        <main className="body flex min-h-0 flex-1 items-center justify-center">
           <ErrorNotice message={errorMessage(specs.error ?? mappings.error)} onRetry={() => { specs.reload(); mappings.reload(); }} />
         </main>
       </>
@@ -76,7 +76,7 @@ export function MappingDictPage() {
     return (
       <>
         {header}
-        <main className="body flex min-h-0 flex-1 items-center justify-center p-6">
+        <main className="body flex min-h-0 flex-1 items-center justify-center">
           <p className="text-[14px] text-[#5B616A]">불러오는 중입니다.</p>
         </main>
       </>
@@ -130,7 +130,7 @@ export function MappingDictPage() {
   return (
     <>
       {header}
-      <main className="body flex min-h-0 flex-1 flex-col gap-3 overflow-hidden p-6">
+      <main className="body flex min-h-0 flex-1 flex-col gap-3 overflow-hidden">
         <SpecTabs active="mappings" />
         <div className="flex min-h-0 flex-1 gap-[18px]">
           <section className="std-list flex w-[240px] shrink-0 flex-col rounded-xl border border-[#E3E5E8] bg-white">

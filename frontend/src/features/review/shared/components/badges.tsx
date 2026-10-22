@@ -1,7 +1,6 @@
-import type { DocumentStatus, FinalDecision, Judgement, LotRecommendation, Role } from '../api/types';
-import { JUDGEMENT_META, PRIMARY_COLOR } from '../domain/judgement';
+import type { DocumentStatus, FinalDecision, Judgement, LotRecommendation } from '../api/types';
+import { JUDGEMENT_META } from '../domain/judgement';
 import { DISPOSITION_META, type Disposition, RECOMMENDATION_META } from '../domain/recommendation';
-import { ROLE_LABEL } from '../domain/role';
 import { STATUS_META, statusKey } from '../domain/status';
 import { Icon } from './Icon';
 
@@ -79,16 +78,6 @@ export function StatusBadge({ status }: { status: DocumentStatus }) {
     >
       <Icon name={meta.icon} size={12} />
       {meta.label}
-    </span>
-  );
-}
-
-/** 역할 배지. 사이드바와 헤더에서 같은 모양으로 씁니다. */
-export function RoleBadge({ role }: { role: Role }) {
-  return (
-    <span className="role-badge inline-flex h-6 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border border-[#C9D5F7] bg-[#EAEFFC] px-2.5 text-[12px] font-semibold text-[#2B4FCB]">
-      <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: PRIMARY_COLOR }} />
-      {ROLE_LABEL[role]}
     </span>
   );
 }
