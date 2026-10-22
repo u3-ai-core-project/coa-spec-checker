@@ -12,7 +12,7 @@ export function draftOf(spec: SpecItem): SpecDraft {
   return {
     lsl: spec.lsl === null ? '' : String(spec.lsl),
     usl: spec.usl === null ? '' : String(spec.usl),
-    unit: spec.unit,
+    unit: spec.unit ?? '',
   };
 }
 

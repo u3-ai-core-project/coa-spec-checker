@@ -2,9 +2,9 @@ import { useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { SpecTabs } from './components/SpecTabs';
 import { SOURCE_LABEL, countByStandard, isNewlyAccumulated, validateNewRawName } from './lib/mappingDict';
-import { groupByMaterial } from './lib/specs';
 import { api } from '../review/shared/api';
 import type { MappingEntry, MappingEntrySource } from '../review/shared/api/Api';
+import type { SpecItem } from '../review/shared/api/types';
 import { errorMessage } from '../review/shared/api/errors';
 import { Chem } from '../review/shared/components/Chem';
 import { ErrorNotice } from '../review/shared/components/EmptyState';
@@ -38,14 +38,33 @@ const today = () => new Date().toISOString().slice(0, 10);
 export function MappingDictPage() {
   const user = useCurrentUser();
   const [params] = useSearchParams();
-  const specs = useAsync(() => api.listSpecs(), []);
+  // [v1.4] 표준 항목명은 원자재의 기본 규격 세트(is_default)의 항목에서 가져옵니다.
+  const setsQuery = useAsync(() => api.listSpecSets(), []);
   // [v1.4안] 매핑 사전은 material_code별입니다. 주소의 ?material=LIOH처럼 원자재를 고르고, 없으면 첫 원자재입니다.
   // TODO(디자인 협의): 원자재를 바꾸는 선택 UI는 시안에 없어 만들지 않았습니다.
   const materialParam = params.get('material');
-  const group = useMemo(() => {
-    const groups = groupByMaterial(specs.data ?? []);
-    return groups.find((entry) => entry.code === materialParam) ?? groups[0];
-  }, [specs.data, materialParam]);
+  const defaultSet = useMemo(() => {
+    const all = setsQuery.data ?? [];
+    return (
+      all.find((entry) => entry.material_code === materialParam && entry.is_default) ??
+      all.find((entry) => entry.material_code === materialParam) ??
+      all.find((entry) => entry.is_default) ??
+      all[0]
+    );
+  }, [setsQuery.data, materialParam]);
+  const itemsQuery = useAsync(
+    () => (defaultSet ? api.listSpecs({ spec_set_code: defaultSet.code }) : Promise.resolve([] as SpecItem[])),
+    [defaultSet?.code],
+  );
+  const specs = {
+    data: setsQuery.data && itemsQuery.data ? itemsQuery.data : null,
+    error: setsQuery.error ?? itemsQuery.error,
+    reload: () => {
+      setsQuery.reload();
+      itemsQuery.reload();
+    },
+  };
+  const group = defaultSet ? { code: defaultSet.material_code, name: defaultSet.material_name, items: itemsQuery.data ?? [] } : undefined;
   const code = group?.code ?? null;
 
   const mappings = useAsync(() => (code ? api.listMappings(code) : Promise.resolve([])), [code]);

@@ -1,9 +1,10 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { MaterialList } from './components/MaterialList';
+import { SpecSetList } from './components/SpecSetList';
 import { SpecTabs } from './components/SpecTabs';
-import { formatLimit, groupByMaterial, latestUpdate } from './lib/specs';
+import { formatLimit, latestUpdate } from './lib/specs';
 import { api } from '../review/shared/api';
+import type { SpecItem } from '../review/shared/api/types';
 import { errorMessage } from '../review/shared/api/errors';
 import { Chem } from '../review/shared/components/Chem';
 import { ErrorNotice } from '../review/shared/components/EmptyState';
@@ -20,10 +21,23 @@ import { useAsync } from '../review/shared/hooks/useAsync';
 export function SpecsPage() {
   const user = useCurrentUser();
   const isAdmin = user.role === 'ADMIN';
-  const { data, error, reload } = useAsync(() => api.listSpecs(), []);
-  const groups = useMemo(() => groupByMaterial(data ?? []), [data]);
+  // [v1.4] 규격은 세트(원자재, 등급, 버전) 단위입니다. 세트 목록에서 고르면 그 세트(spec_set_code)의 항목을 불러옵니다.
+  const setsQuery = useAsync(() => api.listSpecSets(), []);
+  const sets = setsQuery.data ?? [];
   const [selected, setSelected] = useState<string | null>(null);
-  const current = groups.find((group) => group.code === selected) ?? groups[0];
+  const currentSet = sets.find((entry) => entry.code === selected) ?? sets[0];
+  const itemsQuery = useAsync(
+    () => (currentSet ? api.listSpecs({ spec_set_code: currentSet.code }) : Promise.resolve([] as SpecItem[])),
+    [currentSet?.code],
+  );
+  const items = itemsQuery.data ?? [];
+  const data = setsQuery.data && itemsQuery.data ? items : null;
+  const error = setsQuery.error ?? itemsQuery.error;
+  const reload = () => {
+    setsQuery.reload();
+    itemsQuery.reload();
+  };
+  const current = currentSet ? { code: currentSet.code, name: currentSet.material_name, grade: currentSet.grade, version: currentSet.version, items } : undefined;
 
   const header = (
     <PageIntro title="규격 관리" subtitle="원자재별 시험 항목의 단위와 규격 한계(LSL/USL)를 조회합니다." />
@@ -51,8 +65,6 @@ export function SpecsPage() {
   }
 
   const updated = latestUpdate(current.items);
-  // [v1.4안] 규격 버전. 한 원자재 안에서 항목마다 다르면 모두 보여 줍니다.
-  const versions = [...new Set(current.items.map((item) => item.version).filter((version): version is string => version !== null && version !== undefined))];
 
   return (
     <>
@@ -60,7 +72,7 @@ export function SpecsPage() {
       <main className="body flex min-h-0 flex-1 flex-col gap-3 overflow-hidden">
         {isAdmin && <SpecTabs active="specs" />}
         <div className="flex min-h-0 flex-1 gap-[18px]">
-          <MaterialList groups={groups} selectedCode={current.code} onSelect={setSelected} />
+          <SpecSetList sets={sets} selectedCode={current.code} onSelect={setSelected} />
           <section className="spec-detail flex min-w-0 flex-1 flex-col rounded-xl border border-[#E3E5E8] bg-white">
             <div className="spec-detail-header flex items-center justify-between border-b border-[#E3E5E8] px-5 py-4">
               <div className="flex flex-col gap-0.5">
@@ -69,13 +81,14 @@ export function SpecsPage() {
                 </h3>
                 <span className="text-[12px] tabular-nums text-[#5B616A]">
                   시험 항목 {`${current.items.length}개`}
-                  {versions.length > 0 ? ` · 규격 버전 ${versions.join(', ')}` : ''}
+                  {current.grade ? ` · 등급 ${current.grade}` : ''}
+                  {current.version ? ` · 규격 버전 ${current.version}` : ''}
                   {updated ? ` · 최종 수정 ${formatDate(updated.at)}${updated.by ? ` · ${updated.by}` : ''}` : ''}
                 </span>
               </div>
               {isAdmin && (
                 <Link
-                  to={`/specs/edit?material=${encodeURIComponent(current.code)}`}
+                  to={`/specs/edit?set=${encodeURIComponent(current.code)}`}
                   className="btn-edit-spec flex h-9 items-center gap-1.5 rounded-lg bg-[#2B4FCB] px-4 text-[13px] font-semibold text-white"
                 >
                   <Icon name="pencil" size={14} />

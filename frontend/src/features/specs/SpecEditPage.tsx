@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   DRAFT_ERROR_MESSAGE,
@@ -7,9 +7,9 @@ import {
   draftErrors,
   draftOf,
 } from './lib/specEdit';
-import { groupByMaterial } from './lib/specs';
 import { api } from '../review/shared/api';
 import { errorMessage } from '../review/shared/api/errors';
+import { USE_MOCK } from '../review/shared/config';
 import type { SpecItem } from '../review/shared/api/types';
 import { Chem } from '../review/shared/components/Chem';
 import { ErrorNotice } from '../review/shared/components/EmptyState';
@@ -37,9 +37,17 @@ export function SpecEditPage() {
   const user = useCurrentUser();
   const navigate = useNavigate();
   const [params] = useSearchParams();
-  const specsQuery = useAsync(() => api.listSpecs(), []);
-  const groups = useMemo(() => groupByMaterial(specsQuery.data ?? []), [specsQuery.data]);
-  const group = groups.find((entry) => entry.code === params.get('material')) ?? groups[0];
+  // [v1.4] 규격은 세트 단위입니다. 주소의 ?set=(규격 세트 코드)로 고르고, 없으면 ?material=(원자재)의 첫 세트, 그것도 없으면 첫 세트입니다.
+  const setsQuery = useAsync(() => api.listSpecSets(), []);
+  const sets = setsQuery.data ?? [];
+  const currentSet =
+    sets.find((entry) => entry.code === params.get('set')) ?? sets.find((entry) => entry.material_code === params.get('material')) ?? sets[0];
+  const specsQuery = useAsync(
+    () => (currentSet ? api.listSpecs({ spec_set_code: currentSet.code }) : Promise.resolve([] as SpecItem[])),
+    [currentSet?.code],
+  );
+  // 매핑 사전과 변경 이력은 원자재(material_code) 단위입니다.
+  const group = currentSet ? { code: currentSet.material_code, name: currentSet.material_name, items: specsQuery.data ?? [] } : undefined;
   const code = group?.code ?? null;
 
   const mappings = useAsync(() => (code ? api.listMappings(code) : Promise.resolve([])), [code]);
@@ -63,12 +71,18 @@ export function SpecEditPage() {
     />
   );
 
-  if (specsQuery.error && !specsQuery.data) {
+  if ((setsQuery.error ?? specsQuery.error) && !setsQuery.data) {
     return (
       <>
         {header}
         <main className="body flex min-h-0 flex-1 items-center justify-center">
-          <ErrorNotice message={errorMessage(specsQuery.error)} onRetry={specsQuery.reload} />
+          <ErrorNotice
+            message={errorMessage(setsQuery.error ?? specsQuery.error)}
+            onRetry={() => {
+              setsQuery.reload();
+              specsQuery.reload();
+            }}
+          />
         </main>
       </>
     );
@@ -78,7 +92,7 @@ export function SpecEditPage() {
       <>
         {header}
         <main className="body flex min-h-0 flex-1 items-center justify-center">
-          <p className="text-[14px] text-[#5B616A]">{specsQuery.data ? '등록된 규격이 없습니다.' : '불러오는 중입니다.'}</p>
+          <p className="text-[14px] text-[#5B616A]">{setsQuery.data ? '등록된 규격이 없습니다.' : '불러오는 중입니다.'}</p>
         </main>
       </>
     );
@@ -139,6 +153,9 @@ export function SpecEditPage() {
           <div className="spec-form-header flex items-center justify-between border-b border-[#E3E5E8] px-5 py-3.5">
             <h3 className="spec-material text-[16px] font-bold">
               <Chem text={group.name} /> · 규격 편집
+              {currentSet?.grade || currentSet?.version ? (
+                <span className="ml-2 text-[12px] font-normal text-[#5B616A]">{[currentSet.grade, currentSet.version].filter(Boolean).join(' · ')}</span>
+              ) : null}
             </h3>
           </div>
           <div className="spec-apply-notice mx-5 mt-3 flex items-start gap-2 rounded-lg bg-[#EAEFFC] px-3 py-2.5 text-[13px] text-[#2B4FCB]">
@@ -267,15 +284,18 @@ export function SpecEditPage() {
                 value={reason}
                 onChange={(event) => setReason(event.target.value)}
               />
-              <label className="spec-rejudge mt-1 flex items-center gap-2 text-[12px] text-[#5B616A]">
-                <input
-                  type="checkbox"
-                  checked={rejudge}
-                  disabled={saving || rejudged !== null}
-                  onChange={(event) => setRejudge(event.target.checked)}
-                />
-                저장 후 처분 전 문서를 새 규격으로 다시 판정합니다.
-              </label>
+              {/* TODO(백엔드 협의): 규격 재판정(rejudge)은 서버에 아직 없어 목업에서만 보입니다. */}
+              {USE_MOCK && (
+                <label className="spec-rejudge mt-1 flex items-center gap-2 text-[12px] text-[#5B616A]">
+                  <input
+                    type="checkbox"
+                    checked={rejudge}
+                    disabled={saving || rejudged !== null}
+                    onChange={(event) => setRejudge(event.target.checked)}
+                  />
+                  저장 후 처분 전 문서를 새 규격으로 다시 판정합니다.
+                </label>
+              )}
             </div>
           </div>
           <div className="spec-form-actions flex items-center justify-between border-t border-[#E3E5E8] px-5 py-3.5">
