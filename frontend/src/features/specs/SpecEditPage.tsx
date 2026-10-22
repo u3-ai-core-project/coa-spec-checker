@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   DRAFT_ERROR_MESSAGE,
+  describeChangeLog,
   type SpecDraft,
   buildChanges,
   draftErrors,
@@ -9,7 +10,6 @@ import {
 } from './lib/specEdit';
 import { api } from '../review/shared/api';
 import { errorMessage } from '../review/shared/api/errors';
-import { USE_MOCK } from '../review/shared/config';
 import type { SpecItem } from '../review/shared/api/types';
 import { Chem } from '../review/shared/components/Chem';
 import { ErrorNotice } from '../review/shared/components/EmptyState';
@@ -31,7 +31,9 @@ function inputClass(changed: boolean, invalid: boolean, align: string, readOnly 
 /**
  * 시안 5-1 규격 수정(관리자). 실제 API(PATCH /specs/{id})는 하한, 상한, 단위만 수정할 수 있고,
  * 변경한 규격은 이후 업로드되는 문서부터 적용됩니다(이미 추출된 문서의 판정은 그대로입니다).
- * TODO(백엔드 협의): 항목 추가·삭제, 규격 근거 수정, 변경 사유와 변경 이력은 API가 없어 목업(또는 비활성)입니다.
+ * 백엔드 확정 답변: PATCH /specs/{id}에 변경 사유(reason)가 필수이고, 변경 이력은 GET /specs/{id}/change-logs로 봅니다.
+ * 항목 추가·삭제, 규격 근거(source) 수정, 재판정 체크박스는 서버에 없어 화면에서 숨겼습니다.
+ * TODO(백엔드 협의): 변경 사유와 변경 이력은 서버 구현 전이라 필드 이름은 가정입니다(types.ts의 PatchSpecBody, SpecChangeLog).
  */
 export function SpecEditPage() {
   const user = useCurrentUser();
@@ -51,17 +53,22 @@ export function SpecEditPage() {
   const code = group?.code ?? null;
 
   const mappings = useAsync(() => (code ? api.listMappings(code) : Promise.resolve([])), [code]);
-  const history = useAsync(() => (code ? api.listSpecHistory(code) : Promise.resolve([])), [code]);
+  // 변경 이력은 항목(규격 id) 단위 API라 세트의 항목마다 받아서 최근 순으로 합칩니다.
+  // TODO(백엔드 협의): 세트 단위로 한 번에 받는 API가 있으면 바꿉니다.
+  const itemIds = (specsQuery.data ?? []).map((spec) => spec.id);
+  const changeLogs = useAsync(
+    () =>
+      Promise.all(itemIds.map((id) => api.listSpecChangeLogs(id))).then((lists) =>
+        lists.flat().sort((a, b) => b.changed_at.localeCompare(a.changed_at)),
+      ),
+    [itemIds.join(',')],
+  );
 
   // 사용자가 고친 입력값만 보관하고, 고치지 않은 값은 규격 원래 값을 씁니다.
   const [edits, setEdits] = useState<Record<number, Partial<SpecDraft>>>({});
   const [reason, setReason] = useState('');
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  // [v1.4안] 저장 후 처분 전 문서를 새 규격으로 다시 판정할지. 켜면 마지막 PATCH에 rejudge를 보냅니다.
-  const [rejudge, setRejudge] = useState(false);
-  /** 재판정을 켜고 저장했을 때 판정이 바뀐 문서 id. null이면 아직 저장하지 않았거나 재판정을 쓰지 않은 것입니다. */
-  const [rejudged, setRejudged] = useState<string[] | null>(null);
 
   const header = (
     <PageIntro
@@ -104,8 +111,8 @@ export function SpecEditPage() {
   const changes = buildChanges(group.items, drafts);
   const errors = draftErrors(drafts);
   const hasErrors = Object.keys(errors).length > 0;
-  const mappingCount = (spec: SpecItem) => (mappings.data ?? []).filter((entry) => entry.standardName === spec.item_name).length;
-  const canSave = changes.length > 0 && reason.trim().length > 0 && !hasErrors && !saving && rejudged === null;
+  const mappingCount = (spec: SpecItem) => (mappings.data ?? []).filter((entry) => entry.normalized_name === spec.item_name).length;
+  const canSave = changes.length > 0 && reason.trim().length > 0 && !hasErrors && !saving;
   const pendingTitles = changes.flatMap((change) => change.descriptions);
 
   function update(spec: SpecItem, patch: Partial<SpecDraft>) {
@@ -118,25 +125,11 @@ export function SpecEditPage() {
     setSaving(true);
     setSaveError(null);
     try {
-      let changedDocuments: string[] = [];
-      for (const [index, change] of changes.entries()) {
-        // 서버가 하한/상한 범위를 다시 검증합니다(400 INVALID_SPEC_RANGE).
-        // 재판정은 모든 항목을 저장한 뒤 한 번만 하도록 마지막 PATCH에만 붙입니다.
-        const result = await api.patchSpec(change.spec.id, { ...change.body, rejudge: rejudge && index === changes.length - 1 });
-        if (result.rejudged_documents) changedDocuments = result.rejudged_documents.map((entry) => entry.document_id);
-        for (const description of change.descriptions) {
-          // TODO(백엔드 협의): 변경 이력과 사유는 API가 없어 화면(목업) 쪽에만 남깁니다.
-          await api.addSpecHistory({
-            materialCode: code,
-            title: description,
-            by: user.name,
-            at: new Date().toISOString(),
-            reason: reason.trim(),
-          });
-        }
+      for (const change of changes) {
+        // 서버가 하한/상한 범위를 다시 검증합니다(400 INVALID_SPEC_RANGE). 변경 사유는 항목마다 같은 값을 보냅니다.
+        await api.patchSpec(change.spec.id, { ...change.body, reason: reason.trim() });
       }
-      if (rejudge) setRejudged(changedDocuments);
-      else navigate('/specs');
+      navigate('/specs');
     } catch (failure) {
       setSaveError(errorMessage(failure));
       specsQuery.reload();
@@ -175,8 +168,6 @@ export function SpecEditPage() {
                   <th className="px-2 py-2 font-semibold">단위</th>
                   <th className="px-2 py-2 font-semibold">LSL</th>
                   <th className="px-2 py-2 font-semibold">USL</th>
-                  <th className="px-2 py-2 font-semibold">규격 근거</th>
-                  <th className="px-2 py-2" />
                 </tr>
               </thead>
               <tbody>
@@ -232,19 +223,6 @@ export function SpecEditPage() {
                           onChange={(event) => update(spec, { usl: event.target.value })}
                         />
                       </td>
-                      <td className="px-2 py-2">
-                        <input className={`${inputClass(false, false, '', true)} w-[168px]`} value={spec.source ?? ''} readOnly title="규격 근거는 서버 API로 수정할 수 없습니다." aria-label={`${spec.item_name} 규격 근거`} />
-                      </td>
-                      <td className="px-2 py-2">
-                        <button
-                          type="button"
-                          disabled
-                          title="항목 삭제 API가 준비되면 지원합니다."
-                          className="btn-row-delete flex h-8 w-8 cursor-not-allowed items-center justify-center rounded-md text-[#8A9099]"
-                        >
-                          <Icon name="trash" size={15} />
-                        </button>
-                      </td>
                     </tr>
                   );
                 })}
@@ -261,16 +239,7 @@ export function SpecEditPage() {
                   ))}
               </ul>
             )}
-            <div className="flex items-center justify-between px-5 py-3">
-              <button
-                type="button"
-                disabled
-                title="항목 추가 API가 준비되면 지원합니다."
-                className="btn-add-item flex h-8 cursor-not-allowed items-center gap-1.5 rounded-md border border-dashed border-[#D0D4DA] px-3 text-[12px] font-semibold text-[#5B616A]"
-              >
-                <Icon name="plus" size={14} />
-                항목 추가
-              </button>
+            <div className="flex items-center justify-end px-5 py-3">
               <span className="text-[12px] text-[#8A9099]">원문 표기는 매핑 사전 · 단위 환산표에서 관리합니다.</span>
             </div>
             <div className="spec-reason mx-5 mb-4 flex flex-col gap-1.5">
@@ -284,28 +253,11 @@ export function SpecEditPage() {
                 value={reason}
                 onChange={(event) => setReason(event.target.value)}
               />
-              {/* TODO(백엔드 협의): 규격 재판정(rejudge)은 서버에 아직 없어 목업에서만 보입니다. */}
-              {USE_MOCK && (
-                <label className="spec-rejudge mt-1 flex items-center gap-2 text-[12px] text-[#5B616A]">
-                  <input
-                    type="checkbox"
-                    checked={rejudge}
-                    disabled={saving || rejudged !== null}
-                    onChange={(event) => setRejudge(event.target.checked)}
-                  />
-                  저장 후 처분 전 문서를 새 규격으로 다시 판정합니다.
-                </label>
-              )}
             </div>
           </div>
           <div className="spec-form-actions flex items-center justify-between border-t border-[#E3E5E8] px-5 py-3.5">
             <span className={`spec-change-summary text-[12px] ${saveError ? 'text-[#C0342E]' : 'text-[#5B616A]'}`}>
-              {saveError ??
-                (rejudged !== null
-                  ? rejudged.length > 0
-                    ? `저장했습니다. 다시 판정해 판정이 바뀐 문서 ${rejudged.length}건: ${rejudged.join(', ')}`
-                    : '저장했습니다. 다시 판정했고 판정이 바뀐 문서는 없습니다.'
-                  : `변경 ${changes.length}건 · ${rejudge ? '처분 전 문서도 새 규격으로 다시 판정합니다.' : '이후 업로드 건부터 적용됩니다.'}`)}
+              {saveError ?? `변경 ${changes.length}건 · 이후 업로드 건부터 적용됩니다.`}
             </span>
             <div className="flex gap-2">
               <button
@@ -313,7 +265,7 @@ export function SpecEditPage() {
                 onClick={() => navigate('/specs')}
                 className="btn-cancel h-10 rounded-lg border border-[#D0D4DA] bg-white px-5 text-[14px] font-semibold"
               >
-                {rejudged !== null ? '확인' : '취소'}
+                취소
               </button>
               <button
                 type="button"
@@ -342,13 +294,13 @@ export function SpecEditPage() {
                 </div>
               </li>
             ))}
-            {(history.data ?? []).map((entry) => (
+            {(changeLogs.data ?? []).map((entry) => (
               <li key={entry.id} className="history-entry flex gap-3">
                 <span className="history-dot mt-1.5 h-2 w-2 shrink-0 rounded-full bg-[#D0D4DA]" />
                 <div className="history-body flex flex-col gap-0.5 text-[12px]">
-                  <span className="history-title font-semibold tabular-nums">{entry.title}</span>
+                  <span className="history-title font-semibold tabular-nums">{`${entry.item_name} ${describeChangeLog(entry)}`}</span>
                   <span className="history-meta tabular-nums text-[#5B616A]">
-                    {entry.by} · {formatDateTime(entry.at)}
+                    {entry.changed_by} · {formatDateTime(entry.changed_at)}
                     {entry.reason && (
                       <>
                         <br />

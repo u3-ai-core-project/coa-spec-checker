@@ -1,4 +1,4 @@
-import type { SpecItem } from '../../review/shared/api/types';
+import type { SpecChangeLog, SpecItem } from '../../review/shared/api/types';
 import { formatNumber } from '../../review/shared/domain/format';
 
 /** 편집 중인 한 행의 입력값. PATCH /specs/{id}가 받는 세 필드(lsl, usl, unit)만 수정할 수 있습니다. */
@@ -77,4 +77,14 @@ export function draftErrors(drafts: Record<number, SpecDraft>): Record<number, D
     if (error) errors[Number(id)] = error;
   }
   return errors;
+}
+
+/** 규격 변경 이력 한 건을 "LSL - → 99 %, USL 15 → 10 ppm" 같은 문구로 만듭니다(바뀐 값만). */
+export function describeChangeLog(log: SpecChangeLog): string {
+  const unit = log.after.unit ?? '';
+  const parts: string[] = [];
+  if (log.before.lsl !== log.after.lsl) parts.push(`LSL ${limitText(log.before.lsl)} → ${limitText(log.after.lsl)} ${unit}`.trim());
+  if (log.before.usl !== log.after.usl) parts.push(`USL ${limitText(log.before.usl)} → ${limitText(log.after.usl)} ${unit}`.trim());
+  if (log.before.unit !== log.after.unit) parts.push(`단위 ${log.before.unit ?? '-'} → ${log.after.unit ?? '-'}`);
+  return parts.length > 0 ? parts.join(', ') : '값 변경 없음';
 }
