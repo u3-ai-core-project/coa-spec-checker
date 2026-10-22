@@ -1,5 +1,5 @@
 import { formatNumber } from '../../domain/format';
-import { pendingLowConfidenceCount, processedItemIds } from '../../domain/items';
+import { pendingLowConfidenceCount } from '../../domain/items';
 import type { Api, MappingEntry, PatchItemOptions, SpecHistoryEntry, UnitConversion } from '../Api';
 import { ApiError } from '../errors';
 import { LocalOnlyStore } from '../localOnly';
@@ -20,6 +20,7 @@ import type {
   DocumentStatus,
   ExtractionItem,
   ExtractionResult,
+  FollowUpsResponse,
   HoldBody,
   HoldResult,
   LoginResult,
@@ -27,12 +28,16 @@ import type {
   PatchItemResult,
   PatchSpecBody,
   PatchSpecResult,
+  ReviewedItem,
   ReviewLog,
   SpecItem,
+  SpecListQuery,
+  SpecSet,
 } from '../types';
 import { type MockDoc, type MockState, type MockUser, createMockState } from './fixtures';
+import { getFollowUps } from './followUps';
 import { buildPdfBlob } from './mockPdf';
-import { checkApprove, checkSpecRange, recommendLot, rejudge, summarize } from './serverRules';
+import { checkApprove, checkSpecRange, currentOverride, evaluateItem, fmtValue, type ParsedValue, recommendLot, rejudgeItem, summarize } from './serverRules';
 
 const TOKEN_PREFIX = 'mock-token-';
 let latencyMs = 120;
@@ -80,20 +85,64 @@ function todayText(): string {
   return '2026-10-05';
 }
 
-/** API 응답의 이력 본문. item_id와 화면 전용 사유(reason)는 빼고 필요한 필드만 담습니다. */
-function toLogBody(log: ReviewLog): Omit<ReviewLog, 'item_id' | 'reason'> {
-  return {
-    action: log.action,
-    before_value: log.before_value,
-    after_value: log.after_value,
-    reviewer_name: log.reviewer_name,
-    reviewed_at: log.reviewed_at,
-  };
-}
-
 function textOf(value: number | string | null): string {
   if (value === null) return '';
   return typeof value === 'number' ? formatNumber(value) : value;
+}
+
+/**
+ * 이력(review_logs)에 남길 값 문자열. 담당자가 값을 넣은 적이 없으면 CoA의 해석값(없으면 원문), 넣었으면 그 값입니다.
+ * 시안과 같게 숫자에는 단위를 붙이지 않습니다(화면이 단위를 붙입니다). 실제 서버 문자열에는 단위가 들어 있어 화면이 둘 다 처리합니다.
+ */
+function logValue(item: ExtractionItem, unit: string | null): string {
+  if (item.value_source === null) return textOf(item.converted_value) || (item.raw_value ?? '');
+  const { value_qualifier: qualifier, converted_value: value, detection_limit: limit } = item;
+  if (qualifier === 'not_detected') return limit !== null ? `검출 안 됨 (검출한계 ${fmtValue(limit, unit)})` : '검출 안 됨';
+  if (qualifier === 'text' || typeof value === 'string') return String(value);
+  const prefix = qualifier === 'less_than' ? '< ' : qualifier === 'less_equal' ? '≤ ' : '';
+  return prefix + textOf(value);
+}
+
+/** 값 수정 요청(PATCH)의 값 조합을 검사해 판정에 넣을 값으로 바꿉니다. 잘못된 조합은 400 VALIDATION_ERROR입니다(백엔드 ItemUpdateRequest). */
+function parseOverride(body: PatchItemBody): ParsedValue {
+  const invalid = (message: string) => new ApiError(400, 'VALIDATION_ERROR', message);
+  const qualifier = body.value_qualifier ?? (body.converted_value !== undefined ? 'exact' : 'not_detected');
+  let value: number | string | null = null;
+  if (qualifier === 'exact' || qualifier === 'less_than' || qualifier === 'less_equal') {
+    const number = body.converted_value === undefined || body.converted_value === '' ? Number.NaN : Number(body.converted_value);
+    if (!Number.isFinite(number)) throw invalid(`value_qualifier=${qualifier} 이면 converted_value는 숫자여야 합니다`);
+    value = number;
+  } else if (qualifier === 'not_detected') {
+    if (body.converted_value !== undefined) throw invalid('검출 안 됨이면 converted_value를 비우고 detection_limit을 보내야 합니다');
+  } else if (typeof body.converted_value !== 'string' || !body.converted_value.trim()) {
+    throw invalid('value_qualifier=text 이면 converted_value는 문자열이어야 합니다');
+  } else {
+    value = body.converted_value;
+  }
+  if (body.detection_limit !== undefined && qualifier !== 'not_detected') throw invalid('detection_limit은 검출 안 됨 값에만 보낼 수 있습니다');
+  return { qualifier, value, detectionLimit: body.detection_limit ?? null };
+}
+
+/** 서버가 만든 누락 항목 중 담당자가 아직 값을 넣지 않은 것 */
+function isUntouchedMissing(item: ExtractionItem): boolean {
+  return item.mapping_source === 'spec' && item.value_source === null && !item.reviewed;
+}
+
+function toReviewedItem(item: ExtractionItem): ReviewedItem {
+  return {
+    item_id: item.item_id,
+    normalized_name: item.normalized_name,
+    converted_value: item.converted_value,
+    value_qualifier: item.value_qualifier,
+    detection_limit: item.detection_limit,
+    judgement: item.judgement,
+    judgement_reason: item.judgement_reason,
+    deviation: item.deviation,
+    reason_code: item.reason_code,
+    resolution: item.resolution,
+    reviewed: item.reviewed,
+    value_source: item.value_source,
+  };
 }
 
 /**
@@ -235,9 +284,23 @@ export class MockApi implements Api {
     let item = doc.extraction.items[index];
     const newLogs: ReviewLog[] = [];
 
-    if (body.normalized_name !== undefined) {
-      const target = this.state.specs.find((entry) => entry.item_name === body.normalized_name);
+    const specs = this.specsOf(doc);
+    const specOf = (name: string) => specs.find((entry) => entry.item_name === name);
+    const hasValue = body.converted_value !== undefined || body.value_qualifier !== undefined || body.detection_limit !== undefined;
+    const newName = body.normalized_name?.trim() || undefined;
+    if (!hasValue && newName === undefined) {
+      throw new ApiError(400, 'VALIDATION_ERROR', 'converted_value, detection_limit, normalized_name 중 하나 이상 보내야 합니다');
+    }
+    if (body.value_source !== undefined && !hasValue) throw new ApiError(400, 'VALIDATION_ERROR', 'value_source는 값을 입력할 때만 보낼 수 있습니다');
+
+    // ---- 1) 항목명 수정 ----
+    if (newName !== undefined && newName !== item.normalized_name) {
+      const target = specOf(newName);
       if (!target) throw new ApiError(400, 'UNKNOWN_ITEM_NAME', '사내 규격에 없는 항목명');
+      if (item.mapping_source === 'spec') throw new ApiError(400, 'VALIDATION_ERROR', '누락 항목은 항목명을 바꿀 수 없습니다');
+      if (doc.extraction.items.some((entry) => entry.item_id !== item.item_id && entry.normalized_name === target.item_name && !isUntouchedMissing(entry))) {
+        throw new ApiError(400, 'VALIDATION_ERROR', `이미 '${target.item_name}' 항목이 있습니다`);
+      }
       newLogs.push({
         item_id: itemId,
         action: 'rename',
@@ -246,7 +309,8 @@ export class MockApi implements Api {
         reviewer_name: user.name,
         reviewed_at: now('rename'),
       });
-      item = { ...item, normalized_name: target.item_name, mapping_source: 'manual' };
+      // 새 규격으로 다시 판정합니다(검수 상태는 유지).
+      item = rejudgeItem({ ...item, normalized_name: target.item_name, mapping_source: 'manual' }, target);
       // 서버는 item_mappings에 raw_name → normalized_name을 manual로 누적합니다. 담당자가 누적을 끄면(accumulate=false) 남기지 않습니다.
       if (item.raw_name && options.accumulate !== false) {
         const existing = this.local
@@ -266,49 +330,33 @@ export class MockApi implements Api {
       }
     }
 
-    let edited = false;
-    if (body.converted_value !== undefined) {
-      const before = textOf(item.converted_value) || (item.raw_value ?? '');
-      const qualifier = body.value_qualifier ?? 'exact';
-      item = { ...item, converted_value: body.converted_value, value_qualifier: qualifier };
+    // ---- 2) 값 수정, 회신값 입력, 검출한계 입력 ----
+    const spec = specOf(item.normalized_name);
+    if (hasValue) {
+      const override = parseOverride(body);
+      const before = logValue(item, spec?.unit ?? item.unit);
+      item = evaluateItem(item, spec, { override, reviewed: true, valueSource: body.value_source ?? 'correction' });
       newLogs.push({
         item_id: itemId,
         action: 'edit',
         before_value: before,
-        after_value: textOf(body.converted_value),
+        after_value: logValue(item, spec?.unit ?? item.unit),
+        value_source: item.value_source,
         reviewer_name: user.name,
         reviewed_at: now('edit'),
       });
-      edited = true;
-    } else if (body.value_qualifier !== undefined) {
-      item = { ...item, value_qualifier: body.value_qualifier };
     }
 
     doc.reviewLogs.push(...newLogs);
-    const resolved = processedItemIds(doc.reviewLogs).has(itemId);
-    const spec = this.state.specs.find((entry) => entry.item_name === item.normalized_name);
-    // 담당자가 값을 고쳤으면 결과 칸이 규격 문구와 같다는 조건은 더 이상 해당하지 않습니다.
-    const sameAsSpec = !edited && this.resultSameAsSpec(item);
-    const judged = rejudge(item, spec, resolved, sameAsSpec);
-    this.commitItem(doc, index, judged);
+    this.commitItem(doc, index, item);
     this.touchStatus(doc);
     if (options.reason) this.local.saveItemReason(documentId, itemId, options.reason);
 
     return delay({
-      item: {
-        item_id: judged.item_id,
-        normalized_name: judged.normalized_name,
-        converted_value: judged.converted_value,
-        value_qualifier: judged.value_qualifier ?? 'exact',
-        judgement: judged.judgement,
-        judgement_reason: judged.judgement_reason,
-        deviation: judged.deviation,
-      },
+      item: toReviewedItem(item),
       lot_recommendation: doc.extraction.lot_recommendation,
       summary: { ...doc.extraction.summary },
-      review_logs: doc.reviewLogs
-        .filter((log) => log.item_id === itemId)
-        .map(toLogBody),
+      review_logs: structuredClone(newLogs),
     });
   }
 
@@ -319,7 +367,9 @@ export class MockApi implements Api {
     const index = doc.extraction.items.findIndex((entry) => entry.item_id === itemId);
     if (index === -1) throw new ApiError(404, 'ITEM_NOT_FOUND', '문서에 존재하지 않는 item_id');
     const item = doc.extraction.items[index];
-    const value = textOf(item.converted_value) || (item.raw_value ?? '');
+    if (isUntouchedMissing(item)) throw new ApiError(400, 'VALIDATION_ERROR', '누락 항목은 확인할 값이 없습니다. 값을 입력해 주세요');
+    const spec = this.specsOf(doc).find((entry) => entry.item_name === item.normalized_name);
+    const value = logValue(item, spec?.unit ?? item.unit);
     const log: ReviewLog = {
       item_id: itemId,
       action: 'confirm',
@@ -329,22 +379,22 @@ export class MockApi implements Api {
       reviewed_at: now('confirm'),
     };
     doc.reviewLogs.push(log);
-    const spec = this.state.specs.find((entry) => entry.item_name === item.normalized_name);
-    // 확인한 항목은 신뢰도 조건을 빼고 값만으로 다시 판정합니다. 결과 칸이 규격 문구와 같은 항목은 그대로 둡니다.
-    const judged = rejudge(item, spec, true, this.resultSameAsSpec(item));
+    // 확인한 항목은 신뢰도 조건을 빼고 값만으로 다시 판정합니다. 검출한계 미기재, 규격 문구 복사처럼 값 자체가 부족하면 확인해도 예외로 남습니다.
+    const judged = evaluateItem(item, spec, { reviewed: true, override: currentOverride(item), valueSource: item.value_source });
     this.commitItem(doc, index, judged);
     this.touchStatus(doc);
     return delay({
-      item: { item_id: itemId, judgement: judged.judgement, judgement_reason: judged.judgement_reason },
+      item: toReviewedItem(judged),
       lot_recommendation: doc.extraction.lot_recommendation,
-      review_log: toLogBody(log),
+      summary: { ...doc.extraction.summary },
+      review_log: structuredClone(log),
     });
   }
 
-  private resultSameAsSpec(item: ExtractionItem): boolean {
-    if (!item.raw_value || !item.raw_spec) return false;
-    const normalize = (text: string) => text.replace(/\s+/g, '').replace(/=<|<=/g, '≤').toLowerCase();
-    return normalize(item.raw_value) === normalize(item.raw_spec);
+  /** 문서에 연결된 규격 세트의 항목. 세트 정보가 없는 문서는 원자재의 모든 항목을 씁니다. */
+  private specsOf(doc: MockDoc): SpecItem[] {
+    const { spec_set_code: setCode, material_code: materialCode } = doc.detail;
+    return this.state.specs.filter((entry) => (setCode ? entry.spec_set_code === setCode : entry.material_code === materialCode));
   }
 
   /** 항목을 바꾼 뒤 집계, 로트 권고, 문서 헤더를 다시 계산합니다. */
@@ -380,7 +430,7 @@ export class MockApi implements Api {
     const code = checkApprove({
       status: doc.detail.status,
       recommendation: extraction?.lot_recommendation ?? 'hold',
-      pendingLowConfidence: extraction ? pendingLowConfidenceCount(extraction.items, doc.reviewLogs) : 0,
+      pendingLowConfidence: extraction ? pendingLowConfidenceCount(extraction.items) : 0,
       body,
     });
     if (code) {
@@ -465,10 +515,28 @@ export class MockApi implements Api {
 
   // --- 규격 -----------------------------------------------------------------
 
-  async listSpecs(materialCode?: string): Promise<SpecItem[]> {
+  async listSpecs(query: SpecListQuery = {}): Promise<SpecItem[]> {
     this.requireUser();
-    const specs = this.state.specs.filter((entry) => !materialCode || entry.material_code === materialCode);
+    const specs = this.state.specs
+      .filter((entry) => !query.material_code || entry.material_code === query.material_code)
+      .filter((entry) => !query.spec_set_code || entry.spec_set_code === query.spec_set_code);
     return delay(structuredClone(specs));
+  }
+
+  async listSpecSets(materialCode?: string): Promise<SpecSet[]> {
+    this.requireUser();
+    const sets = this.state.specSets
+      .filter((entry) => !materialCode || entry.material_code === materialCode)
+      .map((entry) => ({ ...entry, item_count: this.state.specs.filter((spec) => spec.spec_set_code === entry.code).length }));
+    // 원자재별로 기본 세트가 먼저 옵니다.
+    sets.sort((a, b) => a.material_code.localeCompare(b.material_code) || Number(b.is_default) - Number(a.is_default));
+    return delay(sets);
+  }
+
+  async getFollowUps(documentId: string): Promise<FollowUpsResponse> {
+    this.requireUser();
+    const doc = this.findReadyDoc(documentId);
+    return delay(getFollowUps(doc, this.state.docs));
   }
 
   async patchSpec(specId: number, body: PatchSpecBody): Promise<PatchSpecResult> {
@@ -477,36 +545,31 @@ export class MockApi implements Api {
     const target = this.state.specs.find((entry) => entry.id === specId);
     if (!target) throw new ApiError(404, 'SPEC_NOT_FOUND', '존재하지 않는 규격 항목');
     if (checkSpecRange(body.lsl, body.usl)) throw new ApiError(400, 'INVALID_SPEC_RANGE', '규격 하한이 상한보다 큼');
-    // rejudge가 없으면 이미 추출된 문서의 판정은 바꾸지 않고, 이후 업로드 건부터 적용됩니다.
+    // 서버처럼 rejudge가 없으면 이미 추출된 문서의 판정은 바꾸지 않고, 이후 업로드 건부터 적용됩니다.
     target.lsl = body.lsl;
     target.usl = body.usl;
     target.unit = body.unit;
     target.updated_by = user.name;
     target.updated_at = now('spec');
-    // [v1.4안] rejudge=true이면 처분 전 문서를 새 규격으로 다시 판정하고, 판정이 바뀐 문서 목록을 돌려줍니다.
-    if (body.rejudge) return delay({ ...target, rejudged_documents: this.rejudgeOpenDocuments(target.material_code) });
+    // TODO(백엔드 협의): 규격 재판정(rejudge)은 서버(develop)에 아직 없습니다. 아래는 목업에서만 동작합니다.
+    // rejudge=true이면 처분 전 문서를 새 규격으로 다시 판정하고, 판정이 바뀐 문서 목록을 돌려줍니다.
+    if (body.rejudge) return delay({ ...target, rejudged_documents: this.rejudgeOpenDocuments(target.spec_set_code) });
     return delay({ ...target });
   }
 
-  /** 처분 전(approved가 아닌) 문서를 현재 규격으로 다시 판정하고, 항목 판정이나 로트 권고가 바뀐 문서를 돌려줍니다. */
-  private rejudgeOpenDocuments(materialCode: string): Array<{ document_id: string }> {
+  /** 처분 전(approved가 아닌) 문서를 현재 규격 세트로 다시 판정하고, 항목 판정이나 로트 권고가 바뀐 문서를 돌려줍니다. */
+  private rejudgeOpenDocuments(specSetCode: string): Array<{ document_id: string }> {
     const changed: Array<{ document_id: string }> = [];
+    const specs = this.state.specs.filter((entry) => entry.spec_set_code === specSetCode);
     for (const doc of this.state.docs) {
       const extraction = doc.extraction;
-      if (!extraction || doc.detail.material_code !== materialCode || !READY_STATUSES.includes(doc.detail.status)) continue;
+      if (!extraction || doc.detail.spec_set_code !== specSetCode || !READY_STATUSES.includes(doc.detail.status)) continue;
       if (doc.detail.status === 'approved') continue;
-      const resolvedIds = processedItemIds(doc.reviewLogs);
       const before = JSON.stringify([extraction.items.map((item) => item.judgement), extraction.lot_recommendation]);
       extraction.items = extraction.items.map((item) => {
-        const spec = this.state.specs.find((entry) => entry.material_code === materialCode && entry.item_name === item.normalized_name);
+        const spec = specs.find((entry) => entry.item_name === item.normalized_name);
         // 규격에 없는 이름의 항목(AI 추정 등)은 이 규격 변경과 관계가 없어 그대로 둡니다.
-        if (!spec) return item;
-        // 누락 항목은 값이 들어오기 전까지 누락 그대로 두고 규격 한계만 새 값으로 바꿉니다.
-        if (item.judgement === 'missing' && item.converted_value === null) {
-          return { ...item, spec_lsl: spec.lsl, spec_usl: spec.usl };
-        }
-        const edited = doc.reviewLogs.some((entry) => entry.item_id === item.item_id && entry.action === 'edit');
-        return rejudge(item, spec, resolvedIds.has(item.item_id), !edited && this.resultSameAsSpec(item));
+        return spec ? rejudgeItem(item, spec) : item;
       });
       extraction.summary = summarize(extraction.items);
       extraction.lot_recommendation = recommendLot(extraction.summary, extraction.document_issues.length);

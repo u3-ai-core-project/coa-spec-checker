@@ -23,6 +23,7 @@ import type {
   DocumentListQuery,
   DocumentListResult,
   ExtractionResult,
+  FollowUpsResponse,
   HoldBody,
   HoldResult,
   LoginResult,
@@ -32,6 +33,8 @@ import type {
   PatchSpecResult,
   ReviewLog,
   SpecItem,
+  SpecListQuery,
+  SpecSet,
 } from './types';
 
 interface Envelope<T> {
@@ -181,12 +184,22 @@ export class HttpApi implements Api {
     return request<Anomaly[]>(`/documents/${encodeURIComponent(documentId)}/anomalies`);
   }
 
-  listSpecs(materialCode?: string): Promise<SpecItem[]> {
-    return request<SpecItem[]>(`/specs${buildQuery({ material_code: materialCode })}`);
+  listSpecs(query: SpecListQuery = {}): Promise<SpecItem[]> {
+    return request<SpecItem[]>(`/specs${buildQuery({ material_code: query.material_code, spec_set_code: query.spec_set_code })}`);
+  }
+
+  listSpecSets(materialCode?: string): Promise<SpecSet[]> {
+    return request<SpecSet[]>(`/specs/sets${buildQuery({ material_code: materialCode })}`);
+  }
+
+  getFollowUps(documentId: string): Promise<FollowUpsResponse> {
+    return request<FollowUpsResponse>(`/documents/${encodeURIComponent(documentId)}/follow-ups`);
   }
 
   patchSpec(specId: number, body: PatchSpecBody): Promise<PatchSpecResult> {
-    return request<PatchSpecResult>(`/specs/${specId}`, { method: 'PATCH', body: JSON.stringify(body) });
+    // TODO(백엔드 협의): 서버에는 규격 재판정(rejudge)이 아직 없어 이 값은 보내지 않습니다(목업만 따릅니다).
+    const payload = { lsl: body.lsl, usl: body.usl, unit: body.unit };
+    return request<PatchSpecResult>(`/specs/${specId}`, { method: 'PATCH', body: JSON.stringify(payload) });
   }
 
   // --- API 없음: LocalOnlyStore 위임 (TODO(백엔드 협의)) -----------------------

@@ -15,7 +15,7 @@ export function isLowConfidence(item: Pick<ExtractionItem, 'confidence'>): boole
   return item.confidence !== null && item.confidence < LOW_CONFIDENCE_THRESHOLD;
 }
 
-/** 수정(edit) 또는 확인(confirm) 기록이 있는 항목. 서버가 승인 가능 여부를 판단하는 기준과 같습니다. */
+/** 수정(edit) 또는 확인(confirm) 기록이 있는 항목. 항목의 reviewed와 같은 뜻이지만, 이력 줄 표시에 씁니다. */
 export function processedItemIds(logs: ReviewLog[]): Set<string> {
   const ids = new Set<string>();
   for (const log of logs) {
@@ -24,10 +24,12 @@ export function processedItemIds(logs: ReviewLog[]): Set<string> {
   return ids;
 }
 
-/** 아직 수정 또는 확인하지 않은 신뢰도 낮음 항목 수(N). 누락 항목(confidence null)은 세지 않습니다. */
-export function pendingLowConfidenceCount(items: ExtractionItem[], logs: ReviewLog[]): number {
-  const processed = processedItemIds(logs);
-  return items.filter((item) => isLowConfidence(item) && !processed.has(item.item_id)).length;
+/**
+ * 아직 확인하거나 수정하지 않은 신뢰도 낮음 항목 수(N). 서버가 처분 가능 여부를 판단하는 기준(항목의 reviewed)과 같습니다.
+ * 누락 항목(confidence null)은 세지 않습니다.
+ */
+export function pendingLowConfidenceCount(items: ExtractionItem[]): number {
+  return items.filter((item) => isLowConfidence(item) && !item.reviewed).length;
 }
 
 /** 항목마다 가장 최근 이력 */
@@ -112,8 +114,11 @@ export function rawDifferent(item: ExtractionItem): string | null {
 }
 
 /** 수정 전 값(AI 추출값) 표시용. 단위가 없으면 값만 돌려줍니다. */
-export function withUnit(value: string, unit: string | null): string {
-  return unit ? `${value} ${unit}` : value;
+export function withUnit(value: string | null, unit: string | null): string {
+  if (value === null) return '';
+  // 실제 서버의 이력 값에는 단위가 이미 들어 있어("2.56 ppm") 한 번 더 붙이지 않습니다.
+  if (!unit || value.toLowerCase().endsWith(unit.toLowerCase()) || value.includes('검출한계')) return value;
+  return `${value} ${unit}`;
 }
 
 /** "수정 후 판정" 미리보기. 참고용이며 실제 판정은 서버가 PATCH 응답으로 돌려줍니다. */

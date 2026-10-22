@@ -11,6 +11,7 @@ import type {
   DocumentListQuery,
   DocumentListResult,
   ExtractionResult,
+  FollowUpsResponse,
   HoldBody,
   HoldResult,
   LoginResult,
@@ -20,6 +21,8 @@ import type {
   PatchSpecResult,
   ReviewLog,
   SpecItem,
+  SpecListQuery,
+  SpecSet,
 } from './types';
 
 // ---------------------------------------------------------------------------
@@ -66,7 +69,7 @@ export interface UnitConversion {
 export interface PatchItemOptions {
   /**
    * 수정 사유. API에 필드가 없어 서버로 보내지 않고 화면 쪽 저장소에만 둡니다.
-   * TODO(백엔드 협의): 사유 필드가 생기면 PATCH 요청에 포함합니다.
+   * TODO(백엔드 협의): 사유 필드가 생기면 PATCH 요청에 포함합니다(서버에 아직 없습니다).
    */
   reason?: string;
   /**
@@ -104,11 +107,16 @@ export interface Api {
   hold(documentId: string, body: HoldBody): Promise<HoldResult>;
   cancelApproval(documentId: string, body: CancelApprovalBody): Promise<CancelApprovalResult>;
   getApprovalLogs(documentId: string): Promise<ApprovalLog[]>;
+  /** [v1.4] 후속 조치 목록, 보류 후속 조치 추천, 공급사 문의 초안(같은 공급사의 열린 요청 묶음 포함). 읽기만 합니다. */
+  getFollowUps(documentId: string): Promise<FollowUpsResponse>;
   /** 확장 기능. */
   getAnomalies(documentId: string): Promise<Anomaly[]>;
 
   // --- 규격 -----------------------------------------------------------------
-  listSpecs(materialCode?: string): Promise<SpecItem[]>;
+  /** [v1.4] 원자재(material_code)나 규격 세트(spec_set_code)로 거릅니다. 둘 다 없으면 모든 세트의 항목이 옵니다. */
+  listSpecs(query?: SpecListQuery): Promise<SpecItem[]>;
+  /** [v1.4] 규격 세트(등급, 버전) 목록. 원자재별로 기본 세트가 먼저 옵니다. */
+  listSpecSets(materialCode?: string): Promise<SpecSet[]>;
   patchSpec(specId: number, body: PatchSpecBody): Promise<PatchSpecResult>;
 
   // --- API 없음: 목업 (TODO(백엔드 협의)) ----------------------------------

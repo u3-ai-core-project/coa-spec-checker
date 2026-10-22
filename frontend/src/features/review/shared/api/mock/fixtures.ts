@@ -12,10 +12,11 @@ import type {
   ReviewLog,
   Role,
   SpecItem,
+  SpecSet,
   ValueQualifier,
 } from '../types';
 import { type PdfDocInput, type PdfRow, resultBbox } from './mockPdf';
-import { rejudge, recommendLot, summarize } from './serverRules';
+import { evaluateItem, recommendLot, summarize } from './serverRules';
 
 export interface MockUser {
   id: number;
@@ -40,6 +41,8 @@ export interface MockDoc {
 
 export interface MockState {
   users: MockUser[];
+  /** 규격 세트(등급, 버전). specs의 spec_set_code가 가리킵니다. item_count는 조회할 때 항목 수로 채웁니다. */
+  specSets: Array<Omit<SpecSet, 'item_count'>>;
   specs: SpecItem[];
   docs: MockDoc[];
 }
@@ -54,11 +57,14 @@ export const MOCK_USERS: MockUser[] = [
 const MATERIAL_NAME = '탄산리튬 Li2CO3';
 const D1 = 'YS/T 582-2023 D1';
 const AGREEMENT = 'Chengxin 납품 협약';
-/** [v1.4안] 규격 버전. 탄산리튬 초기값은 YS/T 582-2023 D1 기반입니다. */
+/** [v1.4] 규격 버전과 세트. 탄산리튬 초기 세트는 YS/T 582-2023 D1 기반입니다(백엔드 seeds/spec_sets.csv와 같은 코드). */
 const VERSION = 'YS/T 582-2023';
+export const LI2CO3_SET_CODE = 'LI2CO3-D1-2023';
 
 const LIOH_MATERIAL_CODE = 'LIOH';
 const LIOH_MATERIAL_NAME = '수산화리튬 LiOH';
+/** LIOH 세트 코드는 백엔드 이름 규칙(원자재-등급-연도)에 맞춘 임의 값입니다. 백엔드 시드에는 LIOH 세트가 아직 없습니다. */
+const LIOH_SET_CODE = 'LIOH-D1-2020';
 
 function spec(
   id: number,
@@ -80,6 +86,7 @@ function spec(
     usl,
     spec_type: '정량',
     grade: 'D1',
+    spec_set_code: LI2CO3_SET_CODE,
     version: VERSION,
     is_required: true,
     source,
@@ -89,7 +96,7 @@ function spec(
 }
 
 /**
- * [v1.4안] 수산화리튬(LIOH, 보조 원자재) 규격 자리표시. 초기값은 GB/T 26008-2020 D1 기반 소성훈 님 작성본인데 아직 받지 못해,
+ * [v1.4] 수산화리튬(LIOH, 보조 원자재) 규격 자리표시. 초기값은 GB/T 26008-2020 D1 기반 소성훈 님 작성본인데 아직 받지 못해,
  * 항목 이름과 단위만 두고 하한/상한은 비웠습니다. 한계값이 정해지지 않은 항목은 화면에 "-"로 보입니다.
  * TODO(규격표 수령 후): 소성훈 님 작성본의 항목과 값으로 교체합니다.
  */
@@ -104,11 +111,58 @@ function liohSpec(id: number, itemName: string, unit: string): SpecItem {
     usl: null,
     spec_type: '정량',
     grade: 'D1',
+    spec_set_code: LIOH_SET_CODE,
     version: 'GB/T 26008-2020',
     is_required: true,
     source: 'GB/T 26008-2020 D1 (규격표 수령 전 자리표시)',
     updated_by: null,
     updated_at: null,
+  };
+}
+
+/** 규격 세트 목록(GET /specs/sets 응답의 item_count를 뺀 부분). 기본 세트가 원자재마다 하나씩입니다. */
+export function createSpecSets(): MockState['specSets'] {
+  return [
+    {
+      code: LI2CO3_SET_CODE,
+      material_code: DEFAULT_MATERIAL_CODE,
+      material_name: '탄산리튬',
+      grade: 'D1',
+      version: VERSION,
+      source: D1,
+      description: null,
+      is_default: true,
+    },
+    {
+      code: LIOH_SET_CODE,
+      material_code: LIOH_MATERIAL_CODE,
+      material_name: '수산화리튬',
+      grade: 'D1',
+      version: 'GB/T 26008-2020',
+      source: 'GB/T 26008-2020 D1 (규격표 수령 전 자리표시)',
+      description: '규격표 수령 전 자리표시. 항목 이름과 단위만 있고 한계값은 비어 있습니다.',
+      is_default: true,
+    },
+  ];
+}
+
+/** 개발용 시나리오 'sets'. 탄산리튬에 세트가 둘 이상일 때의 화면을 보려고 D1 항목을 복사한 D3 세트를 더합니다(한계값은 D1과 같은 목업 값). */
+export function createExtraLi2co3Set(specs: SpecItem[]): { set: MockState['specSets'][number]; items: SpecItem[] } {
+  const code = 'LI2CO3-D3-2023';
+  const base = specs.filter((entry) => entry.spec_set_code === LI2CO3_SET_CODE);
+  const firstId = Math.max(...specs.map((entry) => entry.id)) + 1;
+  return {
+    set: {
+      code,
+      material_code: DEFAULT_MATERIAL_CODE,
+      material_name: '탄산리튬',
+      grade: 'D3',
+      version: VERSION,
+      source: 'YS/T 582-2023 D3 (목업 시험용 복사본)',
+      description: '목업 시험용. D1 항목을 복사했고 한계값은 D1과 같습니다.',
+      is_default: false,
+    },
+    items: base.map((entry, index) => ({ ...entry, id: firstId + index, spec_set_code: code, grade: 'D3', source: 'YS/T 582-2023 D3 (목업 시험용 복사본)' })),
   };
 }
 
@@ -145,15 +199,8 @@ interface ItemDef {
   source?: MappingSource;
 }
 
-function normalize(text: string): string {
-  return text.replace(/\s+/g, '').replace(/=<|<=/g, '≤').toLowerCase();
-}
-
-function sameAsSpec(def: Pick<ItemDef, 'rawValue' | 'rawSpec'>): boolean {
-  return normalize(def.rawValue) === normalize(def.rawSpec);
-}
-
-function makeItem(def: ItemDef, specs: SpecItem[], resolved = false): ExtractionItem {
+/** 항목 하나. resolved는 담당자가 확인(confirm)한 항목, edited는 담당자가 값을 직접 고쳐 쓴 항목입니다. */
+function makeItem(def: ItemDef, specs: SpecItem[], resolved = false, edited = false): ExtractionItem {
   const specItem = specs.find((entry) => entry.item_name === def.name);
   const base: ExtractionItem = {
     item_id: def.id,
@@ -175,10 +222,14 @@ function makeItem(def: ItemDef, specs: SpecItem[], resolved = false): Extraction
     resolution: null,
     confidence: def.confidence,
     bbox: null,
+    reviewed: false,
+    value_source: null,
   };
-  const judged = rejudge(base, specItem, resolved, !resolved && sameAsSpec(def));
+  const judged = edited
+    ? evaluateItem(base, specItem, { override: { qualifier: def.qualifier, value: def.value, detectionLimit: null }, valueSource: 'correction' })
+    : evaluateItem(base, specItem, { reviewed: resolved });
   // 시안과 같은 판정 근거 문구(목업 데이터). 상한값만 기재된 항목이 사내 상한을 넘는 경우입니다.
-  if (judged.judgement === 'undetermined' && def.qualifier === 'less_than' && specItem?.usl != null) {
+  if (judged.reason_code === 'BOUND_ABOVE_LIMIT' && def.qualifier === 'less_than' && specItem?.usl != null) {
     const unit = specItem.unit;
     judged.judgement_reason = `${def.name} <${def.value} ${unit}, 사내 상한 ${specItem.usl} ${unit}보다 커서 실제 값을 확인할 수 없습니다.`;
   }
@@ -188,7 +239,7 @@ function makeItem(def: ItemDef, specs: SpecItem[], resolved = false): Extraction
 /** 누락 항목. 시안은 "원문:" 자리에 사전의 영문 표기(황산염 → Sulfate)를 보여 주므로 목업에서는 rawName으로 채웁니다. */
 function makeMissing(id: string, name: string, specs: SpecItem[], rawName: string | null = null): ExtractionItem {
   const specItem = specs.find((entry) => entry.item_name === name);
-  return {
+  const base: ExtractionItem = {
     item_id: id,
     raw_name: rawName,
     normalized_name: name,
@@ -199,17 +250,20 @@ function makeMissing(id: string, name: string, specs: SpecItem[], rawName: strin
     value_qualifier: null,
     converted_value: null,
     detection_limit: null,
-    spec_lsl: specItem?.lsl ?? null,
-    spec_usl: specItem?.usl ?? null,
+    spec_lsl: null,
+    spec_usl: null,
     judgement: 'missing',
-    judgement_reason: '사내 규격에 있으나 CoA에 없음',
+    judgement_reason: null,
     deviation: null,
-    // [v1.4안] 필수 항목이 CoA에 없으면 MISSING_REQUIRED, 해결은 자체 시험값입니다.
-    reason_code: specItem?.is_required ? 'MISSING_REQUIRED' : null,
-    resolution: { type: 'internal_test', condition: specItem?.usl != null ? `자체 시험값 ≤ ${specItem.usl} ${specItem.unit}` : null },
+    reason_code: null,
+    resolution: null,
     confidence: null,
     bbox: null,
+    reviewed: false,
+    value_source: null,
   };
+  // 필수 항목이 CoA에 없으면 MISSING_REQUIRED(누락)이고 해결은 별도 성적서 값 또는 자체 시험값입니다.
+  return evaluateItem(base, specItem);
 }
 
 const LI: ItemDef = { id: 'li', name: '순도', rawName: 'Li2CO3', rawValue: '99.6 %', rawSpec: '>= 99.0 %', qualifier: 'exact', value: 99.6, confidence: 0.96 };
@@ -274,12 +328,14 @@ function itemsB(specs: SpecItem[]): ExtractionItem[] {
     spec_lsl: null,
     spec_usl: null,
     judgement: 'check',
-    judgement_reason: '신뢰도가 기준값(0.8) 미만입니다.',
+    judgement_reason: '추출 신뢰도 낮음(0.72)',
     deviation: null,
     reason_code: 'LOW_CONFIDENCE',
-    resolution: { type: 'confirm', condition: null },
+    resolution: { type: 'confirm', target_item: 'Pb', condition: '원문 하이라이트와 대조해 값 확인' },
     confidence: 0.72,
     bbox: null,
+    reviewed: false,
+    value_source: null,
   });
   return items;
 }
@@ -289,7 +345,7 @@ function itemsC(specs: SpecItem[]): ExtractionItem[] {
   const na = { ...NA, value: 2.56 };
   return [
     makeItem(LI, specs),
-    makeItem(na, specs, true),
+    makeItem(na, specs, false, true),
     makeItem(K, specs),
     makeItem(FE, specs, true),
     makeItem(CA, specs),
@@ -424,6 +480,8 @@ function buildDetail(meta: DocMeta, id: string, recommendation: ExtractionResult
     origin: '중국',
     applied_standard: 'D3',
     spec_grade: 'D1',
+    spec_set_code: LI2CO3_SET_CODE,
+    spec_version: VERSION,
     status: meta.status,
     lot_recommendation: recommendation,
     final_decision: meta.finalDecision ?? null,
@@ -491,12 +549,13 @@ export interface MockOptions {
   empty?: boolean;
   /**
    * 'anomaly': A0266047이 이상 패턴(결과 칸이 규격 문구와 같음, 같은 값 반복)을 가진 상태(시안 2-10)
-   * 'issues': [v1.4안] 모든 항목이 적합한 A0390221에 문서 수준 문제(로트 불일치, 날짜 충돌)가 있어 로트 권고가 보류인 상태
+   * 'issues': [v1.4] 모든 항목이 적합한 A0390221에 문서 수준 문제(로트 불일치, 날짜 충돌)가 있어 로트 권고가 보류인 상태
    */
-  scenario?: 'anomaly' | 'issues';
+  /** 'sets': 탄산리튬에 규격 세트가 둘(D1, D3)인 상태. 규격 관리 화면의 세트 선택을 볼 때 씁니다. */
+  scenario?: 'anomaly' | 'issues' | 'sets';
 }
 
-/** [v1.4안] 시나리오 'issues'에 쓰는 문서 수준 문제 예시 문구(목업) */
+/** [v1.4] 시나리오 'issues'에 쓰는 문서 수준 문제 예시 문구(목업) */
 const ISSUES_SAMPLE: DocumentIssue[] = [
   { code: 'LOT_MISMATCH', message: 'CoA의 로트번호(A0390221)와 입고 로트번호(A0390222)가 다릅니다.' },
   { code: 'DATE_CONFLICT', message: 'CoA 발행일(2026-09-28)이 시험일(2026-09-29)보다 이전입니다.' },
@@ -575,5 +634,11 @@ export function createMockState(options: MockOptions = {}): MockState {
     buildDoc({ lot: 'A0340850', supplier: '대흥리튬', po: 'PO-2026-1074', testDate: '2026-09-24', uploadedAt: '2026-10-01T15:12:00+09:00', status: 'failed', errorMessage: '문서에서 시험 항목을 찾을 수 없습니다.', fileSize: 120_000 }, null),
   ];
 
-  return { users: MOCK_USERS.map((user) => ({ ...user })), specs, docs: options.empty ? [] : docs };
+  const specSets = createSpecSets();
+  if (options.scenario === 'sets') {
+    const extra = createExtraLi2co3Set(specs);
+    specSets.push(extra.set);
+    specs.push(...extra.items);
+  }
+  return { users: MOCK_USERS.map((user) => ({ ...user })), specSets, specs, docs: options.empty ? [] : docs };
 }

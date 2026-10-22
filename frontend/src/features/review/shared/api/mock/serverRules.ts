@@ -1,6 +1,5 @@
 import { LOW_CONFIDENCE_THRESHOLD } from '../../domain/constants';
 import { emptySummary } from '../../domain/judgement';
-import { formatNumber } from '../../domain/format';
 import type {
   ApproveBody,
   DocumentStatus,
@@ -13,143 +12,226 @@ import type {
   Resolution,
   SpecItem,
   ValueQualifier,
+  ValueSource,
 } from '../types';
 
 /**
- * 목업 서버가 쓰는 규칙입니다. 명세 2.3(항목 판정), 2.4(로트 권고), 4.12(처분 검증)를 그대로 옮겼습니다.
- * [v1.4안] 항목의 예외 사유코드(reason_code)와 해결 조건(resolution), 문서 수준 문제(document_issues)가 있으면 보류 권고도 옮겼습니다.
- * 중금속 총량과 Na+K 합산 보수 규칙(v1.4안 2.3)은 목업 문서에 해당 항목이 없어 구현하지 않았습니다.
+ * 목업 서버가 쓰는 규칙입니다. 백엔드(develop)의 판정 모듈을 옮겼습니다.
+ *   - 사유코드 → 판정 5종: backend/app/services/judgement/policy.py (기본 정책)
+ *   - 항목 판정: item_judge.py, 사유코드별 해결 조건: resolutions.py
+ *   - 로트 권고: lot_recommend.py, 처분 검증: approval_service.py (명세 4.12)
  * 실제 화면은 이 규칙을 다시 계산하지 않고 서버(목업 포함) 응답을 따릅니다.
- * 이 파일의 함수는 vitest로 검증합니다.
+ * 옮기지 않은 것: 중금속 총량 → Pb 교차 규칙(cross_rules.py), 산화물 환산 계수, 정책 설정(.env)에 따른 판정 변경.
  */
 
-export interface JudgeInput {
+/** 사유코드 → 판정 (백엔드 기본 정책). 부적합, 누락 코드는 고정입니다. */
+const REASON_JUDGEMENT: Record<ReasonCode, Judgement> = {
+  OUT_OF_SPEC: 'fail',
+  CONVERTED_OOS: 'fail',
+  MISSING_REQUIRED: 'missing',
+  BOUND_ABOVE_LIMIT: 'undetermined',
+  SPEC_COPIED: 'undetermined',
+  SUM_ONLY: 'undetermined',
+  LOD_ABOVE_LIMIT: 'undetermined',
+  LOWER_LIMIT_UNVERIFIABLE: 'undetermined',
+  ND_NO_LOD: 'check',
+  AMBIGUOUS_ANALYTE: 'check',
+  LOW_CONFIDENCE: 'check',
+  UNMAPPED_ITEM: 'check',
+  UNPARSEABLE_VALUE: 'check',
+};
+
+export function judgementForReason(code: ReasonCode | null): Judgement {
+  return code === null ? 'pass' : REASON_JUDGEMENT[code];
+}
+
+/** 5 → "5 ppm", 0.4 → "0.4 %". 값이 없으면 "-". */
+export function fmtValue(value: number | null, unit: string | null): string {
+  if (value === null) return '-';
+  return unit ? `${value} ${unit}` : String(value);
+}
+
+const limitText = (sym: string, value: number | null, unit: string | null, suffix = '') =>
+  value === null ? '' : ` ${sym} ${fmtValue(value, unit)}${suffix}`;
+
+/** 사유코드 1개 → 해결 조건 1개 (백엔드 resolutions.py) */
+export function buildResolution(
+  code: ReasonCode,
+  itemName: string,
+  spec: Pick<SpecItem, 'lsl' | 'usl' | 'unit'> | undefined,
+  oxide: string | null = null,
+): Resolution {
+  const usl = spec?.usl ?? null;
+  const lsl = spec?.lsl ?? null;
+  const unit = spec?.unit ?? null;
+  const target = itemName;
+  switch (code) {
+    case 'OUT_OF_SPEC':
+      return { type: 'confirm', target_item: target, condition: '단위·표기 오류가 아님을 확인 (확인되면 부적합 확정)' };
+    case 'CONVERTED_OOS':
+      return { type: 'confirm', target_item: target, condition: `${oxide ?? '산화물'} → ${itemName} 환산 결과 확인 (확인되면 부적합 확정)` };
+    case 'BOUND_ABOVE_LIMIT':
+      return { type: 'actual_value', target_item: target, operator: '<=', threshold: usl, unit, condition: `정량값 또는 상한값${limitText('≤', usl, unit)} 보고` };
+    case 'ND_NO_LOD':
+    case 'LOD_ABOVE_LIMIT':
+      return { type: 'detection_limit', target_item: target, operator: '<=', threshold: usl, unit, condition: `검출한계${limitText('≤', usl, unit)} (또는 정량값)` };
+    case 'LOWER_LIMIT_UNVERIFIABLE':
+      return { type: 'actual_value', target_item: target, operator: '>=', threshold: lsl, unit, condition: `정량값 (사내 하한${limitText('≥', lsl, unit)} 확인용)` };
+    case 'SPEC_COPIED':
+      return { type: 'actual_value', target_item: target, condition: '실측값이 적힌 CoA (결과 칸에 규격 문구가 적힘)' };
+    case 'MISSING_REQUIRED':
+      return { type: 'internal_test', target_item: target, condition: '별도 성적서 값 또는 자체 시험값 입력' };
+    case 'AMBIGUOUS_ANALYTE':
+      return { type: 'single_value', target_item: target, operator: '<=', threshold: usl, unit, condition: `${target} 단일 분석값${limitText('≤', usl, unit)}` };
+    case 'SUM_ONLY':
+      return { type: 'single_value', target_item: target, condition: `${target} 개별값` };
+    case 'LOW_CONFIDENCE':
+      return { type: 'confirm', target_item: target, condition: '원문 하이라이트와 대조해 값 확인' };
+    case 'UNMAPPED_ITEM':
+      return { type: 'confirm', target_item: target, condition: '사내 표준 항목명으로 수정하거나 참고 항목으로 확인' };
+    case 'UNPARSEABLE_VALUE':
+      return { type: 'confirm', target_item: target, condition: '원문 값을 확인해 수치로 입력' };
+  }
+}
+
+/** 해석된 값. 담당자가 입력한 값(override)도 같은 모양입니다. */
+export interface ParsedValue {
   qualifier: ValueQualifier | null;
   value: number | string | null;
   detectionLimit: number | null;
-  unit: string | null;
-  lsl: number | null;
-  usl: number | null;
-  /** 사내 규격에 있는 항목인지. 없으면 판정하지 않습니다. */
-  hasSpec: boolean;
-  /** 정성 항목은 판정하지 않습니다. */
-  qualitative: boolean;
-  confidence: number | null;
-  /** 담당자가 수정(edit)하거나 확인(confirm)했으면 신뢰도 조건을 빼고 값만으로 판정합니다. */
-  resolved: boolean;
-  /** 결과 칸이 규격 문구와 같은 문자열인지(실측값이 아님) */
-  resultSameAsSpec: boolean;
-  /** CoA의 단위(%, ppb 등)를 사내 규격 단위로 환산한 값인지. 환산한 값이 규격을 벗어나면 CONVERTED_OOS입니다. */
-  converted?: boolean;
 }
 
-export interface JudgeOutput {
-  judgement: Judgement;
+interface Verdict {
+  code: ReasonCode | null;
   reason: string | null;
   deviation: number | null;
-  /** [v1.4안] fail, undetermined, check 항목에만 채웁니다. */
-  reasonCode: ReasonCode | null;
-  resolution: Resolution | null;
 }
 
-const withUnit = (value: number, unit: string | null) => `${formatNumber(value)}${unit ? ` ${unit}` : ''}`;
+const ok = (reason: string | null = null): Verdict => ({ code: null, reason, deviation: null });
+const problem = (code: ReasonCode, reason: string, deviation: number | null = null): Verdict => ({ code, reason, deviation });
 
-function result(
-  judgement: Judgement,
-  reason: string | null,
-  deviation: number | null,
-  reasonCode: ReasonCode | null = null,
-  resolution: Resolution | null = null,
-): JudgeOutput {
-  return { judgement, reason, deviation, reasonCode, resolution };
-}
+/** 해석된 값 하나를 정량 규격과 비교합니다 (백엔드 judge_value). 검출한계 == 사내 상한은 적합입니다(기본 정책). */
+function judgeValue(parsed: ParsedValue, spec: Pick<SpecItem, 'lsl' | 'usl' | 'unit'>, oxide: string | null): Verdict {
+  const { lsl, usl, unit } = spec;
+  const { qualifier, value } = parsed;
 
-/**
- * [v1.4안] 사내 상한이 있으면 해결 조건 문구에 넣습니다. 조건 문구의 모양(예: "LOD < 5 ppm")은 명세에 예시만 있어,
- * 이 목업은 "LOD ≤ 상한", "실측값 ≤ 상한"으로 만듭니다.
- * TODO(백엔드 협의): 해결 조건 문구의 형식이 정해지면 맞춥니다.
- */
-function limitText(label: string, usl: number | null, unit: string | null): string | null {
-  return usl === null ? null : `${label} ≤ ${withUnit(usl, unit)}`;
-}
+  if (qualifier === 'text') return problem('UNPARSEABLE_VALUE', '정량 항목인데 값이 문자열');
+  if (lsl === null && usl === null) return ok('사내 규격 범위 미설정');
 
-/** 명세 2.3의 항목 판정 규칙 */
-export function judgeItem(input: JudgeInput): JudgeOutput {
-  const { qualifier, value, detectionLimit, unit, lsl, usl } = input;
-
-  // 사내 규격에 없는 항목 또는 정성 항목: 판정하지 않고 pass + "규격 없음"
-  if (!input.hasSpec || input.qualitative) {
-    return result('pass', '규격 없음', null);
-  }
-
-  // 신뢰도 낮음: 값 판정보다 우선 (담당자가 수정·확인하기 전까지)
-  if (!input.resolved && input.confidence !== null && input.confidence < LOW_CONFIDENCE_THRESHOLD) {
-    return result('check', `신뢰도가 기준값(${LOW_CONFIDENCE_THRESHOLD}) 미만입니다.`, null, 'LOW_CONFIDENCE', { type: 'confirm', condition: null });
-  }
-
-  // 결과 칸이 규격 문구와 같음(실측값 아님)
-  if (input.resultSameAsSpec) {
-    return result('undetermined', '결과 칸이 규격 문구와 같음', null, 'SPEC_COPIED', {
-      type: 'actual_value',
-      condition: limitText('실측값', usl, unit),
-    });
-  }
-
-  if (qualifier === 'not_detected') {
-    if (detectionLimit === null) {
-      return result('check', '검출한계 미기재', null, 'ND_NO_LOD', {
-        type: 'detection_limit',
-        condition: limitText('LOD', usl, unit),
-      });
-    }
-    if (usl !== null && detectionLimit <= usl) {
-      return result('pass', null, null);
-    }
-    return result('undetermined', `검출한계(${withUnit(detectionLimit, unit)})가 사내 상한보다 큼`, null, 'BOUND_ABOVE_LIMIT', {
-      type: 'actual_value',
-      condition: limitText('실측값', usl, unit),
-    });
-  }
-
-  if (typeof value !== 'number' || Number.isNaN(value)) {
-    // 해석할 수 없는 값은 명세의 사유코드에 맞는 것이 없어 reason_code는 null로 둡니다.
-    return result('check', '값을 해석할 수 없음', null, null, { type: 'confirm', condition: null });
+  if (qualifier === 'exact') {
+    if (typeof value !== 'number' || Number.isNaN(value)) return problem('UNPARSEABLE_VALUE', '값 형식을 해석할 수 없음');
+    const code: ReasonCode = oxide ? 'CONVERTED_OOS' : 'OUT_OF_SPEC';
+    const via = oxide ? ` (${oxide} 환산)` : '';
+    if (usl !== null && value > usl) return problem(code, `사내 상한 ${fmtValue(usl, unit)} 초과${via}`, Number((value - usl).toPrecision(12)));
+    if (lsl !== null && value < lsl) return problem(code, `사내 하한 ${fmtValue(lsl, unit)} 미만${via}`, Number((value - lsl).toPrecision(12)));
+    return ok();
   }
 
   if (qualifier === 'less_than' || qualifier === 'less_equal') {
-    const mark = qualifier === 'less_than' ? '<' : '≤';
-    if (usl !== null && value <= usl) {
-      return result('pass', null, null);
-    }
-    return result(
-      'undetermined',
-      usl === null
-        ? `상한값만 기재됨(${mark} ${withUnit(value, unit)}), 하한을 확인할 수 없음`
-        : `상한값만 기재됨(${mark} ${withUnit(value, unit)}), 사내 상한 ${withUnit(usl, unit)}보다 큼`,
-      null,
-      'BOUND_ABOVE_LIMIT',
-      { type: 'actual_value', condition: limitText('실측값', usl, unit) },
-    );
+    if (typeof value !== 'number' || Number.isNaN(value)) return problem('UNPARSEABLE_VALUE', '값 형식을 해석할 수 없음');
+    const sym = qualifier === 'less_than' ? '<' : '≤';
+    const shown = `상한값만 기재됨(${sym} ${fmtValue(value, unit)})`;
+    // 하한이 있는 항목은 "< X"로는 하한을 충족하는지 알 수 없습니다.
+    if (lsl !== null) return problem('LOWER_LIMIT_UNVERIFIABLE', `${shown}, 사내 하한 충족 여부 확인 불가`);
+    if (usl !== null && value <= usl) return ok(`${shown}, 사내 상한 ${fmtValue(usl, unit)} 이하`);
+    return problem('BOUND_ABOVE_LIMIT', `${shown}, 사내 상한 ${fmtValue(usl, unit)}보다 큼`);
   }
 
-  // exact. 규격을 벗어난 값은 원문을 다시 확인하면 해결되므로 해결 조건은 confirm으로 둡니다.
-  const outOfSpec: ReasonCode = input.converted ? 'CONVERTED_OOS' : 'OUT_OF_SPEC';
-  if (lsl !== null && value < lsl) {
-    return result('fail', `사내 하한 ${withUnit(lsl, unit)} 미만`, round(lsl - value), outOfSpec, { type: 'confirm', condition: null });
+  if (qualifier === 'not_detected') {
+    const dl = parsed.detectionLimit;
+    if (dl === null) return problem('ND_NO_LOD', '검출한계 미기재');
+    // 하한이 있는 항목은 "검출 안 됨"이 하한 충족을 뜻하지 않아 확인 필요가 아니라 판정 불가입니다.
+    if (lsl !== null) return problem('LOWER_LIMIT_UNVERIFIABLE', `검출 안 됨(검출한계 ${fmtValue(dl, unit)}), 사내 하한이 있는 항목`);
+    if (usl !== null && dl <= usl) return ok(`검출 안 됨(검출한계 ${fmtValue(dl, unit)})`);
+    return problem('LOD_ABOVE_LIMIT', `검출한계 ${fmtValue(dl, unit)}가 사내 상한 ${fmtValue(usl, unit)}보다 큼`);
   }
-  if (usl !== null && value > usl) {
-    return result('fail', `사내 상한 ${withUnit(usl, unit)} 초과`, round(value - usl), outOfSpec, { type: 'confirm', condition: null });
-  }
-  return result('pass', null, null);
+
+  return problem('UNPARSEABLE_VALUE', '값 형식을 해석할 수 없음');
 }
 
-function round(n: number): number {
-  return Number(n.toFixed(6));
+/** CoA 원문의 결과 칸이 규격 칸과 같은 문자열인지(실측값이 아님) */
+export function isSpecTextAsResult(rawValue: string | null, rawSpec: string | null): boolean {
+  if (!rawValue || !rawSpec) return false;
+  const normalize = (text: string) => text.replace(/\s+/g, '').replace(/=<|<=/g, '≤').toLowerCase();
+  return normalize(rawValue) === normalize(rawSpec);
+}
+
+/** 원문 이름이 산화물 표기(예: Na2O)이면 그 산화물을 돌려줍니다. 환산 후 규격 밖이면 CONVERTED_OOS입니다. */
+function oxideOf(rawName: string | null): string | null {
+  return /\b(Na2O|K2O|CaO|MgO|Fe2O3)\b/i.exec(rawName ?? '')?.[1] ?? null;
+}
+
+/** 담당자가 값을 입력해 둔 항목이면 그 값. 없으면 null */
+export function currentOverride(item: ExtractionItem): ParsedValue | null {
+  if (item.value_source === null) return null;
+  return { qualifier: item.value_qualifier ?? 'exact', value: item.converted_value, detectionLimit: item.detection_limit };
+}
+
+export interface EvaluateOptions {
+  /** 담당자가 확인(confirm)하거나 값을 입력했는지. 신뢰도 낮음 조건을 건너뜁니다. */
+  reviewed?: boolean;
+  /** 담당자가 입력한 값. 있으면 신뢰도 낮음, 규격 문구 복사, 값 해석 실패 검사를 건너뛰고 이 값으로 판정합니다. */
+  override?: ParsedValue | null;
+  valueSource?: ValueSource | null;
 }
 
 /**
- * 명세 2.4의 로트 권고 규칙.
- * [v1.4안] document_issues가 1개 이상이면 fail이 없어도 보류입니다(fail이 있으면 불합격 권고가 먼저입니다).
+ * 항목 1개를 규격에 대조해 서버 필드(판정, 사유코드, 해결 조건 등)를 채운 새 항목을 돌려줍니다 (백엔드 evaluate_item).
+ * 판정 순서: 규격 없음, 정성, 누락, 신뢰도 낮음, 규격 문구 복사, 값 판정.
+ * 목업 항목은 처음부터 해석된 값(value_qualifier, converted_value)을 갖고 있어, 값을 다시 해석하지 않고 그 값을 씁니다.
+ */
+export function evaluateItem(item: ExtractionItem, spec: SpecItem | undefined, options: EvaluateOptions = {}): ExtractionItem {
+  const override = options.override ?? null;
+  const reviewed = options.reviewed ?? false;
+  const unit = spec ? spec.unit : item.unit;
+  const parsed: ParsedValue | null =
+    override ??
+    (item.raw_value === null && item.mapping_source === 'spec'
+      ? null
+      : { qualifier: item.value_qualifier, value: item.converted_value, detectionLimit: item.detection_limit });
+  const oxide = oxideOf(item.raw_name);
+
+  let verdict: Verdict;
+  if (!spec) {
+    verdict = ok('규격 없음');
+  } else if (spec.spec_type === '정성') {
+    verdict = ok('정성 항목, 판정 제외');
+  } else if (parsed === null) {
+    verdict = problem('MISSING_REQUIRED', 'CoA에 항목 없음');
+  } else if (override === null && !reviewed && item.confidence !== null && item.confidence < LOW_CONFIDENCE_THRESHOLD) {
+    verdict = problem('LOW_CONFIDENCE', `추출 신뢰도 낮음(${item.confidence.toFixed(2)})`);
+  } else if (override === null && isSpecTextAsResult(item.raw_value, item.raw_spec)) {
+    verdict = problem('SPEC_COPIED', '결과 칸이 규격 문구와 같음');
+  } else {
+    verdict = judgeValue(parsed, spec, override === null ? oxide : null);
+  }
+
+  return {
+    ...item,
+    unit,
+    value_qualifier: parsed ? parsed.qualifier : null,
+    converted_value: parsed ? parsed.value : null,
+    detection_limit: parsed ? parsed.detectionLimit : null,
+    spec_lsl: spec?.lsl ?? null,
+    spec_usl: spec?.usl ?? null,
+    judgement: judgementForReason(verdict.code),
+    judgement_reason: verdict.reason,
+    deviation: verdict.deviation,
+    reason_code: verdict.code,
+    resolution: verdict.code ? buildResolution(verdict.code, item.normalized_name, spec, override === null ? oxide : null) : null,
+    reviewed: reviewed || override !== null,
+    value_source: override !== null ? (options.valueSource ?? 'correction') : null,
+  };
+}
+
+/** 저장된 항목을 담당자 검수 상태를 유지한 채 다시 판정합니다(항목명 수정, 규격 재판정). */
+export function rejudgeItem(item: ExtractionItem, spec: SpecItem | undefined): ExtractionItem {
+  return evaluateItem(item, spec, { reviewed: item.reviewed, override: currentOverride(item), valueSource: item.value_source });
+}
+
+/**
+ * 로트 권고 (백엔드 lot_recommend.py). 부적합이 있으면 불합격 권고가 먼저이고,
+ * 부적합이 없으면 문서 수준 문제(document_issues) 또는 판정 불가, 누락, 확인 필요가 하나라도 있을 때 보류입니다.
  */
 export function recommendLot(summary: JudgementSummary, documentIssueCount = 0): LotRecommendation {
   if (summary.fail >= 1) return 'reject';
@@ -181,7 +263,7 @@ export type ApproveErrorCode =
 export interface ApproveCheckInput {
   status: DocumentStatus;
   recommendation: LotRecommendation;
-  /** 수정 또는 확인 기록이 없는 신뢰도 낮음 항목 수 */
+  /** 확인하거나 수정하지 않은(reviewed가 아닌) 신뢰도 낮음 항목 수 */
   pendingLowConfidence: number;
   body: ApproveBody;
 }
@@ -203,45 +285,4 @@ export function checkApprove(input: ApproveCheckInput): ApproveErrorCode | null 
 export function checkSpecRange(lsl: number | null, usl: number | null): 'INVALID_SPEC_RANGE' | null {
   if (lsl !== null && usl !== null && lsl > usl) return 'INVALID_SPEC_RANGE';
   return null;
-}
-
-/** CoA 원문 값의 단위가 사내 규격 단위와 다르면(예: 0.01 % → ppm) 환산한 값입니다. */
-function isConvertedValue(rawValue: string | null, unit: string | null): boolean {
-  if (!rawValue || !unit) return false;
-  const token = /([A-Za-zµ%/]+)\s*$/.exec(rawValue.trim())?.[1];
-  return token !== undefined && token.toLowerCase() !== unit.toLowerCase();
-}
-
-/** 항목을 규격에 대조해 다시 판정합니다. 목업 서버가 PATCH와 confirm에서 씁니다. */
-export function rejudge(
-  item: ExtractionItem,
-  spec: SpecItem | undefined,
-  resolved: boolean,
-  resultSameAsSpec: boolean,
-): ExtractionItem {
-  const outcome = judgeItem({
-    qualifier: item.value_qualifier,
-    value: item.converted_value,
-    detectionLimit: item.detection_limit,
-    unit: spec?.unit ?? item.unit,
-    lsl: spec?.lsl ?? null,
-    usl: spec?.usl ?? null,
-    hasSpec: spec !== undefined,
-    qualitative: spec?.spec_type === '정성',
-    confidence: item.confidence,
-    resolved,
-    resultSameAsSpec,
-    converted: !resolved && isConvertedValue(item.raw_value, spec?.unit ?? item.unit),
-  });
-  return {
-    ...item,
-    unit: spec?.unit ?? item.unit,
-    spec_lsl: spec?.lsl ?? null,
-    spec_usl: spec?.usl ?? null,
-    judgement: outcome.judgement,
-    judgement_reason: outcome.reason,
-    deviation: outcome.deviation,
-    reason_code: outcome.reasonCode,
-    resolution: outcome.resolution,
-  };
 }

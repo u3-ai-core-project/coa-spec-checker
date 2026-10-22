@@ -1,21 +1,25 @@
-import type { DocumentIssueCode, ReasonCode, ResolutionType } from '../api/types';
+import type { DocumentIssueCode, ReasonCode, ResolutionType, ValueSource } from '../api/types';
 
 /**
- * [v1.4안] 예외 사유코드, 해결 조건 종류, 문서 수준 문제의 한글 이름.
- * 명세는 값 이름과 규칙 설명(2.3)만 있고 화면 문구가 없어, 규칙 설명을 줄여 쓴 임시 표기입니다.
+ * [v1.4] 예외 사유코드, 해결 조건 종류, 문서 수준 문제, 값 출처의 한글 이름.
+ * 사유코드와 문서 수준 문제 이름은 백엔드 inquiry_draft.py의 REASON_LABELS, ISSUE_LABELS와 같은 문구입니다(follow-ups 응답의 label과 같음).
+ * 해결 조건 종류와 값 출처의 이름은 시안과 명세에 없어 값 이름을 풀어쓴 임시 표기입니다.
  * TODO(디자인 협의): 시안이 나오면 문구를 맞춥니다.
  */
 export const REASON_CODE_LABEL: Record<ReasonCode, string> = {
-  OUT_OF_SPEC: '규격 이탈',
-  CONVERTED_OOS: '환산 후 규격 이탈',
-  BOUND_ABOVE_LIMIT: '상한값만 기재(사내 상한 초과)',
-  ND_NO_LOD: '불검출, 검출한계 없음',
-  SPEC_COPIED: '규격 문구를 결과로 기재',
+  OUT_OF_SPEC: '규격 초과',
+  CONVERTED_OOS: '환산 후 규격 초과',
+  BOUND_ABOVE_LIMIT: '보고 상한이 사내 상한보다 큼',
+  ND_NO_LOD: '검출 안 됨, 검출한계 미기재',
+  LOD_ABOVE_LIMIT: '검출한계가 사내 상한보다 큼',
+  LOWER_LIMIT_UNVERIFIABLE: '하한 충족 여부 확인 불가',
+  SPEC_COPIED: '결과 칸에 규격 문구 기재',
   MISSING_REQUIRED: '필수 항목 누락',
-  AMBIGUOUS_ANALYTE: '분석 대상 불명확',
+  AMBIGUOUS_ANALYTE: '측정 대상 모호(총량만 기재)',
   SUM_ONLY: '합산값만 기재',
-  LOW_CONFIDENCE: '신뢰도 낮음',
-  UNMAPPED_ITEM: '항목명 매핑 안 됨',
+  LOW_CONFIDENCE: '추출 신뢰도 낮음',
+  UNMAPPED_ITEM: '미등록 항목명',
+  UNPARSEABLE_VALUE: '값 해석 불가',
 };
 
 export const RESOLUTION_TYPE_LABEL: Record<ResolutionType, string> = {
@@ -27,9 +31,18 @@ export const RESOLUTION_TYPE_LABEL: Record<ResolutionType, string> = {
 };
 
 export const DOCUMENT_ISSUE_LABEL: Record<DocumentIssueCode, string> = {
-  LOT_MISMATCH: '로트 불일치',
-  PRODUCT_MISMATCH: '제품 불일치',
+  LOT_MISMATCH: '입고 로트와 CoA 로트 불일치',
+  PRODUCT_MISMATCH: '입고 제품과 CoA 제품 불일치',
   DATE_CONFLICT: '날짜 충돌',
-  SUPPLIER_CONFLICT: '협력사 불일치',
-  SPEC_VERSION_UNKNOWN: '규격 버전 확인 불가',
+  SUPPLIER_CONFLICT: '공급사 판정 모순',
+  SPEC_VERSION_UNKNOWN: '적용 규격 버전 불명',
 };
+
+/** 담당자가 입력한 값의 출처. 첫 번째(correction)가 기본값입니다. */
+export const VALUE_SOURCE_LABEL: Record<ValueSource, string> = {
+  correction: '원문 오독 수정',
+  supplier_reply: '공급사 회신값',
+  internal_test: '자체 시험값',
+};
+
+export const VALUE_SOURCE_ORDER: ValueSource[] = ['correction', 'supplier_reply', 'internal_test'];

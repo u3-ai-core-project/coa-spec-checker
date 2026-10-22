@@ -14,6 +14,8 @@ export class ApiError extends Error {
 /** 에러 코드별 화면 안내 문구입니다. 서버 message는 사용하지 않고 화면 문구로 통일합니다. */
 const MESSAGES: Record<string, string> = {
   UNKNOWN_ITEM_NAME: '사내 규격에 없는 항목명입니다.',
+  UNKNOWN_SPEC_SET: '등록되지 않은 규격 세트입니다.',
+  VALIDATION_ERROR: '입력한 값의 형식이 올바르지 않습니다.',
   REASON_REQUIRED: '사유를 입력해 주십시오.',
   INVALID_SPEC_RANGE: '규격 하한은 상한보다 클 수 없습니다.',
   INVALID_CREDENTIALS: '아이디 또는 비밀번호가 올바르지 않습니다.',
