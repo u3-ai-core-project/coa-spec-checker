@@ -134,8 +134,6 @@ export function CompleteDialog({ doc, extraction, pending, initialFollowUp, onCl
     }
   }
 
-  const dim = approvalLocked ? ' opacity-50' : '';
-
   return (
     <Modal width={560} labelledBy="complete-title" onClose={onClose}>
       <div className="flex items-center gap-3">
@@ -196,14 +194,16 @@ export function CompleteDialog({ doc, extraction, pending, initialFollowUp, onCl
         )}
       </div>
 
-      <div className={`modal-disposition flex flex-col gap-1.5${dim}`}>
+      <div className={`modal-disposition flex flex-col gap-1.5`}>
         <span className="text-[13px] font-semibold" id="disposition-label">
           담당자 처분 선택
         </span>
         <div className="disp-cards grid grid-cols-4 gap-2" role="radiogroup" aria-labelledby="disposition-label">
           {DISPOSITION_ORDER.map((candidate) => {
             const candidateMeta = DISPOSITION_META[candidate];
-            const locked = isDispositionLocked(candidate, recommendation);
+            // 선택할 수 없는 카드(불합격 권고 로트의 승인, 확인 필요가 남은 로트의 승인)만 회색으로 막고,
+            // 나머지 카드는 회색 없이 누를 수 있습니다. 확인 필요가 남았을 때 완료 버튼은 아래에서 비활성으로 둡니다.
+            const locked = isDispositionLocked(candidate, recommendation) || isChoiceBlocked(candidate);
             const on = candidate === disposition && !locked;
             let cardClass = 'border-[#D0D4DA] bg-white';
             if (locked) cardClass = 'border-[#E3E5E8] bg-[#F4F5F7] cursor-not-allowed';
@@ -213,7 +213,7 @@ export function CompleteDialog({ doc, extraction, pending, initialFollowUp, onCl
                 type="button"
                 role="radio"
                 aria-checked={on}
-                aria-disabled={locked || isChoiceBlocked(candidate)}
+                aria-disabled={locked}
                 disabled={isChoiceBlocked(candidate)}
                 onClick={() => choose(candidate)}
                 className={`disp-card disp-card-${candidate} flex h-[58px] flex-col items-start justify-center gap-1 rounded-lg border px-3 text-left ${cardClass}`}
@@ -261,7 +261,7 @@ export function CompleteDialog({ doc, extraction, pending, initialFollowUp, onCl
       </div>
 
       {isHold && (
-        <div className={`modal-hold flex flex-col gap-1.5${dim}`}>
+        <div className={`modal-hold flex flex-col gap-1.5`}>
           <span className="modal-field-label text-[13px] font-semibold" id="followup-label">
             후속 조치 <span className="text-[#C0342E]">*</span>{' '}
             <span className="text-[12px] font-normal text-[#8A9099]">필수 선택입니다.</span>
@@ -288,7 +288,7 @@ export function CompleteDialog({ doc, extraction, pending, initialFollowUp, onCl
         </div>
       )}
 
-      <div className={`modal-field flex flex-col gap-1.5${dim}`}>
+      <div className={`modal-field flex flex-col gap-1.5`}>
         <label className="modal-field-label text-[13px] font-semibold" htmlFor="complete-reason">
           처분 사유 <span className="text-[#C0342E]">*</span>{' '}
           <span className="text-[12px] font-normal text-[#8A9099]">
@@ -300,7 +300,6 @@ export function CompleteDialog({ doc, extraction, pending, initialFollowUp, onCl
           className="modal-textarea h-14 w-full resize-none rounded-lg border border-[#D0D4DA] bg-white px-3 py-2 text-[13px]"
           placeholder={isHold ? '보류 사유를 입력해 주십시오.' : '처분 사유를 입력해 주십시오.'}
           value={reason}
-          disabled={approvalLocked}
           onChange={(event) => {
             setReason(event.target.value);
             setReasonTouched(true);
