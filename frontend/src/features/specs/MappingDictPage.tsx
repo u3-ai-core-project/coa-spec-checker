@@ -261,16 +261,7 @@ export function MappingDictPage() {
             <section className="unit-card flex min-h-0 flex-1 flex-col rounded-xl border border-[#E3E5E8] bg-white">
               <div className="flex items-center justify-between border-b border-[#E3E5E8] px-5 py-3">
                 <h3 className="text-[15px] font-bold">단위 환산표</h3>
-                {/* TODO(백엔드 협의): 환산 계수는 서버 설정값이라 화면에서 고치지 않습니다. 모양만 시안과 같게 두고 동작은 막습니다. */}
-                <button
-                  type="button"
-                  disabled
-                  title="환산 계수는 서버 설정값이라 수정할 수 없습니다."
-                  className="btn-add-unit flex h-8 cursor-not-allowed items-center gap-1.5 rounded-md border border-[#D0D4DA] bg-white px-3 text-[12px] font-semibold"
-                >
-                  <Icon name="plus" size={14} />
-                  환산식 추가
-                </button>
+                {/* 환산 계수는 서버 설정값이라(명세 2.2) 이 화면에서는 조회만 합니다. 환산식 추가 기능은 없습니다. */}
               </div>
               <div className="min-h-0 flex-1 overflow-y-auto">
                 <table className="unit-table w-full text-left">
