@@ -33,7 +33,7 @@ function withReason(parts: string[], reason: string | null | undefined): string 
 /**
  * 승인 이력 카드에 보여 줄 항목을 만듭니다. 처분·보류·승인 취소(approval-logs)와 값 수정·확인(review-logs)을
  * 시간 역순으로 합칩니다. 보류와 승인 취소는 서로 다른 이력이라 action(approve, hold, cancel)으로 구분해 표시합니다.
- * TODO(백엔드 협의): 시안 2-5의 "검수 완료 → 승인" 2단계는 API가 /approve 한 번이므로 처분(승인) 이력 한 줄로 보여 줍니다.
+ * 승인은 1단계로 확정되어(백엔드 답변) 처분(approve) 이력 한 줄로 보여 줍니다.
  */
 export function buildHistory(input: {
   reviewLogs: ReviewLog[];
@@ -82,7 +82,7 @@ export function buildHistory(input: {
       detail = `${name} ${withUnit(log.after_value, unit)} 확인됨`;
     } else {
       kind = '매핑 수정';
-      detail = `${log.before_value} → ${log.after_value}`;
+      detail = withReason([`${log.before_value} → ${log.after_value}`], log.reason);
     }
     entries.push({
       key: `review-${index}`,

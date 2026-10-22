@@ -217,10 +217,10 @@ function ReviewScreen({ documentId }: { documentId: string }) {
       await api.patchItem(
         documentId,
         item.item_id,
+        // 수정 사유는 값 수정에서 필수이고 요청에 함께 보냅니다(백엔드 확정 답변).
         notDetected
-          ? { value_qualifier: 'not_detected', detection_limit: value, value_source: valueSource }
-          : { converted_value: value, value_source: valueSource },
-        { reason },
+          ? { value_qualifier: 'not_detected', detection_limit: value, value_source: valueSource, reason }
+          : { converted_value: value, value_source: valueSource, reason },
       );
       await reload();
       setEditingId(null);

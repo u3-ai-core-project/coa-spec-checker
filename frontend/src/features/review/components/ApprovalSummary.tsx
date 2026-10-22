@@ -4,8 +4,8 @@ import { formatDateTime } from '../shared/domain/format';
 
 /**
  * 처분이 끝난 문서의 처분 결과 요약 (시안 2-5).
- * API는 /approve 한 번이고 처분자와 승인자가 같으므로, 시안의 "검수 완료 → 승인" 2단계 대신 처분 한 줄만 보여 줍니다.
- * TODO(백엔드 협의): 팀에서 2단계 승인을 확정하면 승인자·승인 일시 줄을 추가합니다.
+ * 승인은 1단계로 확정되었습니다(백엔드 답변): "검수 완료" → 처분 다이얼로그(2-2) → POST /approve 한 번이고, 처분자는 누른 사람입니다.
+ * 그래서 시안의 "검수 완료 → 승인" 2단계(승인자 줄) 대신 처분 결과 한 줄만 보여 줍니다.
  */
 export function ApprovalSummary({ doc }: { doc: DocumentDetail }) {
   if (!doc.final_decision) return null;

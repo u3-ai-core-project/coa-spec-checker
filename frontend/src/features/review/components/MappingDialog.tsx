@@ -33,6 +33,8 @@ export function MappingDialog({ doc, item, specs, page, onClose, onDone, onStale
   const [error, setError] = useState<string | null>(null);
   // 수정 내용을 매핑 사전에 누적할지. 시안은 켜진 상태로 시작합니다.
   const [accumulate, setAccumulate] = useState(true);
+  // 항목명만 수정할 때 수정 사유는 선택입니다(백엔드 확정 답변).
+  const [reason, setReason] = useState('');
 
   const options = useMemo(() => buildMappingOptions(specs, query), [specs, query]);
   const hint = mappingHint(item.raw_name, [...specs, ...EXTRA_MAPPING_OPTIONS.map((option) => ({ item_name: option.name }))]);
@@ -43,7 +45,8 @@ export function MappingDialog({ doc, item, specs, page, onClose, onDone, onStale
     setBusy(true);
     setError(null);
     try {
-      await api.patchItem(doc.document_id, item.item_id, { normalized_name: selected }, { accumulate });
+      const note = reason.trim();
+      await api.patchItem(doc.document_id, item.item_id, note ? { normalized_name: selected, reason: note } : { normalized_name: selected }, { accumulate });
       onDone();
     } catch (failure) {
       setError(errorMessage(failure));
@@ -147,6 +150,19 @@ export function MappingDialog({ doc, item, specs, page, onClose, onDone, onStale
           <span>{hint}</span>
         </div>
       )}
+
+      <div className="map-reason flex flex-col gap-1.5">
+        <label className="text-[13px] font-semibold" htmlFor="mapping-reason">
+          수정 사유 <span className="text-[12px] font-normal text-[#8A9099]">선택 입력입니다.</span>
+        </label>
+        <input
+          id="mapping-reason"
+          className="map-reason-input h-9 w-full rounded-lg border border-[#D0D4DA] bg-white px-3 text-[13px]"
+          placeholder="수정 사유를 입력합니다."
+          value={reason}
+          onChange={(event) => setReason(event.target.value)}
+        />
+      </div>
 
       <button
         type="button"
