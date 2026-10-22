@@ -25,8 +25,8 @@ interface CompleteDialogProps {
   /** 후속 조치 버튼에서 열 때의 시작 값(보류 + 후속 조치 선택) */
   initialFollowUp?: HoldFollowUp;
   onClose(): void;
-  /** 처분 또는 보류가 성공했을 때 */
-  onDone(): void;
+  /** 처분 또는 보류가 성공했을 때. 완료한 처분(보류 포함)을 알려 줍니다. */
+  onDone(completed: Disposition): void;
   /** 서버 응답으로 화면 상태가 바뀐 것을 알게 됐을 때(다시 불러오기) */
   onStale(): void;
 }
@@ -123,7 +123,7 @@ export function CompleteDialog({ doc, extraction, pending, initialFollowUp, onCl
       } else {
         await api.approve(doc.document_id, { decision: disposition, reason: reason.trim() || null });
       }
-      onDone();
+      onDone(disposition);
     } catch (failure) {
       setError(errorMessage(failure));
       if (isApiError(failure, 'PENDING_LOW_CONFIDENCE_ITEMS') || isApiError(failure, 'ALREADY_APPROVED') || isApiError(failure, 'INVALID_DECISION')) {
@@ -307,6 +307,11 @@ export function CompleteDialog({ doc, extraction, pending, initialFollowUp, onCl
         />
       </div>
 
+      {approvalLocked && (
+        <p className="modal-locked-reason text-[12px] font-semibold text-[#9A5B00]">
+          {`확인 필요 항목 ${pending}건이 남아 있어 ${withEuro(meta.label)}는 완료할 수 없습니다. 남은 항목을 확인하거나, 보류로 완료해 주십시오.`}
+        </p>
+      )}
       <p className="modal-warning text-[12px] text-[#5B616A]">완료 후에는 값을 수정할 수 없습니다.</p>
       {error && <p className="text-[12px] text-[#C0342E]">{error}</p>}
 

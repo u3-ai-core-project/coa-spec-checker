@@ -336,9 +336,11 @@ function ReviewScreen({ documentId }: { documentId: string }) {
           pending={pending}
           initialFollowUp={completeFollowUp}
           onClose={() => setCompleteOpen(false)}
-          onDone={() => {
+          onDone={(completed) => {
             setCompleteOpen(false);
-            void reload();
+            // 보류로 완료하면 검수 목록으로 돌아갑니다. 처분(승인, 조건부 승인, 불합격)은 이 화면에서 처분 결과를 보여 줍니다.
+            if (completed === 'hold') navigate('/review');
+            else void reload();
           }}
           onStale={() => void reload()}
         />
