@@ -7,6 +7,10 @@
   3. 누락 항목 다시 맞추기 (항목명을 고치면 누락 대상이 바뀜) → 교차 규칙·집계·로트 권고 재계산
   4. review_logs 기록, 문서 상태 extracted·on_hold → in_review, JSON review_status 동기화, 저장
 
+수정 사유 (v1.4)
+  값을 입력하는 PATCH 는 reason 이 필수다. 검사 순서: 문서 없음 404 → 상태 409 → 항목 없음 404 → 사유 누락 400
+  → 항목명 오류 400. 사유는 이번 요청으로 남는 이력(edit, rename)에 같이 저장한다.
+
 자동 재판정 (v1.4안)
   회신값(실측값, 검출한계, 자체 시험값)을 PATCH 로 넣으면 2단계에서 그 값으로 판정한다.
   해결 조건(resolution)을 만족하면 그대로 적합이 되고 reason_code·resolution 이 사라진다.
@@ -70,6 +74,9 @@ def update_item(
     by_name = {name_key(s.item_name): s for s in specs}
     policy = default_policy()
     idx, item = _find_item(result, item_id)
+    reason = req.clean_reason
+    if req.has_value and reason is None:
+        raise AppException(ErrorCode.REASON_REQUIRED, "값을 수정할 때는 수정 사유를 입력해야 합니다")
     logs: list[ReviewLog] = []
 
     # ---- 1) 항목명 수정 ----
@@ -83,7 +90,7 @@ def update_item(
                and not _is_untouched_missing(i) for i in result.items):
             raise AppException(ErrorCode.VALIDATION_ERROR, f"이미 '{spec.item_name}' 항목이 있습니다")
 
-        logs.append(_log(doc, item, ReviewAction.RENAME, item.normalized_name, spec.item_name, user))
+        logs.append(_log(doc, item, ReviewAction.RENAME, item.normalized_name, spec.item_name, user, reason=reason))
         if item.raw_name:
             mapping_service.upsert_manual(db, material_code=doc.material_code, raw_name=item.raw_name,
                                           normalized_name=spec.item_name, user_id=user.id)
@@ -97,7 +104,7 @@ def update_item(
         item = evaluate_item(item, spec, override=req.to_parsed(), reviewed=True,
                              value_source=req.value_source or ValueSource.CORRECTION, policy=policy)
         logs.append(_log(doc, item, ReviewAction.EDIT, before, display_value(item, spec), user,
-                         value_source=item.value_source))
+                         value_source=item.value_source, reason=reason))
 
     result.items[idx] = item
     _sync_missing_items(result, specs, policy)
@@ -146,7 +153,8 @@ def to_reviewed_item(item: ExtractionItem) -> ReviewedItem:
 def to_log_out(log: ReviewLog) -> ReviewLogOut:
     return ReviewLogOut(
         item_id=log.item_id, action=log.action, before_value=log.before_value, after_value=log.after_value,
-        value_source=log.value_source, reviewer_name=log.reviewer.name, reviewed_at=log.reviewed_at,
+        value_source=log.value_source, reason=log.reason, reviewer_name=log.reviewer.name,
+        reviewed_at=log.reviewed_at,
     )
 
 
@@ -230,9 +238,9 @@ def _sync_missing_items(result: ExtractionResult, specs: list[SpecRule], policy)
 
 
 def _log(doc: Document, item: ExtractionItem, action: ReviewAction, before: str | None, after: str | None,
-         user: User, value_source: ValueSource | None = None) -> ReviewLog:
+         user: User, value_source: ValueSource | None = None, reason: str | None = None) -> ReviewLog:
     log = ReviewLog(document_id=doc.id, item_id=item.item_id, action=action, before_value=before,
-                    after_value=after, value_source=value_source, reviewer_id=user.id)
+                    after_value=after, value_source=value_source, reason=reason, reviewer_id=user.id)
     # reviewer 관계는 저장 후 id 로 다시 읽는다 (user 가 다른 세션 객체일 수 있어 직접 붙이지 않음)
     return log
 

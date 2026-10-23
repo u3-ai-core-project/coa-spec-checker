@@ -12,6 +12,12 @@ PATCH 요청은 세 가지 일을 한다 (둘 이상을 한 번에 보내도 된
   - not_detected                   : converted_value 는 비우고, 검출한계가 있으면 detection_limit
   - text                           : converted_value 는 문자열 (정성 항목)
 잘못된 조합은 400 VALIDATION_ERROR.
+
+수정 사유 (reason, 명세 v1.4 4.9)
+  - 값을 입력하는 요청(1, 2)은 필수. 비었거나 공백뿐이면 400 REASON_REQUIRED (검사는 review_service 에서 한다.
+    필드 누락을 VALIDATION_ERROR 로 보내면 처분·보류 API 의 REASON_REQUIRED 와 코드가 달라지기 때문)
+  - 항목명만 고치는 요청(3)은 선택
+  - 이번 요청으로 남는 이력(edit, rename)에 같이 저장한다. 결과 JSON 에는 넣지 않는다.
 """
 from datetime import datetime
 
@@ -33,6 +39,12 @@ class ItemUpdateRequest(BaseModel):
     normalized_name: str | None = Field(None, description="사내 표준 항목명으로 수정")
     value_source: ValueSource | None = Field(
         None, description="입력값 출처 (v1.4안): correction(기본) | supplier_reply | internal_test")
+    reason: str | None = Field(None, description="수정 사유 (v1.4). 값을 입력할 때 필수, 항목명만 고칠 때 선택")
+
+    @property
+    def clean_reason(self) -> str | None:
+        """앞뒤 공백을 뺀 사유. 비었으면 None."""
+        return (self.reason or "").strip() or None
 
     @property
     def has_value(self) -> bool:
@@ -83,6 +95,7 @@ class ReviewLogOut(BaseModel):
     before_value: str | None
     after_value: str | None
     value_source: ValueSource | None = None  # v1.4안. 값 수정(edit)일 때만
+    reason: str | None = None                # v1.4. 수정 사유 (확인 이력은 null)
     reviewer_name: str
     reviewed_at: datetime
 

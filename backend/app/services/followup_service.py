@@ -8,7 +8,8 @@
 
 초안 생성기 (Drafter)
   설정 INQUIRY_DRAFTER 로 고른다. 기본은 템플릿. AI 파트(고도영 님) 모듈을 연결하면 AI 초안을 쓰고,
-  AI 가 실패하면 템플릿으로 대신한다 (source=template_fallback). 숫자·근거는 판정 결과 값만 넘긴다.
+  AI 가 실패하면 템플릿으로 대신한다 (source=template_fallback). 생성기를 준비하다 실패한 경우
+  (ai 패키지 미설치, 알 수 없는 설정값)도 같다. 숫자·근거는 판정 결과 값만 넘긴다.
 읽기만 하고 DB 에 쓰지 않는다.
 """
 import logging
@@ -91,15 +92,21 @@ def get_follow_ups(db: Session, document_id: str) -> FollowUpsResponse:
 
 
 def _draft(supplier: str | None, lots: list[LotRequest]) -> InquiryDraftOut:
-    """설정된 생성기로 초안을 만들고, 실패하면 템플릿으로 대신한다."""
-    drafter, source = get_drafter(), None
+    """설정된 생성기로 초안을 만들고, 실패하면 템플릿으로 대신한다.
+
+    생성기 준비(get_drafter)도 try 안에서 한다. INQUIRY_DRAFTER=ai 인데 ai 패키지가 없거나 설정값이 잘못되면
+    500 대신 템플릿 초안을 쓴다. 템플릿 생성기 자체가 실패하면 대신할 것이 없으므로 그대로 올린다.
+    """
+    drafter: Drafter | None = None
     try:
+        drafter = get_drafter()
         subject, body = drafter.draft(supplier, lots)
         source = drafter.source
     except Exception:
-        if isinstance(drafter, TemplateDrafter):
+        if isinstance(drafter, TemplateDrafter) or (drafter is None and settings.INQUIRY_DRAFTER == "template"):
             raise
-        logger.exception("문의 초안 생성 실패, 템플릿으로 대체")
+        stage = "준비" if drafter is None else "생성"
+        logger.exception("문의 초안 생성기 %s 실패 (INQUIRY_DRAFTER=%s), 템플릿으로 대체", stage, settings.INQUIRY_DRAFTER)
         subject, body = TemplateDrafter().draft(supplier, lots)
         source = "template_fallback"
     return InquiryDraftOut(subject=subject, body=body, source=source, lot_nos=[lot.lot_no for lot in lots])
