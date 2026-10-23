@@ -1,4 +1,4 @@
-import type { Role } from '../currentUser'
+import type { Role } from '../types/auth'
 
 const LABEL: Record<Role, string> = { USER: '사용자', ADMIN: '관리자' }
 
