@@ -29,15 +29,6 @@ import type {
   SpecSet,
 } from './types';
 
-export interface PatchItemOptions {
-  /**
-   * 항목명을 고칠 때 매핑 사전에 누적할지(기본 true). false이면 이 문서의 항목명만 바꾸고 사전에는 남기지 않습니다.
-   * TODO(백엔드 협의): API(PATCH normalized_name)는 항상 사전에 누적하고 끄는 필드가 없어, 목업만 이 값을 따릅니다.
-   * HttpApi는 서버가 누적하는 것을 막을 수 없습니다.
-   */
-  accumulate?: boolean;
-}
-
 /**
  * 화면이 호출하는 유일한 API 계층입니다. 구현은 목업(MockApi)과 http(HttpApi) 두 가지입니다.
  * VITE_USE_MOCK 환경변수로 전환합니다.
@@ -57,7 +48,6 @@ export interface Api {
     documentId: string,
     itemId: string,
     body: PatchItemBody,
-    options?: PatchItemOptions,
   ): Promise<PatchItemResult>;
   confirmItem(documentId: string, itemId: string): Promise<ConfirmItemResult>;
   getReviewLogs(documentId: string): Promise<ReviewLog[]>;

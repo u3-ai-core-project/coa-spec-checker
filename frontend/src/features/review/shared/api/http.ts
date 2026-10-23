@@ -133,7 +133,6 @@ export class HttpApi implements Api {
     documentId: string,
     itemId: string,
     body: PatchItemBody,
-    // Api의 세 번째 인자 options.accumulate(사전 누적 끄기)는 보낼 필드가 없어 받지 않습니다(서버는 항상 누적).
   ): Promise<PatchItemResult> {
     return request<PatchItemResult>(
       `/documents/${encodeURIComponent(documentId)}/extraction/${encodeURIComponent(itemId)}`,

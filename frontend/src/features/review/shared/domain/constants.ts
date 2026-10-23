@@ -11,8 +11,7 @@ export const LOW_CONFIDENCE_THRESHOLD = 0.8;
 export const HIGH_CONFIDENCE_THRESHOLD = 0.9;
 
 /**
- * 원본 근거 좌표(bbox)의 단위. 명세에 단위가 없어 "페이지 크기 대비 0~1 비율, 원점은 좌상단"으로 가정합니다.
- * TODO(백엔드 협의): 단위(비율/픽셀/pt)와 원점을 확인합니다.
+ * 원본 근거 좌표(bbox)의 단위. 페이지 크기 대비 0~1 비율, 원점은 좌상단, page는 1부터입니다(백엔드 확정 답변).
  */
 export const BBOX_UNIT = 'ratio' as const;
 

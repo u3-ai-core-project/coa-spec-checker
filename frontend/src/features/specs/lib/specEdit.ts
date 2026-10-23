@@ -32,12 +32,12 @@ export const DRAFT_ERROR_MESSAGE: Record<DraftError, string> = {
   EMPTY_UNIT: '단위를 입력해 주십시오.',
 };
 
-/** 입력값 검증. 서버의 400 INVALID_SPEC_RANGE를 저장 전에 미리 막습니다. */
-export function validateDraft(draft: SpecDraft): DraftError | null {
+/** 입력값 검증. 서버의 400 INVALID_SPEC_RANGE를 저장 전에 미리 막습니다. 원래 단위가 없는 항목(정성 항목 등)은 빈 단위를 허용합니다. */
+export function validateDraft(draft: SpecDraft, originalUnit: string | null): DraftError | null {
   const lsl = parseLimit(draft.lsl);
   const usl = parseLimit(draft.usl);
   if (lsl === 'invalid' || usl === 'invalid') return 'INVALID_NUMBER';
-  if (draft.unit.trim() === '') return 'EMPTY_UNIT';
+  if (draft.unit.trim() === '' && (originalUnit ?? '').trim() !== '') return 'EMPTY_UNIT';
   if (lsl !== null && usl !== null && lsl > usl) return 'INVALID_SPEC_RANGE';
   return null;
 }
@@ -46,7 +46,7 @@ const limitText = (value: number | null) => (value === null ? '-' : formatNumber
 
 export interface SpecChange {
   spec: SpecItem;
-  body: { lsl: number | null; usl: number | null; unit: string };
+  body: { lsl: number | null; usl: number | null; unit: string | null };
   /** 변경 이력에 쓰는 문구. 예: "Ca USL 20 → 25 ppm" */
   descriptions: string[];
 }
@@ -56,25 +56,28 @@ export function buildChanges(specs: SpecItem[], drafts: Record<number, SpecDraft
   const changes: SpecChange[] = [];
   for (const spec of specs) {
     const draft = drafts[spec.id];
-    if (!draft || validateDraft(draft) !== null) continue;
+    if (!draft || validateDraft(draft, spec.unit) !== null) continue;
     const lsl = parseLimit(draft.lsl) as number | null;
     const usl = parseLimit(draft.usl) as number | null;
     const unit = draft.unit.trim();
+    const before = spec.unit ?? '';
     const descriptions: string[] = [];
     if (lsl !== spec.lsl) descriptions.push(`${spec.item_name} LSL ${limitText(spec.lsl)} → ${limitText(lsl)} ${unit}`);
     if (usl !== spec.usl) descriptions.push(`${spec.item_name} USL ${limitText(spec.usl)} → ${limitText(usl)} ${unit}`);
-    if (unit !== spec.unit) descriptions.push(`${spec.item_name} 단위 ${spec.unit} → ${unit}`);
-    if (descriptions.length > 0) changes.push({ spec, body: { lsl, usl, unit }, descriptions });
+    if (unit !== before) descriptions.push(`${spec.item_name} 단위 ${before || '없음'} → ${unit || '없음'}`);
+    if (descriptions.length > 0) changes.push({ spec, body: { lsl, usl, unit: unit === '' ? null : unit }, descriptions });
   }
   return changes;
 }
 
 /** 입력값에 검증 오류가 있는 행의 id와 오류 */
-export function draftErrors(drafts: Record<number, SpecDraft>): Record<number, DraftError> {
+export function draftErrors(specs: SpecItem[], drafts: Record<number, SpecDraft>): Record<number, DraftError> {
   const errors: Record<number, DraftError> = {};
-  for (const [id, draft] of Object.entries(drafts)) {
-    const error = validateDraft(draft);
-    if (error) errors[Number(id)] = error;
+  for (const spec of specs) {
+    const draft = drafts[spec.id];
+    if (!draft) continue;
+    const error = validateDraft(draft, spec.unit);
+    if (error) errors[spec.id] = error;
   }
   return errors;
 }

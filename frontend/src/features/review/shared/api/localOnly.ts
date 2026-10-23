@@ -115,7 +115,7 @@ const SEED_MAPPINGS: MappingRecord[] = [
 ];
 
 // 환산 계수는 서버 설정값입니다(백엔드 테스트의 값: % → ppm 10000, ppb → ppm 0.001, Na2O → Na 0.7419, Fe2O3 → Fe 0.6994, CaO → Ca 0.7147).
-// K2O → K 0.8301은 일반적인 환산 계수로 가정했습니다. 시안 5-2의 SO3 → SO42−는 서버의 산화물 환산이 아니라서 뺐습니다.
+// 서버 설정에 있는 산화물(Na2O, CaO, Fe2O3)만 둡니다. 시안 5-2의 SO3 → SO42−는 서버의 산화물 환산이 아니라서 뺐습니다.
 const SEED_CONVERSIONS: ConversionsResponse = {
   units: [
     { from: '%', to: 'ppm', factor: 10000 },
@@ -124,7 +124,6 @@ const SEED_CONVERSIONS: ConversionsResponse = {
   ],
   oxides: [
     { oxide: 'Na2O', element: 'Na', factor: 0.7419 },
-    { oxide: 'K2O', element: 'K', factor: 0.8301 },
     { oxide: 'Fe2O3', element: 'Fe', factor: 0.6994 },
     { oxide: 'CaO', element: 'Ca', factor: 0.7147 },
   ],

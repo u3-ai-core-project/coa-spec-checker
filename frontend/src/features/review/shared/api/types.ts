@@ -238,7 +238,6 @@ export interface PatchItemBody {
   value_source?: ValueSource;
   /**
    * 수정 사유(백엔드 확정 답변). 값 수정은 필수이고 항목명만 수정할 때는 선택입니다. review_logs의 reason으로 돌아옵니다.
-   * TODO(백엔드 협의): 서버 구현 전이라 요청과 응답의 reason 필드 이름은 가정입니다.
    */
   reason?: string;
 }
@@ -252,7 +251,7 @@ export interface ReviewLog {
   value_source?: ValueSource | null;
   reviewer_name: string;
   reviewed_at: string;
-  /** 수정 사유(백엔드 확정 답변). 값 수정은 필수이고 항목명만 수정한 이력은 없을 수 있습니다. 서버 구현 전이라 필드 이름은 가정입니다. */
+  /** 수정 사유(백엔드 확정 답변). 값 수정은 필수이고 항목명만 수정한 이력은 없을 수 있습니다. */
   reason?: string | null;
 }
 
@@ -381,7 +380,8 @@ export interface SpecListQuery {
 export interface PatchSpecBody {
   lsl: number | null;
   usl: number | null;
-  unit: string;
+  /** 단위가 없는 항목(정성 항목 등)은 null */
+  unit: string | null;
   /**
    * 변경 사유(백엔드 확정 답변, 필수). 규격 변경 이력(change-logs)에 남습니다.
    */

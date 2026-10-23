@@ -1,6 +1,6 @@
 import { formatNumber } from '../../domain/format';
 import { pendingLowConfidenceCount } from '../../domain/items';
-import type { Api, PatchItemOptions } from '../Api';
+import type { Api } from '../Api';
 import { ApiError } from '../errors';
 import { LocalOnlyStore } from '../localOnly';
 import { getToken, handleUnauthorized, setToken } from '../session';
@@ -276,7 +276,6 @@ export class MockApi implements Api {
     documentId: string,
     itemId: string,
     body: PatchItemBody,
-    options: PatchItemOptions = {},
   ): Promise<PatchItemResult> {
     const user = this.requireUser();
     const doc = this.findReadyDoc(documentId);
@@ -295,7 +294,6 @@ export class MockApi implements Api {
     }
     if (body.value_source !== undefined && !hasValue) throw new ApiError(400, 'VALIDATION_ERROR', 'value_source는 값을 입력할 때만 보낼 수 있습니다');
     // 수정 사유(백엔드 확정 답변): 값 수정은 필수이고, 항목명만 수정할 때는 선택입니다.
-    // TODO(백엔드 협의): 서버 구현 전이라 REASON_REQUIRED 적용 범위와 필드 이름은 가정입니다.
     const reason = body.reason?.trim() || null;
     if (hasValue && reason === null) throw new ApiError(400, 'REASON_REQUIRED', '값 수정은 사유가 필요합니다');
 
@@ -318,8 +316,8 @@ export class MockApi implements Api {
       });
       // 새 규격으로 다시 판정합니다(검수 상태는 유지).
       item = rejudgeItem({ ...item, normalized_name: target.item_name, mapping_source: 'manual' }, target);
-      // 서버는 item_mappings에 raw_name → normalized_name을 manual로 누적합니다. 담당자가 누적을 끄면(accumulate=false) 남기지 않습니다.
-      if (item.raw_name && options.accumulate !== false) {
+      // 서버는 item_mappings에 raw_name → normalized_name을 manual로 누적합니다.
+      if (item.raw_name) {
         const existing = this.local
           .listMappings(target.material_code)
           .find((entry) => entry.raw_name === item.raw_name);

@@ -14,7 +14,7 @@ export interface ItemEditSubmit {
   valueSource: ValueSource;
   /** [v1.4] 검출 안 됨으로 입력하는지(이때 value가 검출한계) */
   notDetected: boolean;
-  /** 수정 사유(필수). PATCH 요청의 reason으로 보내고 review_logs에 남습니다(백엔드 확정 답변, 서버 구현 전이라 필드 이름은 가정). */
+  /** 수정 사유(필수). PATCH 요청의 reason으로 보내고 review_logs에 남습니다(백엔드 확정 답변). */
   reason: string;
 }
 

@@ -34,7 +34,6 @@ function inputClass(changed: boolean, invalid: boolean, align: string, readOnly 
  * 변경한 규격은 이후 업로드되는 문서부터 적용됩니다(이미 추출된 문서의 판정은 그대로입니다).
  * 백엔드 확정 답변: PATCH /specs/{id}에 변경 사유(reason)가 필수이고, 변경 이력은 GET /specs/{id}/change-logs로 봅니다.
  * 항목 추가·삭제, 규격 근거(source) 수정, 재판정 체크박스는 서버에 없어 화면에서 숨겼습니다.
- * TODO(백엔드 협의): 변경 사유와 변경 이력은 서버 구현 전이라 필드 이름은 가정입니다(types.ts의 PatchSpecBody, SpecChangeLog).
  */
 export function SpecEditPage() {
   const user = useCurrentUser();
@@ -113,7 +112,7 @@ export function SpecEditPage() {
     group.items.map((spec) => [spec.id, { ...draftOf(spec), ...edits[spec.id] }]),
   );
   const changes = buildChanges(group.items, drafts);
-  const errors = draftErrors(drafts);
+  const errors = draftErrors(group.items, drafts);
   const hasErrors = Object.keys(errors).length > 0;
   const mappingCount = (spec: SpecItem) => (mappings.data ?? []).filter((entry) => entry.normalized_name === spec.item_name).length;
   const canSave = changes.length > 0 && reason.trim().length > 0 && !hasErrors && !saving;

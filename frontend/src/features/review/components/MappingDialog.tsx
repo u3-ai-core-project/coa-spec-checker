@@ -31,8 +31,6 @@ export function MappingDialog({ doc, item, specs, page, onClose, onDone, onStale
   const [selected, setSelected] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // 수정 내용을 매핑 사전에 누적할지. 시안은 켜진 상태로 시작합니다.
-  const [accumulate, setAccumulate] = useState(true);
   // 항목명만 수정할 때 수정 사유는 선택입니다(백엔드 확정 답변).
   const [reason, setReason] = useState('');
 
@@ -46,7 +44,7 @@ export function MappingDialog({ doc, item, specs, page, onClose, onDone, onStale
     setError(null);
     try {
       const note = reason.trim();
-      await api.patchItem(doc.document_id, item.item_id, note ? { normalized_name: selected, reason: note } : { normalized_name: selected }, { accumulate });
+      await api.patchItem(doc.document_id, item.item_id, note ? { normalized_name: selected, reason: note } : { normalized_name: selected });
       onDone();
     } catch (failure) {
       setError(errorMessage(failure));
@@ -164,22 +162,7 @@ export function MappingDialog({ doc, item, specs, page, onClose, onDone, onStale
         />
       </div>
 
-      <button
-        type="button"
-        role="checkbox"
-        aria-checked={accumulate}
-        onClick={() => setAccumulate((value) => !value)}
-        className="map-accumulate flex items-start gap-2 text-left text-[12px] text-[#5B616A]"
-      >
-        <span
-          className={`mt-px flex h-4 w-4 shrink-0 items-center justify-center rounded ${
-            accumulate ? 'bg-[#2B4FCB] text-white' : 'border-2 border-[#B6BBC4] bg-white'
-          }`}
-        >
-          {accumulate && <Icon name="check" size={12} />}
-        </span>
-        <span>수정 내용을 매핑 사전에 누적합니다. 이후 업로드 건부터 적용됩니다.</span>
-      </button>
+      <p className="map-accumulate text-[12px] text-[#5B616A]">다음 문서부터 자동 매핑됩니다. 잘못 매핑되면 매핑 사전에서 삭제할 수 있습니다.</p>
 
       {error && <p className="text-[12px] text-[#C0342E]">{error}</p>}
 
