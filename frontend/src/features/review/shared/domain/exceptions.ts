@@ -40,7 +40,7 @@ export const DOCUMENT_ISSUE_LABEL: Record<DocumentIssueCode, string> = {
 
 /** 담당자가 입력한 값의 출처. 첫 번째(correction)가 기본값입니다. */
 export const VALUE_SOURCE_LABEL: Record<ValueSource, string> = {
-  correction: '원문 오독 수정',
+  correction: '원문 오독 정정',
   supplier_reply: '공급사 회신값',
   internal_test: '자체 시험값',
 };

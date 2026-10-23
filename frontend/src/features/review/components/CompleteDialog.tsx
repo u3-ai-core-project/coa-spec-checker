@@ -177,7 +177,7 @@ export function CompleteDialog({ doc, extraction, pending, initialFollowUp, sugg
             <Icon name="info" />
           </span>
           <div className="flex flex-col gap-0.5">
-            <span className="modal-blocker-count font-semibold">{`확인 필요 항목 ${pending}건이 남아 있습니다.`}</span>
+            <span className="modal-blocker-count font-semibold">{`신뢰도 낮음 항목 ${pending}건이 남아 있습니다.`}</span>
             <span className="modal-blocker-msg">남은 항목을 모두 확인한 뒤에 검수를 완료할 수 있습니다.</span>
           </div>
         </div>
@@ -314,7 +314,7 @@ export function CompleteDialog({ doc, extraction, pending, initialFollowUp, sugg
 
       {approvalLocked && (
         <p className="modal-locked-reason text-[12px] font-semibold text-[#9A5B00]">
-          {`확인 필요 항목 ${pending}건이 남아 있어 ${withEuro(meta.label)}는 완료할 수 없습니다. 남은 항목을 확인하거나, 보류로 완료해 주십시오.`}
+          {`신뢰도 낮음 항목 ${pending}건이 남아 있어 ${withEuro(meta.label)}는 완료할 수 없습니다. 남은 항목을 확인하거나, 보류로 완료해 주십시오.`}
         </p>
       )}
       <p className="modal-warning text-[12px] text-[#5B616A]">완료 후에는 값을 수정할 수 없습니다.</p>
