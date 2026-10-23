@@ -384,7 +384,6 @@ export interface PatchSpecBody {
   unit: string;
   /**
    * 변경 사유(백엔드 확정 답변, 필수). 규격 변경 이력(change-logs)에 남습니다.
-   * TODO(백엔드 협의): 서버 구현 전이라 필드 이름은 가정입니다.
    */
   reason: string;
 }
@@ -392,34 +391,25 @@ export interface PatchSpecBody {
 /** PATCH /specs/{id} 응답. 수정된 규격 항목입니다. 규격 재판정(rejudge)은 서버에 없어 뺐습니다. */
 export type PatchSpecResult = SpecItem;
 
-/** 규격 한 항목의 값(변경 전후 비교용) */
-export interface SpecValues {
-  lsl: number | null;
-  usl: number | null;
-  unit: string | null;
-}
-
 /**
- * GET /specs/{id}/change-logs 의 변경 이력 1건(백엔드 확정 답변: 변경 전후 값, 수정자, 사유, 시각).
- * TODO(백엔드 협의): 서버 구현 전이라 필드 이름과 모양은 가정입니다.
+ * GET /specs/{id}/change-logs 의 변경 이력 1건(백엔드 PR #12 확정 형식). 서버는 오래된 순으로 줍니다.
+ * before_value, after_value는 실제로 바뀐 필드만 담은 문자열이고 여러 필드면 ", "로 이어 붙입니다.
+ * 예) "usl: 50" → "usl: 30", "lsl: 없음, usl: 30" → "lsl: 1, usl: 40" (값이 없으면 "없음").
+ * 응답에 항목 이름과 id가 없어, 항목(규격 id)마다 불러 온 화면이 항목 이름을 붙입니다.
  */
 export interface SpecChangeLog {
-  id: number;
-  spec_id: number;
-  item_name: string;
-  before: SpecValues;
-  after: SpecValues;
-  changed_by: string;
+  before_value: string;
+  after_value: string;
   reason: string;
-  changed_at: string;
+  user_name: string;
+  created_at: string;
 }
 
 export type MappingRecordSource = 'seed' | 'manual';
 
 /**
- * GET /mappings?material_code= 의 매핑 사전 1건(백엔드 확정 답변: 출처 seed/manual, 등록자, 등록일).
- * 사전은 material_code + raw_name 기준이라 협력사 필드가 없습니다.
- * TODO(백엔드 협의): 서버 구현 전이라 필드 이름과 모양은 가정입니다.
+ * GET /mappings?material_code= 의 매핑 사전 1건(백엔드 PR #12 확정 형식). 사전은 material_code + raw_name 기준이라 협력사 필드가 없습니다.
+ * 등록 API는 없고(매핑은 검수 화면의 항목명 수정으로 쌓임) 삭제는 ADMIN만 합니다.
  */
 export interface MappingRecord {
   id: number;
@@ -428,20 +418,36 @@ export interface MappingRecord {
   raw_name: string;
   /** 사내 표준 항목명 */
   normalized_name: string;
+  /** seed(초기값) | manual(담당자 항목명 수정으로 누적) */
   source: MappingRecordSource;
+  /** 등록한 사용자 이름. 초기값(seed)이면 null */
   created_by: string | null;
-  created_at: string | null;
+  created_at: string;
 }
 
-/**
- * GET /mappings/conversions 의 단위 환산표 1건(조회 전용, 백엔드 확정 답변).
- * TODO(백엔드 협의): 서버 구현 전이라 필드 이름과 모양은 가정입니다.
- */
+/** DELETE /mappings/{id} 응답 */
+export interface MappingDeleted {
+  id: number;
+}
+
+/** 단위 환산 1건. from 단위 값 × factor = to 단위 값 (예: % → ppm, ×10000) */
 export interface UnitConversion {
-  id: number | string;
-  label: string;
-  formula: string;
-  factor: string;
+  from: string;
+  to: string;
+  factor: number;
+}
+
+/** 산화물 → 원소 환산 1건. 산화물 기준 값 × factor = 원소 기준 값. element가 없는 산화물도 있습니다. */
+export interface OxideConversion {
+  oxide: string;
+  element: string | null;
+  factor: number;
+}
+
+/** GET /mappings/conversions 응답(백엔드 PR #12 확정 형식). 서버 설정값이라 조회만 됩니다. */
+export interface ConversionsResponse {
+  units: UnitConversion[];
+  oxides: OxideConversion[];
 }
 
 /** [v1.4] GET /documents/{id}/follow-ups 응답의 후속 조치 1건. 예외 항목 1개 또는 문서 정합성 오류 1개입니다. */

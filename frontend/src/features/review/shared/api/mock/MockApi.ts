@@ -13,6 +13,7 @@ import type {
   CancelApprovalBody,
   CancelApprovalResult,
   ConfirmItemResult,
+  ConversionsResponse,
   DocumentDetail,
   DocumentListItem,
   DocumentListQuery,
@@ -24,6 +25,7 @@ import type {
   HoldBody,
   HoldResult,
   LoginResult,
+  MappingDeleted,
   MappingRecord,
   PatchItemBody,
   PatchItemResult,
@@ -35,8 +37,6 @@ import type {
   SpecItem,
   SpecListQuery,
   SpecSet,
-  SpecValues,
-  UnitConversion,
 } from '../types';
 import { type MockDoc, type MockState, type MockUser, createMockState } from './fixtures';
 import { getFollowUps } from './followUps';
@@ -550,25 +550,30 @@ export class MockApi implements Api {
     const target = this.state.specs.find((entry) => entry.id === specId);
     if (!target) throw new ApiError(404, 'SPEC_NOT_FOUND', '존재하지 않는 규격 항목');
     if (checkSpecRange(body.lsl, body.usl)) throw new ApiError(400, 'INVALID_SPEC_RANGE', '규격 하한이 상한보다 큼');
-    // 변경 사유는 필수입니다(백엔드 확정 답변). TODO(백엔드 협의): 서버 구현 전이라 필드 이름은 가정입니다.
+    // 변경 사유는 필수입니다(백엔드 PR #12). 검사 순서는 서버와 같게 사유 누락, 범위 오류 순입니다.
     const reason = body.reason?.trim();
     if (!reason) throw new ApiError(400, 'REASON_REQUIRED', '변경 사유가 필요합니다');
     // 이미 추출된 문서의 판정은 바꾸지 않고, 이후 업로드 건부터 적용됩니다(규격 재판정은 서버에 없습니다).
-    const before: SpecValues = { lsl: target.lsl, usl: target.usl, unit: target.unit };
+    // 서버처럼 실제로 바뀐 값만 "필드: 값" 문자열로 이력에 남기고, 바뀐 값이 없으면 이력은 남기지 않습니다(수정자와 일시는 갱신).
+    const next = { lsl: body.lsl, usl: body.usl, unit: body.unit };
+    const changed = (['lsl', 'usl', 'unit'] as const).filter((field) => next[field] !== target[field]);
+    const fmt = (value: number | string | null) => (value === null ? '없음' : String(value));
+    const beforeValue = changed.map((field) => `${field}: ${fmt(target[field])}`).join(', ');
+    const afterValue = changed.map((field) => `${field}: ${fmt(next[field])}`).join(', ');
     target.lsl = body.lsl;
     target.usl = body.usl;
     target.unit = body.unit;
     target.updated_by = user.name;
     target.updated_at = now('spec');
-    this.local.addSpecChangeLog({
-      spec_id: target.id,
-      item_name: target.item_name,
-      before,
-      after: { lsl: target.lsl, usl: target.usl, unit: target.unit },
-      changed_by: user.name,
-      reason,
-      changed_at: target.updated_at,
-    });
+    if (changed.length > 0) {
+      this.local.addSpecChangeLog(target.id, {
+        before_value: beforeValue,
+        after_value: afterValue,
+        reason,
+        user_name: user.name,
+        created_at: target.updated_at,
+      });
+    }
     return delay({ ...target });
   }
 
@@ -579,22 +584,22 @@ export class MockApi implements Api {
   }
 
   // --- 매핑 사전 (5-2) -------------------------------------------------------
-  // TODO(백엔드 협의): GET /mappings, DELETE /mappings/{id}, GET /mappings/conversions는 서버 구현 전이라 응답 모양이 가정입니다.
+  // 응답 모양은 백엔드 PR #12에서 확정된 형식입니다(GET /mappings, DELETE /mappings/{id}, GET /mappings/conversions).
 
   async listMappings(materialCode: string): Promise<MappingRecord[]> {
     this.requireUser();
     return delay(this.local.listMappings(materialCode));
   }
 
-  async deleteMapping(id: number): Promise<void> {
+  async deleteMapping(id: number): Promise<MappingDeleted> {
     const user = this.requireUser();
     if (user.role !== 'ADMIN') throw new ApiError(403, 'FORBIDDEN', '권한 없음');
-    this.local.deleteMapping(id);
-    return delay(undefined);
+    if (!this.local.deleteMapping(id)) throw new ApiError(404, 'NOT_FOUND', '존재하지 않는 매핑입니다');
+    return delay({ id });
   }
 
-  async listUnitConversions(): Promise<UnitConversion[]> {
+  async getConversions(): Promise<ConversionsResponse> {
     this.requireUser();
-    return delay(this.local.listUnitConversions());
+    return delay(this.local.getConversions());
   }
 }

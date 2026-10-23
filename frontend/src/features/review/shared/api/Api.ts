@@ -15,6 +15,8 @@ import type {
   HoldBody,
   HoldResult,
   LoginResult,
+  ConversionsResponse,
+  MappingDeleted,
   MappingRecord,
   PatchItemBody,
   PatchItemResult,
@@ -25,7 +27,6 @@ import type {
   SpecItem,
   SpecListQuery,
   SpecSet,
-  UnitConversion,
 } from './types';
 
 export interface PatchItemOptions {
@@ -76,14 +77,13 @@ export interface Api {
   listSpecSets(materialCode?: string): Promise<SpecSet[]>;
   patchSpec(specId: number, body: PatchSpecBody): Promise<PatchSpecResult>;
 
-  /** [백엔드 확정 답변] 규격 항목 하나의 변경 이력(변경 전후 값, 수정자, 사유, 시각). 서버 구현 전이라 응답 모양은 가정입니다. */
+  /** 규격 항목 하나의 변경 이력(GET /specs/{id}/change-logs). 서버는 오래된 순으로 줍니다. */
   listSpecChangeLogs(specId: number): Promise<SpecChangeLog[]>;
 
   // --- 매핑 사전 (5-2) ------------------------------------------------------
-  // [백엔드 확정 답변] GET /mappings?material_code=, DELETE /mappings/{id}(ADMIN만), GET /mappings/conversions(조회만).
-  // TODO(백엔드 협의): 서버 구현 전이라 응답 모양은 가정입니다. 표기 추가와 사전 등록 API는 없습니다.
+  // GET /mappings?material_code=, DELETE /mappings/{id}(ADMIN만), GET /mappings/conversions(조회만). 표기 추가와 사전 등록 API는 없습니다.
   listMappings(materialCode: string): Promise<MappingRecord[]>;
-  deleteMapping(id: number): Promise<void>;
-  /** 환산 계수는 서버 설정값이므로 조회만 합니다. */
-  listUnitConversions(): Promise<UnitConversion[]>;
+  deleteMapping(id: number): Promise<MappingDeleted>;
+  /** 단위 환산과 산화물 → 원소 환산. 서버 설정값이므로 조회만 합니다. */
+  getConversions(): Promise<ConversionsResponse>;
 }

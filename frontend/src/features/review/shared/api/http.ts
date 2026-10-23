@@ -19,7 +19,9 @@ import type {
   FollowUpsResponse,
   HoldBody,
   HoldResult,
+  ConversionsResponse,
   LoginResult,
+  MappingDeleted,
   MappingRecord,
   PatchItemBody,
   PatchItemResult,
@@ -30,7 +32,6 @@ import type {
   SpecItem,
   SpecListQuery,
   SpecSet,
-  UnitConversion,
 } from './types';
 
 interface Envelope<T> {
@@ -96,7 +97,7 @@ function jsonBody(value: unknown): RequestInit {
 
 /**
  * 실제 백엔드 API 구현입니다.
- * TODO(백엔드 협의): 규격 변경 이력, 매핑 사전, 단위 환산표, 값 수정 사유는 서버 구현 전이라 요청 주소와 응답 모양이 가정입니다.
+ * 값 수정 사유, 규격 변경 이력, 매핑 사전, 환산표는 백엔드 PR #12에서 확정된 형식입니다.
  */
 export class HttpApi implements Api {
 
@@ -194,19 +195,17 @@ export class HttpApi implements Api {
     return request<SpecChangeLog[]>(`/specs/${specId}/change-logs`);
   }
 
-  // --- 매핑 사전 (5-2). 서버 구현 전이라 응답 모양은 가정입니다 ---------------
+  // --- 매핑 사전 (5-2) ------------------------------------------------------
 
   listMappings(materialCode: string): Promise<MappingRecord[]> {
     return request<MappingRecord[]>(`/mappings${buildQuery({ material_code: materialCode })}`);
   }
 
-  async deleteMapping(id: number): Promise<void> {
-    // 응답 본문이 비어 있을 수 있어 request() 대신 직접 보냅니다.
-    const response = await send(`/mappings/${id}`, { method: 'DELETE' });
-    if (!response.ok) throw await readError(response);
+  deleteMapping(id: number): Promise<MappingDeleted> {
+    return request<MappingDeleted>(`/mappings/${id}`, { method: 'DELETE' });
   }
 
-  listUnitConversions(): Promise<UnitConversion[]> {
-    return request<UnitConversion[]>('/mappings/conversions');
+  getConversions(): Promise<ConversionsResponse> {
+    return request<ConversionsResponse>('/mappings/conversions');
   }
 }

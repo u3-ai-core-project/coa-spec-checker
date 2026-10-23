@@ -24,6 +24,7 @@ const MESSAGES: Record<string, string> = {
   DOCUMENT_NOT_FOUND: '존재하지 않는 문서입니다.',
   ITEM_NOT_FOUND: '문서에 존재하지 않는 항목입니다.',
   SPEC_NOT_FOUND: '존재하지 않는 규격 항목입니다.',
+  NOT_FOUND: '요청한 대상을 찾을 수 없습니다.',
   ALREADY_APPROVED: '이미 처분된 문서입니다.',
   NOT_APPROVED: '처분되지 않은 문서입니다.',
   NOT_READY: '아직 추출이 끝나지 않은 문서입니다.',
