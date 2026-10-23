@@ -77,6 +77,20 @@ def test_oxide_within_spec_is_plain_pass():
     assert (r.judgement, r.reason_code) == (J.PASS, None)
 
 
+def test_k2o_converted_before_judging():
+    # K2O 11 ppm → K 9.13 ppm ≤ 10. 환산하지 않으면 11 > 10 으로 부적합이 잘못 나온다
+    r = judge("11", SpecRule("K", unit="ppm", usl=10), raw_name="Potassium (as K2O)")
+    assert (r.judgement, r.reason_code) == (J.PASS, None)
+    assert r.converted_value == pytest.approx(9.1311)
+
+
+def test_mgo_converted_oos():
+    # MgO 0.003 % → 30 ppm × 0.6031 ≈ 18.1 ppm > 10
+    r = judge("0.003 %", SpecRule("Mg", unit="ppm", usl=10), raw_name="MgO")
+    assert (r.judgement, r.reason_code) == (J.FAIL, R.CONVERTED_OOS)
+    assert "MgO" in r.resolution.condition
+
+
 # ---- 해결 조건 수치 ---------------------------------------------------------
 def test_resolution_numbers_for_nd_no_lod():
     res = judge("none detected", FE).resolution
