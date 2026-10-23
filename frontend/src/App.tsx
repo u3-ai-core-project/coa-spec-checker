@@ -1,9 +1,20 @@
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
+import { BrowserRouter, Navigate, Route, Routes, useRoutes } from 'react-router-dom'
 import AppLayout from './components/layout/AppLayout'
 import AuthProvider from './auth/AuthProvider'
 import RequireAuth from './auth/RequireAuth'
 import LoginPage from './pages/LoginPage'
 import { NAV_ITEMS } from './navigation'
+import { useAuth } from './auth/authContext'
+import { CurrentUserProvider } from './features/review/shared/currentUser'
+import { reviewRoutes } from './features/review/routes'
+import { specsRoutes } from './features/specs/routes'
+
+function ReviewSpecsRoutes() {
+  const { user } = useAuth()
+  const element = useRoutes([...reviewRoutes, ...specsRoutes])
+  if (!user) return null
+  return <CurrentUserProvider value={user}>{element}</CurrentUserProvider>
+}
 
 export default function App() {
   return (
@@ -14,7 +25,7 @@ export default function App() {
           <Route element={<RequireAuth />}>
             <Route element={<AppLayout />}>
               <Route path="/" element={<Navigate to="/dashboard" replace />} />
-              {NAV_ITEMS.map((item) => (
+              {NAV_ITEMS.filter((item) => item.path !== '/inspection' && item.path !== '/specs').map((item) => (
                 <Route
                   key={item.path}
                   path={item.path}
@@ -25,6 +36,7 @@ export default function App() {
                   }
                 />
               ))}
+              <Route path="*" element={<ReviewSpecsRoutes />} />
             </Route>
           </Route>
         </Routes>
