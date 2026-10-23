@@ -91,12 +91,15 @@ export function formatSpec(item: Pick<ExtractionItem, 'spec_lsl' | 'spec_usl' | 
 
 const QUALIFIER_PREFIX: Record<string, string> = { less_than: '< ', less_equal: '≤ ' };
 
-/** 사내 규격 단위로 환산한 값의 표시. 예: 100 ppm, < 100 ppm, 불검출(ND) */
+/** 사내 규격 단위로 환산한 값의 표시. 예: 100 ppm, < 100 ppm, N.D., 검출 안 됨 (검출한계 2 ppm) */
 export function formatConverted(
-  item: Pick<ExtractionItem, 'converted_value' | 'value_qualifier' | 'unit' | 'raw_value'>,
+  item: Pick<ExtractionItem, 'converted_value' | 'value_qualifier' | 'unit' | 'raw_value' | 'detection_limit'>,
 ): string {
-  const { converted_value: value, value_qualifier: qualifier, unit, raw_value: raw } = item;
-  if (qualifier === 'not_detected') return '불검출(ND)';
+  const { converted_value: value, value_qualifier: qualifier, unit, raw_value: raw, detection_limit: limit } = item;
+  // 검출 안 됨: 검출한계를 받았으면 함께 보여 주고, 검출한계가 없으면 CoA 원문 그대로 보여 줍니다(시안 2-11, 2-12).
+  if (qualifier === 'not_detected') {
+    return limit !== null ? `검출 안 됨 (검출한계 ${formatNumber(limit)}${unit ? ` ${unit}` : ''})` : (raw ?? 'N.D.');
+  }
   if (value === null || value === '') return raw ?? '-';
   if (typeof value === 'string') return value;
   const prefix = qualifier ? (QUALIFIER_PREFIX[qualifier] ?? '') : '';
@@ -119,6 +122,24 @@ export function withUnit(value: string | null, unit: string | null): string {
   // 실제 서버의 이력 값에는 단위가 이미 들어 있어("2.56 ppm") 한 번 더 붙이지 않습니다.
   if (!unit || value.toLowerCase().endsWith(unit.toLowerCase()) || value.includes('검출한계')) return value;
   return `${value} ${unit}`;
+}
+
+/**
+ * 회신값 입력 박스의 재판정 미리보기(시안 2-12). 값 종류까지 보고 적합, 부적합, 판정 불가로 가늠합니다.
+ * - 정량값: 사내 하한과 상한 범위 안이면 적합, 벗어나면 부적합
+ * - "< 값", 검출 안 됨(검출한계): 사내 하한이 있으면 하한 충족 여부를 알 수 없어 판정 불가, 상한만 있으면 값이 상한 이하일 때 적합
+ * 참고용이며 실제 판정은 서버가 PATCH 응답으로 돌려줍니다.
+ */
+export function previewReply(
+  qualifier: 'exact' | 'less_than' | 'not_detected',
+  value: number,
+  lsl: number | null,
+  usl: number | null,
+): Extract<Judgement, 'pass' | 'fail' | 'undetermined'> {
+  if (qualifier === 'exact') return previewJudgement(value, lsl, usl);
+  if (lsl === null && usl === null) return 'pass';
+  if (lsl !== null) return 'undetermined';
+  return usl !== null && value <= usl ? 'pass' : 'undetermined';
 }
 
 /** "수정 후 판정" 미리보기. 참고용이며 실제 판정은 서버가 PATCH 응답으로 돌려줍니다. */

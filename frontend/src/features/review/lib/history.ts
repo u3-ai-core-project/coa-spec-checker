@@ -1,4 +1,5 @@
 import type { ApprovalLog, ExtractionItem, ReviewLog } from '../shared/api/types';
+import { VALUE_SOURCE_LABEL } from '../shared/domain/exceptions';
 import { formatShortDateTime } from '../shared/domain/format';
 import { withUnit } from '../shared/domain/items';
 import { DISPOSITION_META, followUpLabel } from '../shared/domain/recommendation';
@@ -76,7 +77,10 @@ export function buildHistory(input: {
     let detail: string;
     if (log.action === 'edit') {
       kind = '값 수정';
-      detail = withReason([`${name} ${log.before_value} → ${withUnit(log.after_value, unit)}`], log.reason);
+      // 공급사 회신값, 자체 시험값처럼 원문 오독 정정이 아닌 입력은 값 출처를 함께 보여 줍니다(시안 2-12b). 오독 정정은 시안 2-5와 같게 생략합니다.
+      const parts = [`${name} ${log.before_value} → ${withUnit(log.after_value, unit)}`];
+      if (log.value_source && log.value_source !== 'correction') parts.push(`값 출처: ${VALUE_SOURCE_LABEL[log.value_source]}`);
+      detail = withReason(parts, log.reason);
     } else if (log.action === 'confirm') {
       kind = '값 확인';
       detail = `${name} ${withUnit(log.after_value, unit)} 확인됨`;

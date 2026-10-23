@@ -8,7 +8,6 @@ import { JUDGEMENT_META, JUDGEMENT_ORDER } from '../shared/domain/judgement';
 import { DOCUMENT_ISSUE_LABEL } from '../shared/domain/exceptions';
 import { dispositionOf } from '../shared/domain/recommendation';
 import type { ReviewData } from '../hooks/useReviewData';
-import { FollowUpPanel } from './FollowUpPanel';
 import { ItemRow, type ItemRowProps, MissingRow } from './ItemRow';
 
 type RowExtras = Pick<ItemRowProps, 'editor' | 'followUp' | 'exception' | 'onEdit' | 'onVerify' | 'onMap'>;
@@ -19,6 +18,8 @@ interface ItemsPanelProps {
   docInfoCollapsed: boolean;
   onToggleDocInfo(): void;
   onSelect(item: ExtractionItem): void;
+  /** 문서 단위 문제(로트 불일치 등) 경고 줄을 눌렀을 때. 예외 상세 패널(시안 2-11)을 엽니다. */
+  onSelectIssue?(code: string): void;
   /** 항목별로 덧붙는 요소와 동작(수정 편집 박스, 값 확인, 매핑 수정, 후속 조치 줄) */
   getRowExtras?(item: ExtractionItem): RowExtras;
   /** 후속 조치 줄이 펼쳐진 판정 종류와, 건수 칩으로 켜고 끄는 동작 */
@@ -160,6 +161,7 @@ export function ItemsPanel({
   docInfoCollapsed,
   onToggleDocInfo,
   onSelect,
+  onSelectIssue,
   followUpKinds,
   onToggleFollowUp,
   getRowExtras,
@@ -171,10 +173,14 @@ export function ItemsPanel({
   const flagsOf = (item: ExtractionItem) =>
     anomalies.filter((anomaly) => anomaly.item_name === item.normalized_name).map((anomaly) => anomaly.message);
   // [v1.4안] 문서 수준 문제(document_issues)는 시안에 없어, 문서 단위 이상 패턴 경고와 같은 경고 상자 모양으로 먼저 보여 줍니다.
-  const issueFlags = (extraction.document_issues ?? []).map((issue) => `${DOCUMENT_ISSUE_LABEL[issue.code] ?? issue.code} · ${issue.message}`);
+  // 문서 수준 문제는 눌러서 예외 상세 패널(시안 2-11)을 열 수 있고, 문서 단위 이상 패턴 경고는 안내만 합니다.
+  const issueFlags = (extraction.document_issues ?? []).map((issue) => ({
+    message: `${DOCUMENT_ISSUE_LABEL[issue.code] ?? issue.code} · ${issue.message}`,
+    code: issue.code as string | null,
+  }));
   const docFlags = [
     ...issueFlags,
-    ...anomalies.filter((anomaly) => anomaly.item_name === null).map((anomaly) => anomaly.message),
+    ...anomalies.filter((anomaly) => anomaly.item_name === null).map((anomaly) => ({ message: anomaly.message, code: null as string | null })),
   ];
 
   return (
@@ -207,17 +213,26 @@ export function ItemsPanel({
       </div>
       {approvalSummary}
       <div className="item-scroll min-h-0 flex-1 overflow-y-auto">
-        {docFlags.map((message) => (
-          <div
-            key={message}
-            className="item-flag mx-5 mt-2 flex items-start gap-1 rounded-md border border-[#F0C987] bg-[#FFF7E6] px-2 py-1 text-[11px] font-semibold leading-snug text-[#8A5A00]"
-          >
-            <span className="mt-px shrink-0">
-              <Icon name="flag" size={12} />
-            </span>
-            <span>{message}</span>
-          </div>
-        ))}
+        {docFlags.map(({ message, code }) => {
+          const open = code !== null && onSelectIssue ? () => onSelectIssue(code) : undefined;
+          return (
+            <div
+              key={message}
+              role={open ? 'button' : undefined}
+              tabIndex={open ? 0 : undefined}
+              onClick={open}
+              onKeyDown={open ? (event) => event.key === 'Enter' && open() : undefined}
+              className={`item-flag mx-5 mt-2 flex items-start gap-1 rounded-md border border-[#F0C987] bg-[#FFF7E6] px-2 py-1 text-[11px] font-semibold leading-snug text-[#8A5A00]${
+                open ? ' cursor-pointer' : ''
+              }`}
+            >
+              <span className="mt-px shrink-0">
+                <Icon name="flag" size={12} />
+              </span>
+              <span>{message}</span>
+            </div>
+          );
+        })}
         <DocInfo data={data} collapsed={docInfoCollapsed} onToggle={onToggleDocInfo} />
         <div className="section-title px-5 pb-0.5 pt-1.5 text-[12px] font-semibold text-[#8A9099]">시험 항목 · {`${tests.length}개`}</div>
         <ul className="item-list item-list-test flex flex-col divide-y divide-[#E3E5E8] border-t border-[#E3E5E8]">
@@ -243,7 +258,6 @@ export function ItemsPanel({
             </ul>
           </>
         )}
-        {data.followUps && <FollowUpPanel followUps={data.followUps} />}
       </div>
       <div className="action-bar flex items-center justify-between gap-3 border-t border-[#E3E5E8] px-5 py-2">{actionBar}</div>
     </section>

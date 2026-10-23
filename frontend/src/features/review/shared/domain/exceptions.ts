@@ -30,6 +30,15 @@ export const RESOLUTION_TYPE_LABEL: Record<ResolutionType, string> = {
   confirm: '원문 확인',
 };
 
+/** 예외 상세 패널(시안 2-11)에서 해결 조건 종류를 "무엇을 받아야 하는지"로 보여 주는 이름 */
+export const RESOLUTION_ACTION_LABEL: Record<ResolutionType, string> = {
+  detection_limit: '검출한계 받기',
+  actual_value: '실측값 받기',
+  single_value: '개별값 받기',
+  internal_test: '자체 시험값',
+  confirm: '원문 확인',
+};
+
 export const DOCUMENT_ISSUE_LABEL: Record<DocumentIssueCode, string> = {
   LOT_MISMATCH: '입고 로트와 CoA 로트 불일치',
   PRODUCT_MISMATCH: '입고 제품과 CoA 제품 불일치',

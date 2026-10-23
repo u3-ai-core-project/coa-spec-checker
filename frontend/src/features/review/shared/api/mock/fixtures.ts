@@ -211,7 +211,7 @@ function makeItem(def: ItemDef, specs: SpecItem[], resolved = false, edited = fa
     raw_spec: def.rawSpec,
     unit: specItem?.unit ?? null,
     value_qualifier: def.qualifier,
-    converted_value: def.value,
+    converted_value: def.qualifier === 'not_detected' ? null : def.value,
     detection_limit: null,
     spec_lsl: null,
     spec_usl: null,
@@ -354,7 +354,8 @@ function itemsC(specs: SpecItem[]): ExtractionItem[] {
   ];
 }
 
-type Variant = 'allpass' | 'hold' | 'reject';
+/** 'nd'는 Fe가 "N.D."이고 검출한계가 적혀 있지 않은 문서(시안 2-11, 2-12). 예외는 Fe 하나뿐이라 회신값을 넣으면 승인 권고가 됩니다. */
+type Variant = 'allpass' | 'hold' | 'reject' | 'nd';
 
 /** 목록에만 보이던 나머지 문서용 표준 항목 */
 function itemsStandard(specs: SpecItem[], variant: Variant): ExtractionItem[] {
@@ -363,7 +364,7 @@ function itemsStandard(specs: SpecItem[], variant: Variant): ExtractionItem[] {
     pass(LI, 99.7, '99.7 %'),
     pass(NA, 12, '12 ppm'),
     variant === 'hold' ? { ...K, confidence: 0.94 } : pass(K, 6, '6 ppm'),
-    pass(FE, 4, '4 ppm'),
+    variant === 'nd' ? { ...FE, rawValue: 'N.D.', qualifier: 'not_detected', value: 0, confidence: 0.95 } : pass(FE, 4, '4 ppm'),
     variant === 'reject' ? { ...CA, confidence: 0.92 } : pass(CA, 15, '15 ppm'),
     pass(CL, 10, '0.001 %'),
   ];
@@ -589,10 +590,10 @@ export function createMockState(options: MockOptions = {}): MockState {
     buildDoc({ lot: 'A0390188', supplier: '대흥리튬', po: 'PO-2026-1112', testDate: '2026-09-29', uploadedAt: '2026-10-05T11:36:00+09:00', status: 'extracted', fileSize: 462_000 }, itemsStandard(specs, 'hold')),
     buildDoc(
       { lot: 'A0377415', supplier: '서진소재', po: 'PO-2026-1108', testDate: '2026-09-27', uploadedAt: '2026-10-04T16:22:00+09:00', status: 'on_hold', fileSize: 431_000 },
-      itemsStandard(specs, 'hold'),
+      itemsStandard(specs, 'nd'),
       {
         approvalLogs: [
-          { action: 'hold', decision: null, follow_up: 'request_actual_value', user_name: '김OO', reason: 'K 실측값 회신 대기', created_at: '2026-10-05T10:20:00+09:00' },
+          { action: 'hold', decision: null, follow_up: 'request_detection_limit', user_name: '김OO', reason: 'Fe 검출한계 회신 대기', created_at: '2026-10-05T10:20:00+09:00' },
         ],
       },
     ),
