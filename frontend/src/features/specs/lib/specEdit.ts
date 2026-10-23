@@ -79,12 +79,38 @@ export function draftErrors(drafts: Record<number, SpecDraft>): Record<number, D
   return errors;
 }
 
-/** 규격 변경 이력 한 건을 "LSL - → 99 %, USL 15 → 10 ppm" 같은 문구로 만듭니다(바뀐 값만). */
-export function describeChangeLog(log: SpecChangeLog): string {
-  const unit = log.after.unit ?? '';
-  const parts: string[] = [];
-  if (log.before.lsl !== log.after.lsl) parts.push(`LSL ${limitText(log.before.lsl)} → ${limitText(log.after.lsl)} ${unit}`.trim());
-  if (log.before.usl !== log.after.usl) parts.push(`USL ${limitText(log.before.usl)} → ${limitText(log.after.usl)} ${unit}`.trim());
-  if (log.before.unit !== log.after.unit) parts.push(`단위 ${log.before.unit ?? '-'} → ${log.after.unit ?? '-'}`);
-  return parts.length > 0 ? parts.join(', ') : '값 변경 없음';
+/** 변경 이력 한 건에 항목 정보를 붙인 것. 서버 응답에는 항목 이름이 없어 항목(규격 id)마다 불러 온 화면이 붙입니다. */
+export interface SpecChangeEntry extends SpecChangeLog {
+  spec_id: number;
+  item_name: string;
+  unit: string | null;
+}
+
+const FIELD_LABEL: Record<string, string> = { lsl: 'LSL', usl: 'USL', unit: '단위' };
+
+/** "lsl: 없음, usl: 30" → [["lsl", "없음"], ["usl", "30"]]. "필드: 값" 모양이 아니면 키를 빈 문자열로 둡니다. */
+function parsePairs(text: string): Array<[string, string]> {
+  return text.split(', ').map((part): [string, string] => {
+    const at = part.indexOf(': ');
+    return at === -1 ? ['', part] : [part.slice(0, at), part.slice(at + 2)];
+  });
+}
+
+/**
+ * 규격 변경 이력 한 건을 "USL 50 → 30 ppm" 같은 문구로 만듭니다.
+ * 서버는 실제로 바뀐 필드만 "usl: 50" → "usl: 30" 문자열로 줍니다(여러 필드면 ", "로 이음, 값이 없으면 "없음").
+ * 모양을 풀 수 없으면 서버 문자열을 그대로 "이전 → 이후"로 보여 줍니다.
+ */
+export function describeChangeLog(log: SpecChangeLog, unit: string | null): string {
+  const before = parsePairs(log.before_value);
+  const after = parsePairs(log.after_value);
+  const readable = before.length === after.length && before.every(([key], index) => key !== '' && key === after[index][0]);
+  if (!readable) return `${log.before_value} → ${log.after_value}`;
+  return before
+    .map(([key, from], index) => {
+      const to = after[index][1];
+      const suffix = (key === 'lsl' || key === 'usl') && unit && to !== '없음' ? ` ${unit}` : '';
+      return `${FIELD_LABEL[key] ?? key} ${from} → ${to}${suffix}`;
+    })
+    .join(', ');
 }

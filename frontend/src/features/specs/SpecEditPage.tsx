@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   DRAFT_ERROR_MESSAGE,
   describeChangeLog,
+  type SpecChangeEntry,
   type SpecDraft,
   buildChanges,
   draftErrors,
@@ -53,14 +54,17 @@ export function SpecEditPage() {
   const code = group?.code ?? null;
 
   const mappings = useAsync(() => (code ? api.listMappings(code) : Promise.resolve([])), [code]);
-  // 변경 이력은 항목(규격 id) 단위 API라 세트의 항목마다 받아서 최근 순으로 합칩니다.
+  // 변경 이력은 항목(규격 id) 단위 API라 세트의 항목마다 받아서 항목 이름을 붙이고 최근 순으로 합칩니다(서버는 오래된 순).
   // TODO(백엔드 협의): 세트 단위로 한 번에 받는 API가 있으면 바꿉니다.
-  const itemIds = (specsQuery.data ?? []).map((spec) => spec.id);
+  const specsForLogs = specsQuery.data ?? [];
+  const itemIds = specsForLogs.map((spec) => spec.id);
   const changeLogs = useAsync(
     () =>
-      Promise.all(itemIds.map((id) => api.listSpecChangeLogs(id))).then((lists) =>
-        lists.flat().sort((a, b) => b.changed_at.localeCompare(a.changed_at)),
-      ),
+      Promise.all(
+        specsForLogs.map(async (spec): Promise<SpecChangeEntry[]> =>
+          (await api.listSpecChangeLogs(spec.id)).map((log) => ({ ...log, spec_id: spec.id, item_name: spec.item_name, unit: spec.unit })),
+        ),
+      ).then((lists) => lists.flat().sort((a, b) => b.created_at.localeCompare(a.created_at))),
     [itemIds.join(',')],
   );
 
@@ -294,13 +298,13 @@ export function SpecEditPage() {
                 </div>
               </li>
             ))}
-            {(changeLogs.data ?? []).map((entry) => (
-              <li key={entry.id} className="history-entry flex gap-3">
+            {(changeLogs.data ?? []).map((entry, index) => (
+              <li key={`${entry.spec_id}-${entry.created_at}-${index}`} className="history-entry flex gap-3">
                 <span className="history-dot mt-1.5 h-2 w-2 shrink-0 rounded-full bg-[#D0D4DA]" />
                 <div className="history-body flex flex-col gap-0.5 text-[12px]">
-                  <span className="history-title font-semibold tabular-nums">{`${entry.item_name} ${describeChangeLog(entry)}`}</span>
+                  <span className="history-title font-semibold tabular-nums">{`${entry.item_name} ${describeChangeLog(entry, entry.unit)}`}</span>
                   <span className="history-meta tabular-nums text-[#5B616A]">
-                    {entry.changed_by} · {formatDateTime(entry.changed_at)}
+                    {entry.user_name} · {formatDateTime(entry.created_at)}
                     {entry.reason && (
                       <>
                         <br />

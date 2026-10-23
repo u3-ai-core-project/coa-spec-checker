@@ -13,6 +13,9 @@ import { useCurrentUser } from '../review/shared/currentUser';
 import { formatDate } from '../review/shared/domain/format';
 import { useAsync } from '../review/shared/hooks/useAsync';
 
+/** 환산 계수 표시. 천 단위 구분(10,000)을 쓰고 소수는 6자리까지 보여 줍니다. */
+const formatFactor = (value: number) => value.toLocaleString('en-US', { maximumFractionDigits: 6 });
+
 const SOURCE_STYLE: Record<MappingRecordSource, string> = {
   seed: 'bg-[#EEF0F3] text-[#5B616A]',
   manual: 'bg-[#E1F3F6] text-[#0F6A7B]',
@@ -30,7 +33,8 @@ function SourceBadge({ source }: { source: MappingRecordSource }) {
  * 시안 5-2 매핑 사전·단위 환산표(관리자). 백엔드 확정 답변에 따라 원자재별 매핑 사전을 조회하고 삭제만 합니다.
  *   GET /mappings?material_code=, DELETE /mappings/{id}(ADMIN만), GET /mappings/conversions(조회만).
  * 표기 추가, 사전 등록, 환산표 수정은 서버에 없어 화면에서 숨겼습니다. 사전은 material_code + raw_name 기준이라 협력사 열도 없습니다.
- * TODO(백엔드 협의): 위 API는 서버 구현 전이라 응답 필드 이름은 가정입니다(types.ts의 MappingRecord, UnitConversion).
+ * 응답 형식은 백엔드 PR #12에서 확정되었습니다(types.ts의 MappingRecord, ConversionsResponse).
+ * 환산표는 단위 환산(units)과 산화물 → 원소 환산(oxides)을 한 표에 이어서 보여 줍니다.
  */
 export function MappingDictPage() {
   const user = useCurrentUser();
@@ -58,7 +62,7 @@ export function MappingDictPage() {
     [defaultSet?.code],
   );
   const mappings = useAsync(() => (code ? api.listMappings(code) : Promise.resolve([] as MappingRecord[])), [code]);
-  const conversions = useAsync(() => api.listUnitConversions(), []);
+  const conversions = useAsync(() => api.getConversions(), []);
 
   const [selectedName, setSelectedName] = useState<string | null>(params.get('item'));
   const [busy, setBusy] = useState(false);
@@ -97,6 +101,21 @@ export function MappingDictPage() {
 
   const entries = mappings.data;
   const counts = countByStandard(entries);
+  // 환산표 한 줄: 단위 환산은 "from 값 × factor = to 값", 산화물 환산은 "산화물 값 × factor = 원소 값"입니다.
+  const conversionRows = [
+    ...(conversions.data?.units ?? []).map((entry) => ({
+      key: `unit-${entry.from}-${entry.to}`,
+      label: `${entry.from} → ${entry.to}`,
+      formula: `1 ${entry.from} = ${formatFactor(entry.factor)} ${entry.to}`,
+      factor: `×${formatFactor(entry.factor)}`,
+    })),
+    ...(conversions.data?.oxides ?? []).map((entry) => ({
+      key: `oxide-${entry.oxide}`,
+      label: `${entry.oxide} → ${entry.element ?? '-'}`,
+      formula: entry.element ? `${entry.element} = ${entry.oxide} × ${formatFactor(entry.factor)}` : `${entry.oxide} × ${formatFactor(entry.factor)}`,
+      factor: `×${formatFactor(entry.factor)}`,
+    })),
+  ];
   // 표준 항목: 규격 항목에 더해, 검수 중 매핑을 고쳐 사전에만 쌓인 항목(예: 중금속 총량)도 보여 줍니다.
   const specNames = itemsQuery.data.map((spec) => spec.item_name);
   const names = [...specNames, ...[...new Set(entries.map((entry) => entry.normalized_name))].filter((name) => !specNames.includes(name))];
@@ -241,8 +260,8 @@ export function MappingDictPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {(conversions.data ?? []).map((conversion) => (
-                      <tr key={conversion.id} className="unit-row border-t border-[#E3E5E8]">
+                    {conversionRows.map((conversion) => (
+                      <tr key={conversion.key} className="unit-row border-t border-[#E3E5E8]">
                         <td className="px-5 py-2 text-[13px] font-semibold">
                           <Chem text={conversion.label} />
                         </td>
