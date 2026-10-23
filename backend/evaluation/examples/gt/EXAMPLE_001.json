@@ -1,0 +1,53 @@
+{
+  "document_id": "EXAMPLE_001",
+  "material_code": "LI2CO3",
+  "source": "synthetic",
+  "form": "A",
+  "degradation": "original",
+  "header": {
+    "supplier": "Example Lithium Co.",
+    "lot_no": "L-0001",
+    "test_date": "2026-09-28"
+  },
+  "items": [
+    {
+      "normalized_name": "순도",
+      "raw_value": "99.6 %",
+      "unit": "%",
+      "converted_value": 99.6,
+      "judgement": "pass",
+      "reason_code": null
+    },
+    {
+      "normalized_name": "Na",
+      "raw_value": "12 ppm",
+      "unit": "ppm",
+      "converted_value": 12,
+      "judgement": "pass",
+      "reason_code": null
+    },
+    {
+      "normalized_name": "K",
+      "raw_value": "< 100 ppm",
+      "unit": "ppm",
+      "converted_value": 100,
+      "judgement": "undetermined",
+      "reason_code": "BOUND_ABOVE_LIMIT"
+    },
+    {
+      "normalized_name": "Fe",
+      "raw_value": "ND",
+      "unit": "ppm",
+      "converted_value": null,
+      "judgement": "check",
+      "reason_code": "ND_NO_LOD"
+    },
+    {
+      "normalized_name": "황산염",
+      "judgement": "missing",
+      "reason_code": "MISSING_REQUIRED"
+    }
+  ],
+  "lot_recommendation": "hold",
+  "document_issues": []
+}

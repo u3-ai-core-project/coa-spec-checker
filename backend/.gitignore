@@ -8,3 +8,6 @@ storage/uploads/*
 *.xlsx
 .idea/
 .vscode/
+
+# 평가 리포트 (evaluation/run.py 출력)
+evaluation/reports/

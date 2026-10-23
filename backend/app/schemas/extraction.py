@@ -54,6 +54,11 @@ class ExtractionInput(BaseModel):
     test_date: date | None = None
     origin: str | None = None
     applied_standard: str | None = None
+    # v1.4안 2.5: 제품 불일치·날짜 충돌(document_issues) 판단용 (PR #5 요청, AI 가 CoA 에서 읽은 그대로)
+    product_name: str | None = None
+    issue_date: date | None = None
+    expiry_date: date | None = None
+    retest_date: date | None = None
     items: list[ExtractedItem]
 
 
@@ -120,6 +125,10 @@ class ExtractionResult(BaseModel):
     test_date: date | None = None
     origin: str | None = None
     applied_standard: str | None = None
+    product_name: str | None = None  # 아래 넷은 ExtractionInput 에서 그대로 옮긴 값
+    issue_date: date | None = None
+    expiry_date: date | None = None
+    retest_date: date | None = None
     items: list[ExtractionItem]
     document_issues: list[DocumentIssue] = []  # v1.4안. 탐지 규칙은 P1 (지금은 항상 빈 목록)
     lot_recommendation: LotRecommendation

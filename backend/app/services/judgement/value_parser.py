@@ -32,6 +32,11 @@ class UnitConversionError(ValueError):
     pass
 
 
+def ppm_factors() -> dict[str, float]:
+    """단위 → ppm 배수표 사본 (GET /mappings/conversions 조회용). 판정은 convert_unit() 이 이 표를 쓴다."""
+    return dict(_TO_PPM)
+
+
 def normalize_unit(unit: str | None) -> str | None:
     if unit is None:
         return None
@@ -67,6 +72,12 @@ def find_oxide(raw_name: str | None, factors: dict[str, float] | None = None) ->
         if re.search(rf"(?<![A-Za-z0-9]){re.escape(formula)}(?![a-z0-9])", name):
             return formula, factor
     return None, 1.0
+
+
+def oxide_element(formula: str) -> str | None:
+    """산화물 화학식의 원소 기호 (맨 앞 원소). "Na2O" → "Na", "Fe2O3" → "Fe". 읽을 수 없으면 None."""
+    m = re.match(r"[A-Z][a-z]?", formula.translate(_SUBSCRIPTS).strip())
+    return m.group(0) if m else None
 
 
 def oxide_factor(raw_name: str | None, factors: dict[str, float] | None = None) -> float:

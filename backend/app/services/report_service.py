@@ -9,7 +9,7 @@
     3. 항목별 판정표   원문 표기, 정규화 값, 사내 규격, 판정(5종), 판정 근거, 이탈 폭, 신뢰도
                        + v1.4안: 사유코드, 해결 조건, 검수(확인·입력 출처)
                        처리가 필요한 항목이 위로 오도록 부적합 → 판정 불가 → 확인 필요 → 누락 → 적합 순 (명세 4.8)
-    4. 수정 및 확인 이력 (수정자 포함)
+    4. 수정 및 확인 이력 (수정자, 수정 사유 포함)
     5. 처분·보류 이력
     6. 최종 처분       처분, 처분자, 처분 일시, 사유. 미처분 문서는 비워서 출력
   [문의 초안 시트] v1.4안. 로트별 후속 조치 목록과 공급사 문의 메일 초안 (inquiry_draft.py, 템플릿 기반)
@@ -96,7 +96,7 @@ ITEM_COLUMNS = [  # (제목, 너비)
 ]
 
 # 이력 표는 판정표와 열 너비를 같이 쓰므로, 좁은 열(No 등)에 끼지 않게 여러 열을 합쳐 쓴다 (합계 15열)
-LOG_SPANS = [2, 1, 1, 3, 3, 2, 3]       # 일시, 항목, 작업, 이전 값, 이후 값, 입력 출처, 담당자
+LOG_SPANS = [2, 1, 1, 2, 2, 1, 4, 2]    # 일시, 항목, 작업, 이전 값, 이후 값, 입력 출처, 사유, 담당자
 APPROVAL_SPANS = [2, 1, 1, 3, 6, 2]     # 일시, 작업, 처분, 후속 조치, 사유, 담당자
 
 
@@ -207,14 +207,15 @@ def _write_lot_sheet(db: Session, ws: Worksheet, doc: Document, result: Extracti
 
     # 4. 수정 및 확인 이력
     row = _section(ws, row + 1, "4. 수정 및 확인 이력")
-    row = _header(ws, row, ["일시", "항목", "작업", "이전 값", "이후 값", "입력 출처", "담당자"], LOG_SPANS)
+    row = _header(ws, row, ["일시", "항목", "작업", "이전 값", "이후 값", "입력 출처", "사유", "담당자"], LOG_SPANS)
     names = {i.item_id: i.normalized_name for i in result.items}
     logs = db.scalars(select(ReviewLog).options(joinedload(ReviewLog.reviewer))
                       .where(ReviewLog.document_id == doc.id).order_by(ReviewLog.reviewed_at, ReviewLog.id)).all()
     for log in logs:
         _row(ws, row, [_fmt_dt(log.reviewed_at), names.get(log.item_id, log.item_id),
                        REVIEW_ACTION_KO.get(log.action), log.before_value, log.after_value,
-                       VALUE_SOURCE_KO.get(log.value_source) if log.value_source else None, log.reviewer.name],
+                       VALUE_SOURCE_KO.get(log.value_source) if log.value_source else None, log.reason,
+                       log.reviewer.name],
              LOG_SPANS)
         row += 1
     if not logs:

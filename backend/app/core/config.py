@@ -50,9 +50,12 @@ class Settings(BaseSettings):
     HEAVY_METAL_TOTAL_NAME: str = "중금속 총량"
     HEAVY_METAL_TARGET_NAME: str = "Pb"
 
-    # 공급사 문의 초안 생성기 (v1.4안 4.22). "template" 이면 inquiry_draft.TemplateDrafter.
-    # AI 파트 모듈이 준비되면 followup_service.get_drafter() 에 이름을 등록하고 이 값을 바꾼다.
+    # 공급사 문의 초안 생성기 (v1.4안 4.22). "template" 이면 inquiry_draft.TemplateDrafter,
+    # "ai" 면 app.pipeline.ai_drafter.AIDrafter (LLM_BASE_URL 필요, 실패하면 템플릿으로 대체).
     INQUIRY_DRAFTER: str = "template"
+    # LLM 서버 주소 (ai/docker-compose.llm.yml 의 Gemma 서버, 예: http://127.0.0.1:8090).
+    # 비워 두면 LLM 없이 동작한다: 처음 보는 항목명은 제안 없이 확인 필요, 문의 초안은 템플릿.
+    LLM_BASE_URL: str | None = None
 
     CORS_ORIGINS: list[str] = ["http://localhost:5173", "http://localhost:3000"]
 

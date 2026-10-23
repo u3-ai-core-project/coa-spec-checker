@@ -1,0 +1,652 @@
+import { DEFAULT_MATERIAL_CODE } from '../../domain/constants';
+import type {
+  Anomaly,
+  ApprovalLog,
+  DocumentDetail,
+  DocumentIssue,
+  DocumentStatus,
+  ExtractionItem,
+  ExtractionResult,
+  FinalDecision,
+  MappingSource,
+  ReviewLog,
+  Role,
+  SpecItem,
+  SpecSet,
+  ValueQualifier,
+} from '../types';
+import { type PdfDocInput, type PdfRow, resultBbox } from './mockPdf';
+import { evaluateItem, recommendLot, summarize } from './serverRules';
+
+export interface MockUser {
+  id: number;
+  username: string;
+  password: string;
+  name: string;
+  role: Role;
+}
+
+export interface MockDoc {
+  detail: DocumentDetail;
+  uploaderId: number;
+  extraction: ExtractionResult | null;
+  reviewLogs: ReviewLog[];
+  approvalLogs: ApprovalLog[];
+  anomalies: Anomaly[];
+  pdf: PdfDocInput | null;
+  fileSize: number;
+  /** 시안 비교용 문서입니다. 검수 목록에는 나오지 않고 주소로만 열 수 있습니다. */
+  hidden?: boolean;
+}
+
+export interface MockState {
+  users: MockUser[];
+  /** 규격 세트(등급, 버전). specs의 spec_set_code가 가리킵니다. item_count는 조회할 때 항목 수로 채웁니다. */
+  specSets: Array<Omit<SpecSet, 'item_count'>>;
+  specs: SpecItem[];
+  docs: MockDoc[];
+}
+
+// 개발용 시드 계정입니다. 비밀번호는 아이디와 같습니다(목업 전용).
+export const MOCK_USERS: MockUser[] = [
+  { id: 1, username: 'admin', password: 'admin', name: '박OO', role: 'ADMIN' },
+  { id: 2, username: 'user', password: 'user', name: '김OO', role: 'USER' },
+  { id: 3, username: 'user2', password: 'user2', name: '이OO', role: 'USER' },
+];
+
+const MATERIAL_NAME = '탄산리튬 Li2CO3';
+const D1 = 'YS/T 582-2023 D1';
+const AGREEMENT = 'Chengxin 납품 협약';
+/** [v1.4] 규격 버전과 세트. 탄산리튬 초기 세트는 YS/T 582-2023 D1 기반입니다(백엔드 seeds/spec_sets.csv와 같은 코드). */
+const VERSION = 'YS/T 582-2023';
+export const LI2CO3_SET_CODE = 'LI2CO3-D1-2023';
+
+const LIOH_MATERIAL_CODE = 'LIOH';
+const LIOH_MATERIAL_NAME = '수산화리튬 LiOH';
+/** LIOH 세트 코드는 백엔드 이름 규칙(원자재-등급-연도)에 맞춘 임의 값입니다. 백엔드 시드에는 LIOH 세트가 아직 없습니다. */
+const LIOH_SET_CODE = 'LIOH-D1-2020';
+
+function spec(
+  id: number,
+  itemName: string,
+  unit: string,
+  lsl: number | null,
+  usl: number | null,
+  source: string,
+  updatedAt: string,
+  updatedBy: string,
+): SpecItem {
+  return {
+    id,
+    material_code: DEFAULT_MATERIAL_CODE,
+    material_name: MATERIAL_NAME,
+    item_name: itemName,
+    unit,
+    lsl,
+    usl,
+    spec_type: '정량',
+    grade: 'D1',
+    spec_set_code: LI2CO3_SET_CODE,
+    version: VERSION,
+    is_required: true,
+    source,
+    updated_by: updatedBy,
+    updated_at: updatedAt,
+  };
+}
+
+/**
+ * [v1.4] 수산화리튬(LIOH, 보조 원자재) 규격 자리표시. 초기값은 GB/T 26008-2020 D1 기반 소성훈 님 작성본인데 아직 받지 못해,
+ * 항목 이름과 단위만 두고 하한/상한은 비웠습니다. 한계값이 정해지지 않은 항목은 화면에 "-"로 보입니다.
+ * TODO(규격표 수령 후): 소성훈 님 작성본의 항목과 값으로 교체합니다.
+ */
+function liohSpec(id: number, itemName: string, unit: string): SpecItem {
+  return {
+    id,
+    material_code: LIOH_MATERIAL_CODE,
+    material_name: LIOH_MATERIAL_NAME,
+    item_name: itemName,
+    unit,
+    lsl: null,
+    usl: null,
+    spec_type: '정량',
+    grade: 'D1',
+    spec_set_code: LIOH_SET_CODE,
+    version: 'GB/T 26008-2020',
+    is_required: true,
+    source: 'GB/T 26008-2020 D1 (규격표 수령 전 자리표시)',
+    updated_by: null,
+    updated_at: null,
+  };
+}
+
+/** 규격 세트 목록(GET /specs/sets 응답의 item_count를 뺀 부분). 기본 세트가 원자재마다 하나씩입니다. */
+export function createSpecSets(): MockState['specSets'] {
+  return [
+    {
+      code: LI2CO3_SET_CODE,
+      material_code: DEFAULT_MATERIAL_CODE,
+      material_name: '탄산리튬',
+      grade: 'D1',
+      version: VERSION,
+      source: D1,
+      description: null,
+      is_default: true,
+    },
+    {
+      code: LIOH_SET_CODE,
+      material_code: LIOH_MATERIAL_CODE,
+      material_name: '수산화리튬',
+      grade: 'D1',
+      version: 'GB/T 26008-2020',
+      source: 'GB/T 26008-2020 D1 (규격표 수령 전 자리표시)',
+      description: '규격표 수령 전 자리표시. 항목 이름과 단위만 있고 한계값은 비어 있습니다.',
+      is_default: true,
+    },
+  ];
+}
+
+/** 개발용 시나리오 'sets'. 탄산리튬에 세트가 둘 이상일 때의 화면을 보려고 D1 항목을 복사한 D3 세트를 더합니다(한계값은 D1과 같은 목업 값). */
+export function createExtraLi2co3Set(specs: SpecItem[]): { set: MockState['specSets'][number]; items: SpecItem[] } {
+  const code = 'LI2CO3-D3-2023';
+  const base = specs.filter((entry) => entry.spec_set_code === LI2CO3_SET_CODE);
+  const firstId = Math.max(...specs.map((entry) => entry.id)) + 1;
+  return {
+    set: {
+      code,
+      material_code: DEFAULT_MATERIAL_CODE,
+      material_name: '탄산리튬',
+      grade: 'D3',
+      version: VERSION,
+      source: 'YS/T 582-2023 D3 (목업 시험용 복사본)',
+      description: '목업 시험용. D1 항목을 복사했고 한계값은 D1과 같습니다.',
+      is_default: false,
+    },
+    items: base.map((entry, index) => ({ ...entry, id: firstId + index, spec_set_code: code, grade: 'D3', source: 'YS/T 582-2023 D3 (목업 시험용 복사본)' })),
+  };
+}
+
+// 규격 항목은 명세 4.20 응답 형태 그대로입니다. 항목과 값은 확정 전이라 이 목업 한 곳에서만 정의합니다.
+export function createSpecs(): SpecItem[] {
+  return [
+    spec(1, '순도', '%', 99.5, null, D1, '2026-03-11T10:05:00+09:00', '이OO'),
+    spec(2, 'Na', 'ppm', null, 50, D1, '2026-03-11T10:05:00+09:00', '이OO'),
+    spec(3, 'K', 'ppm', null, 10, AGREEMENT, '2026-09-20T09:12:00+09:00', '박OO'),
+    spec(4, 'Fe', 'ppm', null, 5, D1, '2026-03-11T10:05:00+09:00', '이OO'),
+    spec(5, 'Ca', 'ppm', null, 20, D1, '2026-03-11T10:05:00+09:00', '이OO'),
+    spec(6, 'Cl', 'ppm', null, 20, D1, '2026-03-11T10:05:00+09:00', '이OO'),
+    spec(7, '황산염', 'ppm', null, 400, AGREEMENT, '2026-06-02T15:40:00+09:00', '박OO'),
+    liohSpec(8, '순도', '%'),
+    liohSpec(9, 'Na', 'ppm'),
+    liohSpec(10, 'K', 'ppm'),
+  ];
+}
+
+// ---------------------------------------------------------------------------
+// 문서 항목
+// ---------------------------------------------------------------------------
+
+interface ItemDef {
+  id: string;
+  name: string;
+  rawName: string;
+  rawValue: string;
+  rawSpec: string;
+  qualifier: ValueQualifier;
+  /** 사내 규격 단위로 환산한 값 */
+  value: number;
+  confidence: number;
+  source?: MappingSource;
+}
+
+/** 항목 하나. resolved는 담당자가 확인(confirm)한 항목, edited는 담당자가 값을 직접 고쳐 쓴 항목입니다. */
+function makeItem(def: ItemDef, specs: SpecItem[], resolved = false, edited = false): ExtractionItem {
+  const specItem = specs.find((entry) => entry.item_name === def.name);
+  const base: ExtractionItem = {
+    item_id: def.id,
+    raw_name: def.rawName,
+    normalized_name: def.name,
+    mapping_source: def.source ?? 'dictionary',
+    raw_value: def.rawValue,
+    raw_spec: def.rawSpec,
+    unit: specItem?.unit ?? null,
+    value_qualifier: def.qualifier,
+    converted_value: def.value,
+    detection_limit: null,
+    spec_lsl: null,
+    spec_usl: null,
+    judgement: 'pass',
+    judgement_reason: null,
+    deviation: null,
+    reason_code: null,
+    resolution: null,
+    confidence: def.confidence,
+    bbox: null,
+    reviewed: false,
+    value_source: null,
+  };
+  const judged = edited
+    ? evaluateItem(base, specItem, { override: { qualifier: def.qualifier, value: def.value, detectionLimit: null }, valueSource: 'correction' })
+    : evaluateItem(base, specItem, { reviewed: resolved });
+  // 시안과 같은 판정 근거 문구(목업 데이터). 상한값만 기재된 항목이 사내 상한을 넘는 경우입니다.
+  if (judged.reason_code === 'BOUND_ABOVE_LIMIT' && def.qualifier === 'less_than' && specItem?.usl != null) {
+    const unit = specItem.unit;
+    judged.judgement_reason = `${def.name} <${def.value} ${unit}, 사내 상한 ${specItem.usl} ${unit}보다 커서 실제 값을 확인할 수 없습니다.`;
+  }
+  return judged;
+}
+
+/** 누락 항목. 시안은 "원문:" 자리에 사전의 영문 표기(황산염 → Sulfate)를 보여 주므로 목업에서는 rawName으로 채웁니다. */
+function makeMissing(id: string, name: string, specs: SpecItem[], rawName: string | null = null): ExtractionItem {
+  const specItem = specs.find((entry) => entry.item_name === name);
+  const base: ExtractionItem = {
+    item_id: id,
+    raw_name: rawName,
+    normalized_name: name,
+    mapping_source: 'spec',
+    raw_value: null,
+    raw_spec: null,
+    unit: specItem?.unit ?? null,
+    value_qualifier: null,
+    converted_value: null,
+    detection_limit: null,
+    spec_lsl: null,
+    spec_usl: null,
+    judgement: 'missing',
+    judgement_reason: null,
+    deviation: null,
+    reason_code: null,
+    resolution: null,
+    confidence: null,
+    bbox: null,
+    reviewed: false,
+    value_source: null,
+  };
+  // 필수 항목이 CoA에 없으면 MISSING_REQUIRED(누락)이고 해결은 별도 성적서 값 또는 자체 시험값입니다.
+  return evaluateItem(base, specItem);
+}
+
+const LI: ItemDef = { id: 'li', name: '순도', rawName: 'Li2CO3', rawValue: '99.6 %', rawSpec: '>= 99.0 %', qualifier: 'exact', value: 99.6, confidence: 0.96 };
+const NA: ItemDef = { id: 'na', name: 'Na', rawName: 'Sodium', rawValue: '25.6 ppm', rawSpec: '<= 200 ppm', qualifier: 'exact', value: 25.6, confidence: 0.62 };
+const K: ItemDef = { id: 'k', name: 'K', rawName: 'Potassium', rawValue: '< 100 ppm', rawSpec: '<= 100 ppm', qualifier: 'less_than', value: 100, confidence: 0.93 };
+const FE: ItemDef = { id: 'fe', name: 'Fe', rawName: 'Iron', rawValue: '3 ppm', rawSpec: '<= 20 ppm', qualifier: 'exact', value: 3, confidence: 0.71 };
+const CA: ItemDef = { id: 'ca', name: 'Ca', rawName: 'Calcium', rawValue: '0.01 %', rawSpec: '<= 0.01 %', qualifier: 'exact', value: 100, confidence: 0.85 };
+const CL: ItemDef = { id: 'cl', name: 'Cl', rawName: 'Chloride', rawValue: '0.001 %', rawSpec: '<= 0.005 %', qualifier: 'exact', value: 10, confidence: 0.88 };
+
+/** 문서 A(A0266047): 시안 2-1 기본 상태. 적합 2, 부적합 1, 판정 불가 1, 누락 1, 확인 필요 2 */
+function itemsA(specs: SpecItem[]): ExtractionItem[] {
+  return [
+    makeItem(LI, specs),
+    makeItem(NA, specs),
+    makeItem(K, specs),
+    makeItem(FE, specs),
+    makeItem(CA, specs),
+    makeItem(CL, specs),
+    makeMissing('so4', '황산염', specs, 'Sulfate'),
+  ];
+}
+
+/** 문서 A의 이상 패턴 변형(시안 2-10): Fe 결과 칸이 규격 문구와 같음 */
+function itemsAnomaly(specs: SpecItem[]): ExtractionItem[] {
+  const fe: ItemDef = { ...FE, rawValue: '<= 20 ppm', qualifier: 'less_equal', value: 20, confidence: 0.85 };
+  return [
+    makeItem(LI, specs),
+    makeItem(NA, specs),
+    makeItem(K, specs),
+    makeItem(fe, specs),
+    makeItem(CA, specs),
+    makeItem(CL, specs),
+    makeMissing('so4', '황산염', specs, 'Sulfate'),
+  ];
+}
+
+/** 문서 B(A0481544): 시안 2-9. 적합 7, 확인 필요 1(중금속 항목명 매핑 확인) */
+function itemsB(specs: SpecItem[]): ExtractionItem[] {
+  const defs: ItemDef[] = [
+    { id: 'li', name: '순도', rawName: 'Li2CO3', rawValue: '99.7 %', rawSpec: '>= 99.0 %', qualifier: 'exact', value: 99.7, confidence: 0.97 },
+    { id: 'na', name: 'Na', rawName: 'Sodium', rawValue: '12 ppm', rawSpec: '<= 200 ppm', qualifier: 'exact', value: 12, confidence: 0.95 },
+    { id: 'k', name: 'K', rawName: 'Potassium', rawValue: '6 ppm', rawSpec: '<= 100 ppm', qualifier: 'exact', value: 6, confidence: 0.94 },
+    { id: 'fe', name: 'Fe', rawName: 'Iron', rawValue: '4 ppm', rawSpec: '<= 20 ppm', qualifier: 'exact', value: 4, confidence: 0.92 },
+    { id: 'ca', name: 'Ca', rawName: 'Calcium', rawValue: '15 ppm', rawSpec: '<= 0.01 %', qualifier: 'exact', value: 15, confidence: 0.93 },
+    { id: 'cl', name: 'Cl', rawName: 'Chloride', rawValue: '0.001 %', rawSpec: '<= 0.005 %', qualifier: 'exact', value: 10, confidence: 0.91 },
+    { id: 'so4', name: '황산염', rawName: 'Sulfate', rawValue: '< 0.02 %', rawSpec: '<= 0.05 %', qualifier: 'less_than', value: 200, confidence: 0.92 },
+  ];
+  const items = defs.map((def) => makeItem(def, specs));
+  // AI가 항목명을 'Pb'로 추정했지만 사내 규격에는 없는 이름입니다. 신뢰도가 낮아 서버가 확인 필요로 내려 준 것으로 가정합니다.
+  // TODO(백엔드 협의): 사내 규격에 없는 normalized_name(AI 추정)의 판정을 확인합니다.
+  items.push({
+    item_id: 'hm',
+    raw_name: 'Heavy metals (as Pb)',
+    normalized_name: 'Pb',
+    mapping_source: 'ai',
+    raw_value: '< 10 ppm',
+    raw_spec: '<= 10 ppm',
+    unit: 'ppm',
+    value_qualifier: 'less_than',
+    converted_value: 10,
+    detection_limit: null,
+    spec_lsl: null,
+    spec_usl: null,
+    judgement: 'check',
+    judgement_reason: '추출 신뢰도 낮음(0.72)',
+    deviation: null,
+    reason_code: 'LOW_CONFIDENCE',
+    resolution: { type: 'confirm', target_item: 'Pb', condition: '원문 하이라이트와 대조해 값 확인' },
+    confidence: 0.72,
+    bbox: null,
+    reviewed: false,
+    value_source: null,
+  });
+  return items;
+}
+
+/** 문서 C(A0355164): 시안 2-5. 문서 A에서 Na 수정, Fe 확인을 마치고 불합격 처분한 상태 */
+function itemsC(specs: SpecItem[]): ExtractionItem[] {
+  const na = { ...NA, value: 2.56 };
+  return [
+    makeItem(LI, specs),
+    makeItem(na, specs, false, true),
+    makeItem(K, specs),
+    makeItem(FE, specs, true),
+    makeItem(CA, specs),
+    makeItem(CL, specs),
+    makeMissing('so4', '황산염', specs, 'Sulfate'),
+  ];
+}
+
+type Variant = 'allpass' | 'hold' | 'reject';
+
+/** 목록에만 보이던 나머지 문서용 표준 항목 */
+function itemsStandard(specs: SpecItem[], variant: Variant): ExtractionItem[] {
+  const pass = (def: ItemDef, value: number, rawValue: string): ItemDef => ({ ...def, value, rawValue, confidence: 0.95 });
+  const defs: ItemDef[] = [
+    pass(LI, 99.7, '99.7 %'),
+    pass(NA, 12, '12 ppm'),
+    variant === 'hold' ? { ...K, confidence: 0.94 } : pass(K, 6, '6 ppm'),
+    pass(FE, 4, '4 ppm'),
+    variant === 'reject' ? { ...CA, confidence: 0.92 } : pass(CA, 15, '15 ppm'),
+    pass(CL, 10, '0.001 %'),
+  ];
+  return [...defs.map((def) => makeItem(def, specs)), makeItem(
+    { id: 'so4', name: '황산염', rawName: 'Sulfate', rawValue: '100 ppm', rawSpec: '<= 500 ppm', qualifier: 'exact', value: 100, confidence: 0.95 },
+    specs,
+  )];
+}
+
+// ---------------------------------------------------------------------------
+// 원본 PDF 내용과 bbox
+// ---------------------------------------------------------------------------
+
+/** 원본 문서(종이)에 적힌 내용. 항목의 AI 추출값과 다를 수 있습니다(예: 종이에는 2.56 ppm, AI는 25.6 ppm으로 읽음). */
+interface Paper {
+  page1: PdfRow[];
+  page2: PdfRow[];
+}
+
+const PRODUCT = 'Lithium Carbonate (Li_{2}CO_{3})';
+const row = (itemId: string, label: string, spec: string, result: string, inset = false): PdfRow => ({ itemId, label, spec, result, inset });
+
+/** 문서 A(A0266047)와 C(A0355164)의 종이. 시안 2-1, 2-5와 같은 값입니다. */
+function paperA(): Paper {
+  return {
+    page1: [
+      row('li', 'Li_{2}CO_{3} (Assay)', '≥ 99.0 %', '99.6 %'),
+      row('na', 'Na', '≤ 200 ppm', '2.56 ppm', true),
+      row('k', 'K', '≤ 100 ppm', '< 100 ppm', true),
+      row('fe', 'Fe', '≤ 20 ppm', '3 ppm', true),
+    ],
+    page2: [row('ca', 'Ca', '≤ 0.01 %', '0.01 %', true), row('cl', 'Cl', '≤ 0.005 %', '0.001 %')],
+  };
+}
+
+/** 이상 패턴 시나리오의 A0266047: Fe 결과 칸에 규격 문구가 그대로 적혀 있습니다(시안 2-10). */
+function paperAnomaly(): Paper {
+  const paper = paperA();
+  paper.page1[3] = row('fe', 'Fe', '≤ 20 ppm', '≤ 20 ppm', true);
+  return paper;
+}
+
+/** 문서 B(A0481544)의 종이. 시안 2-9와 같은 값입니다. */
+function paperB(): Paper {
+  return {
+    page1: [
+      row('li', 'Li_{2}CO_{3} (Assay)', '≥ 99.0 %', '99.7 %'),
+      row('na', 'Na', '≤ 200 ppm', '12 ppm'),
+      row('k', 'K', '≤ 100 ppm', '6 ppm'),
+      row('fe', 'Fe', '≤ 20 ppm', '4 ppm'),
+    ],
+    page2: [
+      row('ca', 'Ca', '≤ 0.01 %', '15 ppm'),
+      row('cl', 'Cl', '≤ 0.005 %', '0.001 %'),
+      row('so4', 'SO_{4}^{2−}', '≤ 0.05 %', '< 0.02 %'),
+      row('hm', 'Heavy metals (as Pb)', '≤ 10 ppm', '< 10 ppm', true),
+    ],
+  };
+}
+
+/** 목록에만 보이는 나머지 문서: 항목의 원문 표기로 종이를 만듭니다. */
+function paperFromItems(items: ExtractionItem[]): Paper {
+  const symbols = (text: string) => text.replace(/<=/g, '≤').replace(/>=/g, '≥');
+  const found = items.filter((item) => item.mapping_source !== 'spec');
+  const toRow = (item: ExtractionItem) =>
+    row(item.item_id, item.raw_name ?? item.normalized_name, symbols(item.raw_spec ?? ''), symbols(item.raw_value ?? ''));
+  return { page1: found.slice(0, 4).map(toRow), page2: found.slice(4).map(toRow) };
+}
+
+/** 종이의 결과 칸 좌표를 항목 bbox로 붙이고, PDF 입력을 만듭니다. */
+function attachPdf(docNo: string, testDate: string, items: ExtractionItem[], paper: Paper): PdfDocInput {
+  const attach = (rows: PdfRow[], page: 1 | 2) =>
+    rows.forEach((paperRow, index) => {
+      const item = items.find((entry) => entry.item_id === paperRow.itemId);
+      if (item) item.bbox = resultBbox(page, index, paperRow.result);
+    });
+  attach(paper.page1, 1);
+  attach(paper.page2, 2);
+  return { docNo, testDate, grade: 'D3', product: PRODUCT, page1: paper.page1, page2: paper.page2 };
+}
+
+// ---------------------------------------------------------------------------
+// 문서 메타와 로그
+// ---------------------------------------------------------------------------
+
+interface DocMeta {
+  lot: string;
+  supplier: string;
+  po: string;
+  testDate: string;
+  uploadedAt: string;
+  status: DocumentStatus;
+  finalDecision?: FinalDecision;
+  decisionReason?: string;
+  approvedBy?: string;
+  approvedAt?: string;
+  errorMessage?: string;
+  fileSize: number;
+}
+
+const UPLOADER = { id: 2, name: '김OO' };
+
+function buildDetail(meta: DocMeta, id: string, recommendation: ExtractionResult['lot_recommendation'] | null): DocumentDetail {
+  return {
+    document_id: id,
+    file_name: `coa_${meta.lot}_${meta.supplier}.pdf`,
+    supplier: meta.supplier,
+    material_code: DEFAULT_MATERIAL_CODE,
+    material_name: MATERIAL_NAME,
+    po_no: meta.po,
+    lot_no: meta.lot,
+    received_lot_no: meta.lot,
+    test_date: meta.testDate,
+    origin: '중국',
+    applied_standard: 'D3',
+    spec_grade: 'D1',
+    spec_set_code: LI2CO3_SET_CODE,
+    spec_version: VERSION,
+    status: meta.status,
+    lot_recommendation: recommendation,
+    final_decision: meta.finalDecision ?? null,
+    decision_reason: meta.decisionReason ?? null,
+    error_message: meta.errorMessage ?? null,
+    uploaded_by: UPLOADER.name,
+    uploaded_at: meta.uploadedAt,
+    approved_by: meta.approvedBy ?? null,
+    approved_at: meta.approvedAt ?? null,
+  };
+}
+
+function buildDoc(
+  meta: DocMeta,
+  items: ExtractionItem[] | null,
+  options: { id?: string; hidden?: boolean; paper?: Paper; reviewLogs?: ReviewLog[]; approvalLogs?: ApprovalLog[]; anomalies?: Anomaly[]; documentIssues?: DocumentIssue[] } = {},
+): MockDoc {
+  const id = options.id ?? meta.lot;
+  if (!items) {
+    return {
+      detail: buildDetail(meta, id, null),
+      uploaderId: UPLOADER.id,
+      extraction: null,
+      reviewLogs: [],
+      approvalLogs: [],
+      anomalies: [],
+      pdf: null,
+      fileSize: meta.fileSize,
+      hidden: options.hidden,
+    };
+  }
+  const pdf = attachPdf(meta.lot, meta.testDate, items, options.paper ?? paperFromItems(items));
+  const summary = summarize(items);
+  const documentIssues = options.documentIssues ?? [];
+  const recommendation = recommendLot(summary, documentIssues.length);
+  const extraction: ExtractionResult = {
+    document_id: id,
+    supplier: meta.supplier,
+    lot_no: meta.lot,
+    test_date: meta.testDate,
+    origin: '중국',
+    applied_standard: 'D3',
+    items,
+    document_issues: documentIssues,
+    lot_recommendation: recommendation,
+    summary,
+    review_status: meta.status === 'approved' ? 'approved' : meta.status === 'on_hold' ? 'on_hold' : meta.status === 'in_review' ? 'in_review' : 'pending',
+  };
+  return {
+    detail: buildDetail(meta, id, recommendation),
+    uploaderId: UPLOADER.id,
+    extraction,
+    reviewLogs: options.reviewLogs ?? [],
+    approvalLogs: options.approvalLogs ?? [],
+    anomalies: options.anomalies ?? [],
+    pdf,
+    fileSize: meta.fileSize,
+    hidden: options.hidden,
+  };
+}
+
+/** 목업 서버의 초기 상태. 문서 A0266047, A0481544, A0355164는 시안과 같은 값입니다. */
+export interface MockOptions {
+  /** 문서가 하나도 없는 상태(시안 2-0) */
+  empty?: boolean;
+  /**
+   * 'anomaly': A0266047이 이상 패턴(결과 칸이 규격 문구와 같음, 같은 값 반복)을 가진 상태(시안 2-10)
+   * 'issues': [v1.4] 모든 항목이 적합한 A0390221에 문서 수준 문제(로트 불일치, 날짜 충돌)가 있어 로트 권고가 보류인 상태
+   */
+  /** 'sets': 탄산리튬에 규격 세트가 둘(D1, D3)인 상태. 규격 관리 화면의 세트 선택을 볼 때 씁니다. */
+  scenario?: 'anomaly' | 'issues' | 'sets';
+}
+
+/** [v1.4] 시나리오 'issues'에 쓰는 문서 수준 문제 예시 문구(목업) */
+const ISSUES_SAMPLE: DocumentIssue[] = [
+  { code: 'LOT_MISMATCH', message: 'CoA의 로트번호(A0390221)와 입고 로트번호(A0390222)가 다릅니다.' },
+  { code: 'DATE_CONFLICT', message: 'CoA 발행일(2026-09-28)이 시험일(2026-09-29)보다 이전입니다.' },
+];
+
+export function createMockState(options: MockOptions = {}): MockState {
+  const specs = createSpecs();
+
+  const metaA: DocMeta = { lot: 'A0266047', supplier: 'Chengxin', po: 'PO-2026-1104', testDate: '2026-09-28', uploadedAt: '2026-10-05T17:20:00+09:00', status: 'extracted', fileSize: 524_000 };
+  const docA =
+    options.scenario === 'anomaly'
+      ? buildDoc(metaA, itemsAnomaly(specs), {
+          paper: paperAnomaly(),
+          anomalies: [
+            { type: 'spec_text_as_result', item_name: 'Fe', message: '결과 칸이 규격 문구와 같음 · 실측값이 아닌 규격 문구를 옮겨 적었을 수 있습니다.', related_document_ids: [] },
+            { type: 'identical_values', item_name: 'Cl', message: '이전 로트(A0481544)와 값이 같음 · Cl 10 ppm이 동일합니다.', related_document_ids: ['A0481544'] },
+          ],
+        })
+      : buildDoc(metaA, itemsA(specs), { paper: paperA() });
+
+  const docs: MockDoc[] = [
+    buildDoc({ lot: 'A0511902', supplier: '서진소재', po: 'PO-2026-1131', testDate: '2026-10-05', uploadedAt: '2026-10-06T09:02:00+09:00', status: 'queued', fileSize: 412_000 }, null),
+    buildDoc({ lot: 'A0511877', supplier: 'Chengxin', po: 'PO-2026-1128', testDate: '2026-10-04', uploadedAt: '2026-10-06T08:47:00+09:00', status: 'processing', fileSize: 388_000 }, null),
+    docA,
+    buildDoc({ lot: 'A0481544', supplier: 'Chengxin', po: 'PO-2026-1121', testDate: '2026-09-30', uploadedAt: '2026-10-05T15:41:00+09:00', status: 'extracted', fileSize: 497_000 }, itemsB(specs), { paper: paperB() }),
+    buildDoc(
+      { lot: 'A0390221', supplier: '대흥리튬', po: 'PO-2026-1115', testDate: '2026-09-29', uploadedAt: '2026-10-05T14:10:00+09:00', status: 'extracted', fileSize: 455_000 },
+      itemsStandard(specs, 'allpass'),
+      { documentIssues: options.scenario === 'issues' ? ISSUES_SAMPLE : [] },
+    ),
+    buildDoc({ lot: 'A0390188', supplier: '대흥리튬', po: 'PO-2026-1112', testDate: '2026-09-29', uploadedAt: '2026-10-05T11:36:00+09:00', status: 'extracted', fileSize: 462_000 }, itemsStandard(specs, 'hold')),
+    buildDoc(
+      { lot: 'A0377415', supplier: '서진소재', po: 'PO-2026-1108', testDate: '2026-09-27', uploadedAt: '2026-10-04T16:22:00+09:00', status: 'on_hold', fileSize: 431_000 },
+      itemsStandard(specs, 'hold'),
+      {
+        approvalLogs: [
+          { action: 'hold', decision: null, follow_up: 'request_actual_value', user_name: '김OO', reason: 'K 실측값 회신 대기', created_at: '2026-10-05T10:20:00+09:00' },
+        ],
+      },
+    ),
+    buildDoc({ lot: 'A0377402', supplier: '서진소재', po: 'PO-2026-1107', testDate: '2026-09-27', uploadedAt: '2026-10-04T13:05:00+09:00', status: 'in_review', fileSize: 440_000 }, itemsStandard(specs, 'reject')),
+    buildDoc(
+      {
+        lot: 'A0355190', supplier: 'Chengxin', po: 'PO-2026-1095', testDate: '2026-09-25', uploadedAt: '2026-10-03T10:18:00+09:00', status: 'approved',
+        finalDecision: 'accept', approvedBy: '김OO', approvedAt: '2026-10-03T11:02:00+09:00', fileSize: 470_000,
+      },
+      itemsStandard(specs, 'allpass'),
+      { approvalLogs: [{ action: 'approve', decision: 'accept', follow_up: null, user_name: '김OO', reason: null, created_at: '2026-10-03T11:02:00+09:00' }] },
+    ),
+    buildDoc(
+      {
+        lot: 'A0355164', supplier: 'Chengxin', po: 'PO-2026-1089', testDate: '2026-09-26', uploadedAt: '2026-10-02T17:50:00+09:00', status: 'approved',
+        finalDecision: 'reject', decisionReason: 'Ca 100 ppm이 사내 상한 20 ppm을 초과합니다.', approvedBy: '김OO', approvedAt: '2026-10-05T15:02:00+09:00', fileSize: 509_000,
+      },
+      itemsC(specs),
+      {
+        paper: paperA(),
+        reviewLogs: [
+          { item_id: 'na', action: 'edit', before_value: '25.6', after_value: '2.56', value_source: 'correction', reviewer_name: '김OO', reviewed_at: '2026-10-05T14:32:00+09:00', reason: 'OCR 오인식 정정' },
+          { item_id: 'fe', action: 'confirm', before_value: '3', after_value: '3', reviewer_name: '김OO', reviewed_at: '2026-10-05T14:35:00+09:00' },
+        ],
+        approvalLogs: [
+          { action: 'hold', decision: null, follow_up: 'request_actual_value', user_name: '김OO', reason: '판정 불가 · 누락 항목 후속 조치 대기', created_at: '2026-10-05T10:40:00+09:00' },
+          { action: 'approve', decision: 'reject', follow_up: null, user_name: '김OO', reason: 'Ca 100 ppm이 사내 상한 20 ppm을 초과합니다.', created_at: '2026-10-05T15:02:00+09:00' },
+        ],
+      },
+    ),
+    buildDoc(
+      {
+        lot: 'A0340871', supplier: '대흥리튬', po: 'PO-2026-1075', testDate: '2026-09-24', uploadedAt: '2026-10-02T09:33:00+09:00', status: 'approved',
+        finalDecision: 'conditional_accept', decisionReason: 'K 실측값 회신 후 재확인 조건으로 승인합니다.', approvedBy: '김OO', approvedAt: '2026-10-02T14:20:00+09:00', fileSize: 452_000,
+      },
+      itemsStandard(specs, 'hold'),
+      { approvalLogs: [{ action: 'approve', decision: 'conditional_accept', follow_up: null, user_name: '김OO', reason: 'K 실측값 회신 후 재확인 조건으로 승인합니다.', created_at: '2026-10-02T14:20:00+09:00' }] },
+    ),
+    buildDoc({ lot: 'A0340850', supplier: '대흥리튬', po: 'PO-2026-1074', testDate: '2026-09-24', uploadedAt: '2026-10-01T15:12:00+09:00', status: 'failed', errorMessage: '문서에서 시험 항목을 찾을 수 없습니다.', fileSize: 120_000 }, null),
+  ];
+
+  // 시나리오 'issues'의 경고 문구(로트 불일치, 날짜 충돌)와 문서 데이터가 맞도록 입고 로트번호와 발행일을 같이 바꿉니다.
+  if (options.scenario === 'issues') {
+    const target = docs.find((entry) => entry.detail.document_id === 'A0390221');
+    if (target) {
+      target.detail.received_lot_no = 'A0390222';
+      if (target.extraction) target.extraction.issue_date = '2026-09-28';
+    }
+  }
+  const specSets = createSpecSets();
+  if (options.scenario === 'sets') {
+    const extra = createExtraLi2co3Set(specs);
+    specSets.push(extra.set);
+    specs.push(...extra.items);
+  }
+  return { users: MOCK_USERS.map((user) => ({ ...user })), specSets, specs, docs: options.empty ? [] : docs };
+}
