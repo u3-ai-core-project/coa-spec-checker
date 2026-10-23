@@ -147,9 +147,11 @@ def test_user_can_hold(client, user, upload):
 
 
 def test_user_cannot_update_spec(client, user, admin, spec_na):
-    r = client.patch(f"/api/v1/specs/{spec_na.id}", json={"usl": 40}, headers=bearer(create_access_token(user.id)))
+    r = client.patch(f"/api/v1/specs/{spec_na.id}", json={"usl": 40, "reason": "규격 개정"},
+                     headers=bearer(create_access_token(user.id)))
     assert_forbidden(r)
-    r = client.patch(f"/api/v1/specs/{spec_na.id}", json={"usl": 40}, headers=bearer(create_access_token(admin.id)))
+    r = client.patch(f"/api/v1/specs/{spec_na.id}", json={"usl": 40, "reason": "규격 개정"},
+                     headers=bearer(create_access_token(admin.id)))
     assert r.status_code == 200
 
 
@@ -170,7 +172,7 @@ def test_admin_views_all_dashboard(client, user, admin):
     ("get", "/api/v1/users", None),
     ("get", "/api/v1/dashboard/summary", None),
     ("get", "/api/v1/specs", None),
-    ("patch", "/api/v1/specs/1", {"usl": 1}),
+    ("patch", "/api/v1/specs/1", {"usl": 1, "reason": "규격 개정"}),
     ("post", "/api/v1/documents/x/approve", {"decision": "accept"}),
     ("post", "/api/v1/documents/x/hold", {"follow_up": "other", "reason": "x"}),
     ("post", "/api/v1/documents/x/cancel-approval", {"reason": "x"}),

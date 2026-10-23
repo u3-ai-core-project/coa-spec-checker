@@ -44,7 +44,21 @@ class SpecSetOut(BaseModel):
 
 
 class SpecUpdateRequest(BaseModel):
-    """PATCH /specs/{id} (명세 4.21). 보낸 필드만 바꾼다. 범위를 지우려면 null 을 보낸다."""
+    """PATCH /specs/{id} (명세 4.21). 보낸 필드만 바꾼다. 범위를 지우려면 null 을 보낸다.
+
+    reason(변경 사유, v1.4)은 필수다. 비었거나 공백뿐이면 400 REASON_REQUIRED (검사는 spec_service 에서 한다.
+    필드 누락을 VALIDATION_ERROR 로 보내면 다른 API 의 REASON_REQUIRED 와 코드가 달라지기 때문).
+    """
     lsl: float | None = Field(None, description="하한. null 이면 하한 없음")
     usl: float | None = Field(None, description="상한. null 이면 상한 없음")
     unit: str | None = Field(None, description="단위")
+    reason: str | None = Field(None, description="변경 사유 (v1.4, 필수)")
+
+
+class SpecChangeLogOut(BaseModel):
+    """GET /specs/{id}/change-logs 1건 (명세 v1.4 4.21-1). 바뀐 필드만 문자열로 담는다. 예) "usl: 50" → "usl: 30"."""
+    before_value: str
+    after_value: str
+    reason: str
+    user_name: str
+    created_at: datetime

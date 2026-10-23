@@ -3,6 +3,7 @@
 후속 조치 목록, 보류 후속 조치 추천, 문의 초안, 같은 공급사 열린 요청 묶음, AI 생성기 실패 시 템플릿 대체.
 """
 import json
+import sys
 
 import pytest
 
@@ -121,7 +122,7 @@ def test_draft_follows_review_progress(auth_client, upload):
     items = auth_client.get(f"/api/v1/documents/{doc_id}/extraction").json()["data"]["items"]
     fe = next(i for i in items if i["normalized_name"] == "Fe")
     auth_client.patch(f"/api/v1/documents/{doc_id}/extraction/{fe['item_id']}",
-                      json={"detection_limit": 1, "value_source": "supplier_reply"})
+                      json={"detection_limit": 1, "value_source": "supplier_reply", "reason": "공급사 회신 (LOD 1 ppm)"})
     d = follow_ups(auth_client, doc_id)
     assert [ln["target"] for ln in d["supplier_lines"]] == ["Na"]   # 회신으로 해결된 Fe 는 빠짐
 
@@ -150,6 +151,17 @@ def test_ai_drafter_used_when_configured(auth_client, upload, monkeypatch):
 def test_ai_failure_falls_back_to_template(auth_client, upload, monkeypatch):
     monkeypatch.setattr(followup_service, "get_drafter", lambda: BrokenAIDrafter())
     draft = follow_ups(auth_client, upload("lot1"))["draft"]
+    assert draft["source"] == "template_fallback" and draft["subject"].startswith("[CoA 확인 요청]")
+
+
+def test_ai_package_missing_falls_back_to_template(auth_client, upload, monkeypatch):
+    # INQUIRY_DRAFTER=ai 인데 ai 패키지(coa_ai)가 없으면 생성기 준비가 실패한다 → 500 이 아니라 템플릿
+    monkeypatch.setattr(settings, "INQUIRY_DRAFTER", "ai")
+    monkeypatch.setitem(sys.modules, "coa_ai", None)                    # import coa_ai 가 실패하게
+    monkeypatch.delitem(sys.modules, "app.pipeline.ai_drafter", raising=False)  # 이미 읽힌 어댑터를 쓰지 않게
+    monkeypatch.delitem(sys.modules, "app.pipeline.llm_client", raising=False)
+    doc_id = upload("lot1")
+    draft = follow_ups(auth_client, doc_id)["draft"]
     assert draft["source"] == "template_fallback" and draft["subject"].startswith("[CoA 확인 요청]")
 
 

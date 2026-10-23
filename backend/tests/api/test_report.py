@@ -135,7 +135,7 @@ def test_logs_and_final_decision(auth_client, doc_id):
     ids = {i["normalized_name"]: i["item_id"] for i in items}
     auth_client.post(f"/api/v1/documents/{doc_id}/extraction/{ids['순도']}/confirm")
     auth_client.patch(f"/api/v1/documents/{doc_id}/extraction/{ids['Fe']}",
-                      json={"detection_limit": 2, "value_source": "supplier_reply"})
+                      json={"detection_limit": 2, "value_source": "supplier_reply", "reason": "공급사 회신 메일"})
     auth_client.post(f"/api/v1/documents/{doc_id}/hold", json={"follow_up": "internal_test", "reason": "Mg 자체 시험"})
     auth_client.post(f"/api/v1/documents/{doc_id}/approve",
                      json={"decision": "conditional_accept", "reason": "Na 초과분 혼합 사용"})
@@ -143,12 +143,12 @@ def test_logs_and_final_decision(auth_client, doc_id):
     _, wb = download(auth_client, doc_id)
     rows = cells(wb["A0481544"])
     review = table(rows, "일시", "항목")
-    # 열: 일시(A:B) 항목(C) 작업(D) 이전 값(E:G) 이후 값(H:J) 입력 출처(K:L) 담당자(M:O)
-    assert [(r[2], r[3], r[10], r[12]) for r in review] == [
-        ("순도", "값 확인", None, "김사용"),
-        ("Fe", "값 수정", "공급사 회신", "김사용"),
+    # 열: 일시(A:B) 항목(C) 작업(D) 이전 값(E:F) 이후 값(G:H) 입력 출처(I) 사유(J:M) 담당자(N:O)
+    assert [(r[2], r[3], r[8], r[9], r[13]) for r in review] == [
+        ("순도", "값 확인", None, None, "김사용"),
+        ("Fe", "값 수정", "공급사 회신", "공급사 회신 메일", "김사용"),
     ]
-    assert (review[1][4], review[1][7]) == ("none detected", "검출 안 됨 (검출한계 2 ppm)")
+    assert (review[1][4], review[1][6]) == ("none detected", "검출 안 됨 (검출한계 2 ppm)")
     approvals = table(rows, "일시", "작업")
     # 열: 일시(A:B) 작업(C) 처분(D) 후속 조치(E:G) 사유(H:M) 담당자(N:O)
     assert [(r[2], r[3], r[4]) for r in approvals] == [("보류", None, "자체 시험"), ("처분", "조건부 승인", None)]

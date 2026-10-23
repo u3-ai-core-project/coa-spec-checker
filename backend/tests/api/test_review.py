@@ -66,6 +66,9 @@ def item_id(client, doc_id, name) -> str:
 
 
 def patch(client, doc_id, name, **body):
+    """항목 수정. 사유(reason)는 따로 주지 않으면 기본값을 넣는다 (v1.4: 값 수정은 사유 필수). 빼려면 reason=None."""
+    body.setdefault("reason", "원문 대조 후 수정")
+    body = {k: v for k, v in body.items() if v is not None or k != "reason"}
     return client.patch(f"/api/v1/documents/{doc_id}/extraction/{item_id(client, doc_id, name)}", json=body)
 
 
@@ -273,6 +276,51 @@ def test_requires_login(client, auth_client, doc_id):
     from app.main import app
     app.dependency_overrides.pop(get_current_user, None)
     assert client.get(f"/api/v1/documents/{doc_id}/extraction").status_code == 401
+
+
+# ---- 수정 사유 (v1.4) --------------------------------------------------------
+@pytest.mark.parametrize("reason", [None, "", "   "])
+def test_edit_value_requires_reason(auth_client, doc_id, reason):
+    before = items_of(auth_client, doc_id)["Na"]
+    r = patch(auth_client, doc_id, "Na", converted_value=80, reason=reason)
+    assert r.status_code == 400 and r.json()["error"]["code"] == "REASON_REQUIRED"
+    assert items_of(auth_client, doc_id)["Na"] == before                               # 아무것도 바뀌지 않음
+    assert auth_client.get(f"/api/v1/documents/{doc_id}/review-logs").json()["data"] == []
+
+
+def test_reply_value_requires_reason(auth_client, doc_id):
+    r = patch(auth_client, doc_id, "Fe", detection_limit=2, value_source="supplier_reply", reason=None)
+    assert r.status_code == 400 and r.json()["error"]["code"] == "REASON_REQUIRED"
+
+
+def test_rename_only_does_not_require_reason(auth_client, doc_id):
+    r = patch(auth_client, doc_id, "칼슘", normalized_name="Ca", reason=None)
+    assert r.status_code == 200
+    assert r.json()["data"]["review_logs"][0]["reason"] is None
+
+
+def test_reason_saved_on_every_log_of_the_request(auth_client, doc_id):
+    body = patch(auth_client, doc_id, "칼슘", normalized_name="Ca", converted_value=25,
+                 reason="  OCR 오인식 정정 (원본 2.5)  ").json()["data"]
+    assert [(log["action"], log["reason"]) for log in body["review_logs"]] == [
+        ("rename", "OCR 오인식 정정 (원본 2.5)"), ("edit", "OCR 오인식 정정 (원본 2.5)"),   # 앞뒤 공백 제거
+    ]
+
+
+def test_reason_in_review_logs(auth_client, doc_id):
+    confirm(auth_client, doc_id, "순도")
+    patch(auth_client, doc_id, "Fe", detection_limit=2, value_source="supplier_reply", reason="공급사 회신 메일")
+    logs = auth_client.get(f"/api/v1/documents/{doc_id}/review-logs").json()["data"]
+    assert [(log["action"], log["reason"]) for log in logs] == [("confirm", None), ("edit", "공급사 회신 메일")]
+
+
+def test_status_checked_before_reason(auth_client, doc_id, db):
+    # 검사 순서: 상태 409 가 사유 누락 400 보다 먼저
+    doc = db.get(Document, doc_id)
+    doc.status = DocumentStatus.APPROVED
+    db.commit()
+    r = patch(auth_client, doc_id, "Na", converted_value=80, reason=None)
+    assert r.status_code == 409 and r.json()["error"]["code"] == "ALREADY_APPROVED"
 
 
 # ---- 이력 (4.11) -------------------------------------------------------------
