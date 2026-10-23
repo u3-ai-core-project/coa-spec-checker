@@ -1,7 +1,7 @@
 import type { ApiResponse } from '../types/auth'
 
 const BASE_URL = `${import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000'}/api/v1`
-const TOKEN_KEY = 'access_token'
+const TOKEN_KEY = 'coa_access_token'
 
 export const tokenStorage = {
     get: () => localStorage.getItem(TOKEN_KEY),
