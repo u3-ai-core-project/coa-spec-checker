@@ -7,13 +7,15 @@ import { parseValue } from '../lib/parseValue';
 
 const SUB = 'col-start-2 col-span-3';
 
+export type EditQualifier = 'exact' | 'less_than' | 'not_detected';
+
 export interface ItemEditSubmit {
-  /** 값. notDetected이면 검출한계입니다. */
+  /** 값. not_detected이면 검출한계, less_than이면 "< 값"의 상한값입니다. */
   value: number;
   /** [v1.4] 입력값 출처 */
   valueSource: ValueSource;
-  /** [v1.4] 검출 안 됨으로 입력하는지(이때 value가 검출한계) */
-  notDetected: boolean;
+  /** [v1.4] 값 종류. exact(정량값), less_than("< 값"으로 회신), not_detected(검출 안 됨, 이때 value가 검출한계) */
+  qualifier: EditQualifier;
   /** 수정 사유(필수). PATCH 요청의 reason으로 보내고 review_logs에 남습니다(백엔드 확정 답변). */
   reason: string;
 }
@@ -27,26 +29,27 @@ interface ItemEditorProps {
 }
 
 /** 해결 조건 종류에 맞춰 값 출처와 값 종류의 시작값을 정합니다(공급사 회신값, 자체 시험값, 검출한계 등). */
-function defaultsFor(item: ExtractionItem): { source: ValueSource; notDetected: boolean } {
+function defaultsFor(item: ExtractionItem): { source: ValueSource; qualifier: EditQualifier } {
   switch (item.resolution?.type) {
     case 'detection_limit':
-      return { source: 'supplier_reply', notDetected: true };
+      return { source: 'supplier_reply', qualifier: 'not_detected' };
     case 'actual_value':
     case 'single_value':
-      return { source: 'supplier_reply', notDetected: false };
+      return { source: 'supplier_reply', qualifier: 'exact' };
     case 'internal_test':
-      return { source: 'internal_test', notDetected: false };
+      return { source: 'internal_test', qualifier: 'exact' };
     default:
-      return { source: 'correction', notDetected: false };
+      return { source: 'correction', qualifier: 'exact' };
   }
 }
 
 /** 항목 안에서 바로 여는 값 수정 박스 (시안 2-3). "수정 후 판정"은 참고용이고 실제 판정은 서버가 다시 계산합니다. */
 export function ItemEditor({ item, busy, error, onCancel, onSubmit }: ItemEditorProps) {
   const defaults = defaultsFor(item);
-  const [notDetected, setNotDetected] = useState(defaults.notDetected);
+  const [qualifier, setQualifier] = useState<EditQualifier>(defaults.qualifier);
+  const notDetected = qualifier === 'not_detected';
   const [source, setSource] = useState<ValueSource>(defaults.source);
-  const initial = typeof item.converted_value === 'number' && !defaults.notDetected ? String(item.converted_value) : '';
+  const initial = typeof item.converted_value === 'number' && !notDetected ? String(item.converted_value) : '';
   const [text, setText] = useState(initial);
   const [reason, setReason] = useState('');
   const value = parseValue(text);
@@ -64,23 +67,24 @@ export function ItemEditor({ item, busy, error, onCancel, onSubmit }: ItemEditor
         </span>
         <span className="flex items-center gap-1.5">
           수정 후 판정
-          {value === null || notDetected ? (
+          {value === null || qualifier !== 'exact' ? (
             <span className="text-[#8A9099]">-</span>
           ) : (
-            <JudgementBadge judgement={notDetected ? 'pass' : previewJudgement(value, item.spec_lsl, item.spec_usl)} />
+            <JudgementBadge judgement={previewJudgement(value, item.spec_lsl, item.spec_usl)} />
           )}
         </span>
       </div>
       <div className="item-edit-controls flex items-center gap-2">
         <div className="relative">
           <input
-            className="item-edit-input h-9 w-28 rounded-md border-2 border-[#2B4FCB] bg-white pl-3 pr-10 text-[14px] tabular-nums"
+            className={`item-edit-input h-9 w-28 rounded-md border-2 border-[#2B4FCB] bg-white pr-10 ${qualifier === 'less_than' ? 'pl-7' : 'pl-3'} text-[14px] tabular-nums`}
             value={text}
             inputMode="decimal"
             autoFocus
-            aria-label={notDetected ? '검출한계' : '수정할 값'}
+            aria-label={notDetected ? '검출한계' : qualifier === 'less_than' ? '상한값 (< 값)' : '수정할 값'}
             onChange={(event) => setText(event.target.value)}
           />
+          {qualifier === 'less_than' && <span className="absolute left-3 top-2 text-[14px] text-[#5B616A]">&lt;</span>}
           {item.unit && <span className="absolute right-3 top-2 text-[12px] text-[#8A9099]">{item.unit}</span>}
         </div>
         <span className="item-edit-hint text-[12px] tabular-nums text-[#5B616A]">규격 {formatSpec(item)}</span>
@@ -91,10 +95,11 @@ export function ItemEditor({ item, busy, error, onCancel, onSubmit }: ItemEditor
           값 종류
           <select
             className="item-edit-kind-select h-8 rounded-md border border-[#D0D4DA] bg-white px-2 text-[12px]"
-            value={notDetected ? 'not_detected' : 'value'}
-            onChange={(event) => setNotDetected(event.target.value === 'not_detected')}
+            value={qualifier}
+            onChange={(event) => setQualifier(event.target.value as EditQualifier)}
           >
-            <option value="value">수치(정량값)</option>
+            <option value="exact">수치(정량값)</option>
+            <option value="less_than">미만(&lt; 상한값)</option>
             <option value="not_detected">검출 안 됨(검출한계 입력)</option>
           </select>
         </label>
@@ -137,7 +142,7 @@ export function ItemEditor({ item, busy, error, onCancel, onSubmit }: ItemEditor
         <button
           type="button"
           disabled={!canSubmit}
-          onClick={() => value !== null && onSubmit({ value, reason: reason.trim(), valueSource: source, notDetected })}
+          onClick={() => value !== null && onSubmit({ value, reason: reason.trim(), valueSource: source, qualifier })}
           className={`btn-confirm h-9 rounded-md px-4 text-[13px] font-semibold ${
             canSubmit ? 'bg-[#2B4FCB] text-white' : 'cursor-not-allowed bg-[#E3E5E8] text-[#8A9099]'
           }`}

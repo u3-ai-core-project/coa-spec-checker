@@ -209,7 +209,7 @@ function ReviewScreen({ documentId }: { documentId: string }) {
     }
   }
 
-  async function submitEdit(item: ExtractionItem, { value, reason, valueSource, notDetected }: ItemEditSubmit) {
+  async function submitEdit(item: ExtractionItem, { value, reason, valueSource, qualifier }: ItemEditSubmit) {
     setBusy(true);
     setEditError(null);
     try {
@@ -218,9 +218,11 @@ function ReviewScreen({ documentId }: { documentId: string }) {
         documentId,
         item.item_id,
         // 수정 사유는 값 수정에서 필수이고 요청에 함께 보냅니다(백엔드 확정 답변).
-        notDetected
+        qualifier === 'not_detected'
           ? { value_qualifier: 'not_detected', detection_limit: value, value_source: valueSource, reason }
-          : { converted_value: value, value_source: valueSource, reason },
+          : qualifier === 'less_than'
+            ? { value_qualifier: 'less_than', converted_value: value, value_source: valueSource, reason }
+            : { converted_value: value, value_source: valueSource, reason },
       );
       await reload();
       setEditingId(null);
