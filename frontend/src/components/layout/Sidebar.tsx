@@ -1,10 +1,12 @@
 import { NavLink } from 'react-router-dom'
 import { NAV_ITEMS } from '../../navigation'
-import { CURRENT_USER } from '../../currentUser'
+import { useAuth } from '../../auth/authContext'
 import RoleBadge from '../RoleBadge'
 import { LogoutIcon, UserIcon } from '../icons'
 
 export default function Sidebar() {
+    const { user, logout } = useAuth()
+    if (!user) return null
     return (
         <aside className="flex w-60 shrink-0 flex-col border-r border-line bg-white">
             <div className="px-6 pt-6 pb-5 text-base font-bold text-brand">
@@ -33,11 +35,12 @@ export default function Sidebar() {
                     <div className="flex h-7 w-7 items-center justify-center rounded-full bg-gray-300">
                         <UserIcon />
                     </div>
-                    <span className="text-sm font-bold">{CURRENT_USER.name}</span>
-                    <RoleBadge role={CURRENT_USER.role} />
+                    <span className="text-sm font-bold">{user.name}</span>
+                    <RoleBadge role={user.role} />
                 </div>
                 <button
                     type="button"
+                    onClick={logout}
                     className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-line px-3 py-1.5 text-xs text-ink-sub hover:bg-surface"
                 >
                     <LogoutIcon />
