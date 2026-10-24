@@ -8,6 +8,7 @@ import { useAuth } from './auth/authContext'
 import { CurrentUserProvider } from './features/review/shared/currentUser'
 import { reviewRoutes } from './features/review/routes'
 import { specsRoutes } from './features/specs/routes'
+import UploadPage from './features/upload/UploadPage'
 
 function ReviewSpecsRoutes() {
   const { user } = useAuth()
@@ -24,8 +25,8 @@ export default function App() {
           <Route path="/login" element={<LoginPage />} />
           <Route element={<RequireAuth />}>
             <Route element={<AppLayout />}>
-              <Route path="/" element={<Navigate to="/dashboard" replace />} />
-              {NAV_ITEMS.filter((item) => item.path !== '/inspection' && item.path !== '/specs').map((item) => (
+              <Route path="/" element={<Navigate to="/upload" replace />} />
+              {NAV_ITEMS.filter((item) => !['/upload', '/inspection', '/specs'].includes(item.path)).map((item) => (
                 <Route
                   key={item.path}
                   path={item.path}
@@ -36,6 +37,7 @@ export default function App() {
                   }
                 />
               ))}
+              <Route path="/upload" element={<UploadPage />} />
               <Route path="*" element={<ReviewSpecsRoutes />} />
             </Route>
           </Route>

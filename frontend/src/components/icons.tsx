@@ -16,3 +16,30 @@ export function LogoutIcon() {
         </svg>
     )
 }
+
+export function UploadIcon({ className }: { className?: string }) {
+    return (
+        <svg className={className} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M12 16V4" />
+            <path d="m6 10 6-6 6 6" />
+            <path d="M5 20h14" />
+        </svg>
+    )
+}
+
+export function CloseIcon({ className }: { className?: string }) {
+    return (
+        <svg className={className} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M6 6l12 12" />
+            <path d="M18 6 6 18" />
+        </svg>
+    )
+}
+
+export function ChevronDownIcon({ className }: { className?: string }) {
+    return (
+        <svg className={className} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#5b616a" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="m6 9 6 6 6-6" />
+        </svg>
+    )
+}
