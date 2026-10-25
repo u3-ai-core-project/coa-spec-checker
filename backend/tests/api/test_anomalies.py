@@ -14,8 +14,9 @@ def url(doc_id):
     return f"/api/v1/documents/{doc_id}/anomalies"
 
 
-def item(name, raw, qualifier="exact", reason_code=None):
-    return {"normalized_name": name, "raw_value": raw, "value_qualifier": qualifier, "reason_code": reason_code}
+def item(name, raw, qualifier="exact", reason_code=None, raw_spec=None, unit=None):
+    return {"normalized_name": name, "raw_value": raw, "value_qualifier": qualifier, "reason_code": reason_code,
+            "raw_spec": raw_spec, "unit": unit}
 
 
 def make_doc(db, user, lot, items, supplier="Chengxin", material="LI2CO3"):
@@ -115,3 +116,36 @@ def test_end_to_end_with_upload(auth_client, db, tmp_path, monkeypatch):
     data = auth_client.get(url(ids[-1])).json()["data"]
     assert len(data) == 1 and data[0]["item_name"] == "Ca"
     assert data[0]["related_document_ids"] == ids[:2]
+
+
+# ---- at_spec_limit: 값이 협력사 규격 경계와 정확히 같음 ----------------------------------
+@pytest.mark.parametrize("raw, spec, unit", [
+    ("50 ppm", "≤ 50 ppm", None),          # 상한과 같음
+    ("99.5 %", "99.5 % min", None),        # 하한과 같음
+    ("1.0", "0.5-1.0", "%"),               # 범위 경계, 단위는 unit 칸
+    ("0.005 %", "=<50 ppm", None),         # 단위가 달라도 환산해서 같으면
+    ("20", "Max 20", "ppm"),
+])
+def test_at_spec_limit(auth_client, db, user, raw, spec, unit):
+    doc = make_doc(db, user, "L1", [item("Na", raw, raw_spec=spec, unit=unit)])
+    data = auth_client.get(url(doc.id)).json()["data"]
+    assert [(a["type"], a["item_name"], a["related_document_ids"]) for a in data] == [("at_spec_limit", "Na", [])]
+    assert data[0]["message"] == f"값이 협력사 규격 경계와 같습니다. Na {raw} (협력사 규격 {spec})"
+
+
+@pytest.mark.parametrize("raw, spec, qualifier, reason", [
+    ("49.9 ppm", "≤ 50 ppm", "exact", None),            # 경계 안쪽
+    ("< 50 ppm", "≤ 50 ppm", "less_than", None),        # 실측값 아님
+    ("≤ 50 ppm", "≤ 50 ppm", "less_equal", "SPEC_COPIED"),  # 규격 복사는 SPEC_COPIED 가 담당
+    ("50 ppm", None, "exact", None),                    # 규격 칸 없음
+    ("50", "D50 3-20 μm", "exact", None),               # 항목 이름 속 숫자(D50)는 경계가 아님
+])
+def test_not_at_spec_limit(auth_client, db, user, raw, spec, qualifier, reason):
+    doc = make_doc(db, user, "L1", [item("Na", raw, qualifier, reason, raw_spec=spec, unit="ppm")])
+    assert auth_client.get(url(doc.id)).json()["data"] == []
+
+
+def test_both_types_together(auth_client, db, user):
+    make_doc(db, user, "L1", [item("Ca", "20 ppm", raw_spec="≤ 20 ppm")])
+    b = make_doc(db, user, "L2", [item("Ca", "20 ppm", raw_spec="≤ 20 ppm")])
+    assert [a["type"] for a in auth_client.get(url(b.id)).json()["data"]] == ["identical_values", "at_spec_limit"]

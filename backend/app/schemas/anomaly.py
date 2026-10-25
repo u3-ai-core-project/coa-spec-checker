@@ -3,9 +3,8 @@ from typing import Literal
 
 from pydantic import BaseModel
 
-# 명세 v1.4안 4.17 에서 남는 유형은 identical_values, at_spec_limit 이다.
-# at_spec_limit 은 기획안 v2 와 명세가 달라 확정 전이라 아직 넣지 않았다 (2026-10-25).
-AnomalyType = Literal["identical_values"]
+# 명세 v1.4안 4.17 에서 남는 유형 (lot_mismatch·issued_before_test 는 document_issues, spec_text_as_result 는 SPEC_COPIED 로 이동)
+AnomalyType = Literal["identical_values", "at_spec_limit"]
 
 
 class AnomalyOut(BaseModel):

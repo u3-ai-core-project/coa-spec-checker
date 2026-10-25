@@ -3,6 +3,7 @@
 명세 4.17: 요청 시점에 기존 테이블을 읽어 계산하고 DB 에 쓰지 않는다. 판정과 로트 권고에는 영향을 주지 않고
 검수 화면에 참고 경고로만 보여 준다. 멘토님 기준에 따라 '위조' 같은 표현은 쓰지 않는다.
 """
+import math
 import re
 
 from sqlalchemy import select
@@ -12,11 +13,14 @@ from app.core.enums import ReasonCode, ValueQualifier
 from app.models import Document
 from app.schemas.anomaly import AnomalyOut
 from app.services import document_service
+from app.services.judgement.value_parser import UnitConversionError, convert_unit, is_spec_text_as_result
+
+_NUM_UNIT = re.compile(r"(?<![A-Za-z\d.])(?P<num>\d+(?:\.\d+)?|\.\d+)\s*(?P<unit>%|ppm|ppb|mg/kg|μg/kg|µg/kg|wt%)?", re.IGNORECASE)
 
 
 def get_anomalies(db: Session, document_id: str) -> list[AnomalyOut]:
     doc = document_service.get_document(db, document_id)
-    return _identical_values(db, doc)
+    return _identical_values(db, doc) + _at_spec_limit(doc)
 
 
 def _norm(text: str | None) -> str:
@@ -78,4 +82,44 @@ def _identical_values(db: Session, doc: Document) -> list[AnomalyOut]:
             message=f"다른 로트({lots})와 값이 같습니다. {name} {raw}",
             related_document_ids=[d.id for d in matches[name]],
         ))
+    return anomalies
+
+
+def _numbers(text: str) -> list[tuple[float, str | None]]:
+    return [(float(m["num"]), m["unit"]) for m in _NUM_UNIT.finditer(text.replace(",", ""))]
+
+
+def _at_spec_limit(doc: Document) -> list[AnomalyOut]:
+    """값이 협력사 규격 경계와 정확히 같음 (명세 4.17 at_spec_limit).
+
+    협력사 규격은 CoA 의 규격 칸 원문(raw_spec)이다 (사내 규격이 아님). 규격 칸에 적힌 숫자를 경계로 보고
+    ('≤ 50 ppm', '99.5 % min', '0.5-1.0' 등), 실측값(exact)이 그중 하나와 같으면 경고한다.
+    단위가 서로 다르면 환산해서 비교하고, 환산할 수 없으면 비교하지 않는다.
+    결과 칸이 규격 문구와 같은 경우는 규격 복사(SPEC_COPIED)라 여기서 다루지 않는다.
+    """
+    anomalies = []
+    for item in _items(doc):
+        raw, spec = item.get("raw_value"), item.get("raw_spec")
+        if (item.get("value_qualifier") != ValueQualifier.EXACT or not raw or not spec
+                or item.get("reason_code") == ReasonCode.SPEC_COPIED or is_spec_text_as_result(raw, spec)):
+            continue
+        values = _numbers(raw)
+        if len(values) != 1:
+            continue
+        value, value_unit = values[0]
+        value_unit = value_unit or item.get("unit")
+        for bound, bound_unit in _numbers(spec):
+            try:
+                bound = convert_unit(bound, bound_unit or item.get("unit"), value_unit)
+            except UnitConversionError:
+                continue
+            if math.isclose(value, bound, rel_tol=1e-9, abs_tol=1e-12):
+                name = item["normalized_name"]
+                anomalies.append(AnomalyOut(
+                    type="at_spec_limit",
+                    item_name=name,
+                    message=f"값이 협력사 규격 경계와 같습니다. {name} {raw.strip()} (협력사 규격 {spec.strip()})",
+                    related_document_ids=[],
+                ))
+                break
     return anomalies
