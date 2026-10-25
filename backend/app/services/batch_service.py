@@ -8,6 +8,7 @@
   2. 추출이 끝나면 (save_extraction → link_by_lot)
        - 아직 입고 정보가 없는 문서는 CoA 로트번호 = received_lot 인 입고 행과 연결한다
        - 입고 CSV 를 올렸는데 맞는 입고 행이 없으면 LOT_MISMATCH (입고 정보 없는 CoA → 보류 권고)
+       - 로트는 맞는데 입고 원자재가 다르면 PRODUCT_MISMATCH (입고 건은 연결, 규격 세트는 그대로)
        - file_name 으로 연결된 문서는 입고 로트 ≠ CoA 로트를 document_checks.check_lot 이 검사한다
   3. GET /documents/batch/{batch_id} : 검토 큐
        부적합 → 서류 불일치 → 판정 불가·누락·확인 필요 → 정상 → 처리 중 순. 추출 실패 문서는 격리 목록,
@@ -234,6 +235,16 @@ def link_by_lot(db: Session, document: Document, extraction: ExtractionInput) ->
         if same_lot:
             return [DocumentIssue(code=D.LOT_MISMATCH,
                                   message=f"입고 로트 {same_lot[0].received_lot_no} 는 이미 다른 CoA 와 연결됨 (같은 로트 CoA 중복)")]
+        other_material = [r for r in receipts if normalize_lot(r.received_lot_no) == key and r.document_id is None]
+        if other_material:
+            # 로트는 맞는데 입고 원자재가 다름 (생성기 v2 MATERIAL_MISMATCH). 입고 건은 연결해 두고 규격 세트는 바꾸지 않는다
+            receipt = other_material[0]
+            receipt.document_id = document.id
+            document.received_lot_no = receipt.received_lot_no
+            document.supplier = document.supplier or receipt.supplier
+            return [DocumentIssue(code=D.PRODUCT_MISMATCH,
+                                  message=f"입고 원자재 {receipt.material_code} ≠ 접수 원자재 {document.material_code} "
+                                          f"(로트 {receipt.received_lot_no})")]
         return [DocumentIssue(code=D.LOT_MISMATCH, message=f"입고 정보에 CoA 로트 {extraction.lot_no.strip()} 가 없습니다")]
 
     receipt = free[0]
@@ -243,6 +254,14 @@ def link_by_lot(db: Session, document: Document, extraction: ExtractionInput) ->
     if receipt.spec_set_code:
         document.spec_set = spec_service.resolve_spec_set(db, document.material_code, receipt.spec_set_code)
     return []
+
+
+def receipt_of(db: Session, document: Document) -> Receipt | None:
+    """문서와 연결된 입고 행 (일괄 접수가 아니거나 연결되지 않았으면 None)."""
+    if not document.batch_id:
+        return None
+    db.flush()  # 방금 link_by_lot 이 연결한 행도 찾도록 (세션 autoflush 꺼져 있음)
+    return db.scalar(select(Receipt).where(Receipt.document_id == document.id))
 
 
 # ---------------------------------------------------------------------------

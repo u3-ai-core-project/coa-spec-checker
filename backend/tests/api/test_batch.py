@@ -95,6 +95,41 @@ def test_file_linked_receipt_with_different_lot_is_mismatch(batch, auth_client):
     assert (item["received_lot_no"], item["document_issues"]) == ("LOT-Z", ["LOT_MISMATCH"])
 
 
+def test_received_date_after_expiry_is_date_conflict(batch, auth_client):
+    """입고 CSV 의 입고일이 CoA 유효기한을 지나면 DATE_CONFLICT (file_name 연결, 로트 연결 모두)."""
+    expired = {**coa("LOT-A"), "expiry_date": "2026-09-30"}
+    fresh = {**coa("LOT-B"), "expiry_date": "2027-09-30"}
+    csv = HEADER + "R1,,,LOT-A,,2026-10-05,a.pdf\nR2,,,LOT-B,,2026-10-05,\n"
+    code, up = batch({"a": expired, "b": fresh}, csv=csv)
+    docs = by_file(detail(auth_client, up["batch_id"]))
+    assert docs["a.pdf"]["document_issues"] == ["DATE_CONFLICT"] and docs["a.pdf"]["lot_recommendation"] == "hold"
+    assert docs["b.pdf"]["document_issues"] == []
+    msg = auth_client.get(f"/api/v1/documents/{docs['a.pdf']['document_id']}/extraction").json()["data"]
+    assert "입고일 2026-10-05이 유효기한 2026-09-30을 지남" in msg["document_issues"][0]["message"]
+
+
+def test_received_date_checked_after_lot_link(batch, auth_client):
+    expired = {**coa("LOT-B"), "retest_date": "2026-08-01"}
+    code, up = batch({"b": expired}, csv=HEADER + "R2,,,LOT-B,,2026-10-05,\n")
+    item = by_file(detail(auth_client, up["batch_id"]))["b.pdf"]
+    assert (item["receipt_id"], item["document_issues"]) == ("R2", ["DATE_CONFLICT"])
+
+
+def test_same_lot_different_material_is_product_mismatch(batch, auth_client, db):
+    """로트는 맞는데 입고 원자재가 다르면 PRODUCT_MISMATCH (생성기 v2 MATERIAL_MISMATCH). 입고 건은 연결된다."""
+    from app.models import SpecSet
+    db.add(SpecSet(code="LIOH-TEST", material_code="LIOH", material_name="수산화리튬", is_default=True))
+    db.commit()
+    code, up = batch({"a": coa("LOT-A")}, csv=HEADER + "R1,,LIOH,LOT-A,,,\n")
+    d = detail(auth_client, up["batch_id"])
+    item = by_file(d)["a.pdf"]
+    assert (item["receipt_id"], item["document_issues"], item["spec_set_code"]) == \
+           ("R1", ["PRODUCT_MISMATCH"], "LI2CO3-D1-2023")
+    assert d["unmatched_receipts"] == []
+    f = auth_client.get(f"/api/v1/documents/{item['document_id']}/follow-ups").json()["data"]
+    assert f["suggested_follow_up"] == "request_correct_coa"
+
+
 def test_two_coas_for_one_received_lot(batch, auth_client):
     code, up = batch({"b1": coa("LOT-B"), "b2": coa("LOT-B")}, csv=HEADER + "R1,,,LOT-B,,,\n")
     docs = by_file(detail(auth_client, up["batch_id"]))
@@ -131,8 +166,8 @@ def test_queue_order(batch, auth_client):
 
 
 def test_demo_lots_as_one_batch(batch, auth_client):
-    """멘토님 데모 로트(구현된 18건)를 한 묶음으로 올려도 사례별 권고가 같고, 검토 큐가 순서대로 나온다 (UC10 20건 혼합 배치)."""
-    cases = [c for c in CASES if not c.get("pending")]
+    """멘토님 데모 로트(단일 로트 사례 중 구현된 18건)를 한 묶음으로 올려도 사례별 권고가 같고, 검토 큐가 순서대로 나온다 (UC10 20건 혼합 배치)."""
+    cases = [c for c in CASES if not c.get("pending") and "repeat_lots" not in c]   # 데모 20 은 여러 로트 사례
     coas, rows = {}, []
     for c in cases:
         name, lot = f'demo{c["id"]}', f'DEMO-L{c["id"]}'

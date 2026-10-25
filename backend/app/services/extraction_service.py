@@ -27,9 +27,11 @@ def save_extraction(db: Session, document: Document, extraction: ExtractionInput
     batch_issues = batch_service.link_by_lot(db, document, extraction)
     spec_set = document.spec_set or spec_service.get_default_set(db, document.material_code)
     specs = spec_service.get_rules(db, spec_set.id) if spec_set else []
-    # 문서 정합성 검사 (v1.4 2.1, 데모 12·18): 입고 로트 ≠ CoA 로트, 날짜 충돌, 규격 버전 다름 → 보류 권고
+    # 문서 정합성 검사 (v1.4 2.1, 데모 12·18): 입고 로트 ≠ CoA 로트, 날짜 충돌(입고일 포함), 규격 버전 다름 → 보류 권고
+    receipt = batch_service.receipt_of(db, document)
     issues = check_document(extraction, received_lot_no=document.received_lot_no,
-                            spec_version=spec_set.version if spec_set else None) + batch_issues
+                            spec_version=spec_set.version if spec_set else None,
+                            received_date=receipt.received_date if receipt else None) + batch_issues
     result = judge_document(extraction, document_id=document.id, specs=specs, issues=issues)
 
     # 업로드 때 입력한 협력사명이 있으면 그것을 우선한다

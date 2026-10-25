@@ -47,6 +47,20 @@ def test_expiry_before_test_date():
     assert codes(issues) == [D.DATE_CONFLICT] and "유효기한" in issues[0].message
 
 
+def test_received_after_expiry_or_retest():
+    """입고 시점에 유효기한·재시험일이 지난 원료 (생성기 v2 DATE_CONFLICT)."""
+    doc = coa(test_date=date(2026, 1, 10), expiry_date=date(2026, 9, 30), retest_date=date(2026, 7, 1))
+    issues = check_document(doc, received_date=date(2026, 10, 5))
+    assert codes(issues) == [D.DATE_CONFLICT]
+    assert "유효기한 2026-09-30" in issues[0].message and "재시험일 2026-07-01" in issues[0].message
+
+
+def test_received_before_expiry_is_fine():
+    doc = coa(expiry_date=date(2027, 9, 30), retest_date=date(2027, 3, 1))
+    assert check_document(doc, received_date=date(2026, 10, 5)) == []
+    assert check_document(doc) == []          # 입고일을 모르면 검사하지 않음
+
+
 def test_dates_in_order_are_fine():
     ok = coa(test_date=date(2026, 9, 20), issue_date=date(2026, 9, 20), expiry_date=date(2028, 9, 20))
     assert check_document(ok) == []
