@@ -29,10 +29,12 @@ class Settings(BaseSettings):
     EXTRACTOR: str = "mock"
     MOCK_EXTRACTION_DIR: str = "app/pipeline/mock_data"
 
-    # 산화물 → 원소 환산 계수 (명세 2.2). 원소 질량 / 산화물 질량
+    # 산화물 → 원소 환산 계수 (명세 2.2). 원소 질량 / 산화물 질량 (원자량으로 계산, 소수 넷째 자리)
     OXIDE_TO_ELEMENT: dict[str, float] = {
         "Na2O": 0.7419,   # Na
+        "K2O": 0.8301,    # K  = 2×39.098 / 94.196
         "CaO": 0.7147,    # Ca
+        "MgO": 0.6031,    # Mg = 24.305 / 40.304
         "Fe2O3": 0.6994,  # Fe
     }
 
