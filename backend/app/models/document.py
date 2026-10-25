@@ -50,6 +50,8 @@ class Document(Base):
     # 이 문서를 판정한 사내 규격 세트 (v1.4안). 업로드 때 정한다.
     # 지정하지 않으면 원자재 기본 세트. 규격 세트가 바뀌어도 어떤 기준으로 판정했는지 남기기 위해 둔다.
     spec_set_id: Mapped[int | None] = mapped_column(ForeignKey("spec_sets.id"), index=True)
+    # 일괄 접수(UC01)로 올린 문서면 그 묶음. 한 건씩 올리면 null
+    batch_id: Mapped[str | None] = mapped_column(ForeignKey("batches.id", ondelete="SET NULL"), index=True)
 
     # 상태와 판정
     status: Mapped[DocumentStatus] = mapped_column(

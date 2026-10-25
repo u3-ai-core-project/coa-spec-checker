@@ -41,7 +41,7 @@ def judge(raw_value, spec, policy=POLICY, **kw):
     ("< 100", NA, {"unit": "ppm"}, J.UNDETERMINED, R.BOUND_ABOVE_LIMIT, T.ACTUAL_VALUE),
     ("none detected", FE, {}, J.CHECK, R.ND_NO_LOD, T.DETECTION_LIMIT),
     ("ND (<20 ppm)", FE, {}, J.UNDETERMINED, R.LOD_ABOVE_LIMIT, T.DETECTION_LIMIT),
-    ("=<1000", NA, {"raw_spec": "≤ 1000"}, J.UNDETERMINED, R.SPEC_COPIED, T.ACTUAL_VALUE),
+    ("=<1000", NA, {"raw_spec": "≤ 1000"}, J.CHECK, R.SPEC_COPIED, T.ACTUAL_VALUE),   # 10.25: 판정 불가 → 확인 필요
     ("30", NA, {"unit": "ppm", "conf": 0.5}, J.CHECK, R.LOW_CONFIDENCE, T.CONFIRM),
     ("3.2-3.4", NA, {}, J.CHECK, R.UNPARSEABLE_VALUE, T.CONFIRM),
     ("< 99.9", PURITY, {"unit": "%"}, J.UNDETERMINED, R.LOWER_LIMIT_UNVERIFIABLE, T.ACTUAL_VALUE),
@@ -168,15 +168,28 @@ def test_nd_limit_equal_to_usl_exclusive_undetermined():
 
 
 # ---- 정책: 미등록 AI 항목명 (안건 3) ------------------------------------------
-def test_unmapped_ai_item_reference_by_default():
+def test_unmapped_ai_item_check_by_default():
+    # 멘토님 판정표 "항목명 모호·화학종 불명 → 확인 필요, 잘못된 자동 매핑 금지" (10.25 기본값 변경)
     r = judge("1.2", None)
+    assert (r.judgement, r.reason_code) == (J.CHECK, R.UNMAPPED_ITEM)
+    assert r.resolution.type == T.CONFIRM
+
+
+def test_unmapped_ai_item_reference_policy():
+    # 설정으로 이전 동작(참고)으로 되돌릴 수 있다: UNMAPPED_AI_ITEM=reference
+    policy = POLICY.with_overrides(unmapped_ai_item=UnmappedPolicy.REFERENCE)
+    r = judge("1.2", None, policy=policy)
     assert (r.judgement, r.reason_code, r.judgement_reason) == (J.PASS, None, "규격 없음")
 
 
-def test_unmapped_ai_item_check_policy():
-    policy = POLICY.with_overrides(unmapped_ai_item=UnmappedPolicy.CHECK)
-    r = judge("1.2", None, policy=policy)
-    assert (r.judgement, r.reason_code) == (J.CHECK, R.UNMAPPED_ITEM)
+def test_default_policy_matches_mentor_criteria():
+    # 기본 정책 = 멘토님 판정표 기준 (10.25): 규격 복사·합산값·미등록 AI 항목명은 확인 필요
+    p = JudgementPolicy()
+    assert p.judgement_for(R.SPEC_COPIED) == J.CHECK and p.judgement_for(R.SUM_ONLY) == J.CHECK
+    assert p.unmapped_ai_item == UnmappedPolicy.CHECK
+    assert p.judgement_for(R.BOUND_ABOVE_LIMIT) == J.UNDETERMINED   # "< X, X > 상한 → 판정 불가"는 그대로
+    s = Settings(_env_file=None)   # 각자의 .env 와 상관없이 코드 기본값 확인
+    assert JudgementPolicy.from_settings(s).unmapped_ai_item == UnmappedPolicy.CHECK
 
 
 def test_unmapped_dictionary_item_stays_reference_under_check_policy():
