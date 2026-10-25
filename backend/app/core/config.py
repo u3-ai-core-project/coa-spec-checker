@@ -44,8 +44,9 @@ class Settings(BaseSettings):
     REASON_JUDGEMENT: dict[str, str] = {}
     # 검출 안 됨: 검출한계 == 사내 상한일 때 적합으로 볼지 (True: 이하면 적합, False: 미만이어야 적합)
     ND_LIMIT_INCLUSIVE: bool = True
-    # 사내 규격에 없는 항목 중 AI 가 항목명을 추정한 것: "reference"(참고, 판정 안 함) | "check"(확인 필요)
-    UNMAPPED_AI_ITEM: str = "reference"
+    # 사내 규격에 없는 항목 중 AI 가 항목명을 추정한 것: "check"(확인 필요, 기본) | "reference"(참고, 판정 안 함)
+    # 멘토님 판정표 "항목명 모호·화학종 불명 → 확인 필요" (10.25 기본값 변경)
+    UNMAPPED_AI_ITEM: str = "check"
     # 켜 둘 교차 규칙 (여러 항목을 함께 보는 규칙). 사용 가능: heavy_metal_total
     CROSS_RULES: list[str] = ["heavy_metal_total"]
     # 중금속 총량 규칙에 쓰는 사내 표준 항목명 (규격 시드·매핑 사전의 normalized_name 과 같아야 함)
