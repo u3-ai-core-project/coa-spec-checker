@@ -24,6 +24,7 @@ class Settings(BaseSettings):
     # 파일
     UPLOAD_DIR: str = "storage/uploads"
     MAX_UPLOAD_MB: int = 20
+    MAX_BATCH_FILES: int = 20   # 일괄 접수 한 번에 올릴 수 있는 CoA 수 (멘토님 UC01 "CoA 1~20개")
 
     # AI 추출기. "mock" 이면 app/pipeline/mock_data 의 JSON 을 결과로 사용 (AI 파트 연결 전)
     EXTRACTOR: str = "mock"
