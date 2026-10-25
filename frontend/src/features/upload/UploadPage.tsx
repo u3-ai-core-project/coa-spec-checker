@@ -7,8 +7,10 @@ import ReceiptDialog from './components/ReceiptDialog'
 import { DECISION_LABEL, STATUS_LABEL } from './lib/documentStatus'
 import { MATERIALS, MAX_FILES } from './lib/upload'
 import { useUploadQueue, type QueueItem } from './hooks/useUploadQueue'
-
-const GRID = 'grid grid-cols-[minmax(0,1fr)_100px_300px_100px] items-center px-5'
+import { GRID, Mark, Spinner } from './components/cells'
+import BatchRows from './components/BatchRows'
+import { useBatchUpload } from './hooks/useBatchUpload'
+import { splitSelection } from './lib/selection'
 
 function fileMeta(file: File) {
     const ext = file.name.split('.').pop()?.toLowerCase() ?? ''
@@ -17,18 +19,6 @@ function fileMeta(file: File) {
             ? `${Math.max(1, Math.round(file.size / 1024))}KB`
             : `${(file.size / 1024 / 1024).toFixed(1)}MB`
     return `${ext} · ${size}`
-}
-
-function Spinner() {
-    return <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-brand/25 border-t-brand" />
-}
-
-function Mark({ color, children }: { color: string; children: string }) {
-    return (
-        <span className={`flex h-4 w-4 items-center justify-center rounded-full text-[11px] font-bold text-white ${color}`}>
-            {children}
-        </span>
-    )
 }
 
 function StatusCell({ item, onOpenDialog, onRetry }: { item: QueueItem; onOpenDialog: () => void; onRetry: () => void }) {
@@ -112,24 +102,56 @@ function StatusCell({ item, onOpenDialog, onRetry }: { item: QueueItem; onOpenDi
 export default function UploadPage() {
     const { user } = useAuth()
     const queue = useUploadQueue()
+    const batch = useBatchUpload()
     const [materialCode, setMaterialCode] = useState(MATERIALS[0].code)
     const [notice, setNotice] = useState<string | null>(null)
     const [dragging, setDragging] = useState(false)
     const [dialogId, setDialogId] = useState<string | null>(null)
     const inputRef = useRef<HTMLInputElement>(null)
     const navigate = useNavigate()
-    const firstReady = queue.items.find((i) => i.phase === 'uploaded' && i.status === 'extracted')
+    const singleId = queue.items.find((i) => i.phase === 'uploaded' && i.status === 'extracted')?.documentId
+    const batchDocId = batch.batches.flatMap((b) => b.detail?.queue ?? []).find((i) => i.status === 'extracted')?.document_id
+    const readyId = singleId ?? batchDocId
+    const batchCount = batch.batches.reduce((n, b) => n + b.accepted.length + b.rejected.length + (b.csvName ? 1 : 0), 0)
+    const isolatedCount = batch.batches.reduce((n, b) => n + b.rejected.length + (b.detail?.isolated.length ?? 0), 0)
+    const total = queue.items.length + batchCount
 
     const dialogItem = queue.items.find((i) => i.localId === dialogId)
+
+    async function handleSelect(files: File[]) {
+        const { coa, csv, other } = splitSelection(files)
+        const notes: string[] = []
+        if (other.length > 0) notes.push(`${other.length}개 파일은 지원하지 않는 형식이라 제외했습니다.`)
+        if (csv.length > 1) {
+            setNotice('입고 정보 CSV는 1개만 선택할 수 있습니다.')
+            return
+        }
+        if (csv.length === 1 && coa.length === 0) {
+            setNotice('입고 정보 CSV는 CoA 파일과 함께 선택해 주세요.')
+            return
+        }
+        if (coa.length > MAX_FILES) {
+            setNotice(`한 번에 ${MAX_FILES}개까지 선택할 수 있습니다.`)
+            return
+        }
+        if (coa.length >= 2 || csv.length === 1) {
+            const err = await batch.submit(coa, csv[0], materialCode) // 일괄 접수
+            if (err) notes.push(err)
+        } else if (coa.length === 1) {
+            const msg = queue.addFiles(coa) // 입고 정보 팝업
+            if (msg) notes.push(msg)
+        }
+        setNotice(notes.length > 0 ? notes.join(' ') : null)
+    }
 
     function onDrop(e: DragEvent<HTMLDivElement>) {
         e.preventDefault()
         setDragging(false)
-        setNotice(queue.addFiles(Array.from(e.dataTransfer.files)))
+        void handleSelect(Array.from(e.dataTransfer.files))
     }
 
     function onPick(e: ChangeEvent<HTMLInputElement>) {
-        setNotice(queue.addFiles(Array.from(e.target.files ?? [])))
+        void handleSelect(Array.from(e.target.files ?? []))
         e.target.value = ''
     }
 
@@ -161,23 +183,27 @@ export default function UploadPage() {
                     파일 선택
                 </button>
                 <input ref={inputRef} type="file" multiple accept=".pdf,.png,.jpg,.csv" className="hidden" onChange={onPick} />
+                {batch.sending && <p className="text-xs text-ink-sub">일괄 접수 중…</p>}
             </div>
 
-            {notice && (
-                <p role="alert" className="text-xs text-[#c0392b]">
-                    {notice}
-                </p>
-            )}
+            {
+                notice && (
+                    <p role="alert" className="text-xs text-[#c0392b]">
+                        {notice}
+                    </p>
+                )
+            }
 
             <div className="overflow-hidden rounded-xl border border-line bg-white">
                 <div className="flex h-16 items-center justify-between px-5">
                     <p className="text-[15px] font-bold text-ink">
-                        <span className="text-brand">{queue.items.length}개</span> / {MAX_FILES}개
+                        <span className="text-brand">{total}개</span>
+                        {isolatedCount > 0 && <span className="text-xs text-[#c0392b]"> (격리 {isolatedCount}건 포함)</span>} / {MAX_FILES}개
                     </p>
                     <button
                         type="button"
-                        disabled={!firstReady}
-                        onClick={() => { if (firstReady?.documentId) navigate(`/inspection/${firstReady.documentId}`) }}
+                        disabled={!readyId}
+                        onClick={() => { if (readyId) navigate(`/inspection/${readyId}`) }}
                         className="rounded-lg bg-brand px-4 py-2 text-sm font-bold text-white disabled:bg-[#eceef1] disabled:text-[#9aa0a8]"
                     >
                         검수 시작
@@ -191,50 +217,55 @@ export default function UploadPage() {
                     <span />
                 </div>
 
-                {queue.items.length === 0 ? (
+                {queue.items.length === 0 && batch.batches.length === 0 ? (
                     <div className="flex flex-col items-center gap-1 py-10">
                         <p className="text-[13px] text-ink">아직 업로드한 파일이 없습니다.</p>
                         <p className="text-xs text-[#9aa0a8]">위 영역에 CoA 파일을 끌어다 놓거나 파일 선택 버튼을 눌러주세요.</p>
                     </div>
                 ) : (
-                    queue.items.map((item) => (
-                        <div
-                            key={item.localId}
-                            className={`${GRID} border-b border-[#eceef1] py-2.5 last:border-b-0 ${item.phase === 'error' || item.status === 'failed' ? 'bg-[#FFF1F0]' : ''
-                                }`}
-                        >
-                            <div className="min-w-0">
-                                <p className="truncate text-[13px] font-medium text-ink">{item.file.name}</p>
-                                <p className="text-[11px] text-[#9aa0a8]">{fileMeta(item.file)}</p>
+                    <>
+                        {queue.items.map((item) => (
+                            <div
+                                key={item.localId}
+                                className={`${GRID} border-b border-[#eceef1] py-2.5 last:border-b-0 ${item.phase === 'error' || item.status === 'failed' ? 'bg-[#FFF1F0]' : ''
+                                    }`}
+                            >
+                                <div className="min-w-0">
+                                    <p className="truncate text-[13px] font-medium text-ink">{item.file.name}</p>
+                                    <p className="text-[11px] text-[#9aa0a8]">{fileMeta(item.file)}</p>
+                                </div>
+                                <span className="text-[13px] text-ink-sub">{user?.name}</span>
+                                <StatusCell item={item} onOpenDialog={() => setDialogId(item.localId)} onRetry={() => { if (item.info) void queue.saveInfoAndStart(item.localId, item.info, materialCode) }} />
+                                <div className="flex justify-end">
+                                    <button
+                                        type="button"
+                                        onClick={() => queue.remove(item.localId)}
+                                        aria-label={`${item.file.name} 삭제`}
+                                        className="text-[#9aa0a8] hover:text-ink"
+                                    >
+                                        <CloseIcon />
+                                    </button>
+                                </div>
                             </div>
-                            <span className="text-[13px] text-ink-sub">{user?.name}</span>
-                            <StatusCell item={item} onOpenDialog={() => setDialogId(item.localId)} onRetry={() => { if (item.info) void queue.saveInfoAndStart(item.localId, item.info, materialCode) }} />
-                            <div className="flex justify-end">
-                                <button
-                                    type="button"
-                                    onClick={() => queue.remove(item.localId)}
-                                    aria-label={`${item.file.name} 삭제`}
-                                    className="text-[#9aa0a8] hover:text-ink"
-                                >
-                                    <CloseIcon />
-                                </button>
-                            </div>
-                        </div>
-                    ))
+                        ))}
+                        <BatchRows batches={batch.batches} owner={user?.name ?? ''} />
+                    </>
                 )}
             </div>
 
-            {dialogItem && (
-                <ReceiptDialog
-                    key={dialogItem.localId}
-                    fileName={dialogItem.file.name}
-                    onCancel={() => setDialogId(null)}
-                    onSubmit={(info) => {
-                        setDialogId(null)
-                        void queue.saveInfoAndStart(dialogItem.localId, info, materialCode)
-                    }}
-                />
-            )}
-        </div>
+            {
+                dialogItem && (
+                    <ReceiptDialog
+                        key={dialogItem.localId}
+                        fileName={dialogItem.file.name}
+                        onCancel={() => setDialogId(null)}
+                        onSubmit={(info) => {
+                            setDialogId(null)
+                            void queue.saveInfoAndStart(dialogItem.localId, info, materialCode)
+                        }}
+                    />
+                )
+            }
+        </div >
     )
 }

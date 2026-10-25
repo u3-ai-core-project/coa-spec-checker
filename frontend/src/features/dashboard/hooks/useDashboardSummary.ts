@@ -9,14 +9,14 @@ interface Loaded {
     error: string | null
 }
 
-export function useDashboardSummary({ userId, from, to }: DashboardQuery) {
+export function useDashboardSummary({ userId, materialCode, from, to }: DashboardQuery) {
     const [reloadCount, setReloadCount] = useState(0)
     const [loaded, setLoaded] = useState<Loaded | null>(null)
     const key = `${userId ?? ''}|${from ?? ''}|${to ?? ''}|${reloadCount}`
 
     useEffect(() => {
         let cancelled = false
-        fetchDashboardSummary({ userId, from, to })
+        fetchDashboardSummary({ userId, materialCode, from, to })
             .then((data) => {
                 if (!cancelled) setLoaded({ key, data, error: null })
             })
@@ -27,7 +27,7 @@ export function useDashboardSummary({ userId, from, to }: DashboardQuery) {
                 setLoaded({ key, data: null, error: message })
             })
         return () => { cancelled = true }
-    }, [key, userId, from, to])
+    }, [key, userId, materialCode, from, to])
 
     // 필터가 바뀌어 새 요청이 진행 중이면 loading
     const current = loaded?.key === key ? loaded : null
