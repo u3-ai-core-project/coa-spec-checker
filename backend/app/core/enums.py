@@ -77,7 +77,8 @@ class ResolutionType(StrEnum):
 class DocumentIssueCode(StrEnum):
     """문서 정합성 오류 (명세 v1.4안 2.1 document_issues). 1개 이상이면 보류 권고.
 
-    탐지 규칙은 P1 에서 구현한다. 지금은 결과 JSON 형식과 로트 권고 연결만 준비해 둔다.
+    탐지 규칙: app/services/judgement/document_checks.py (10.25: LOT_MISMATCH, DATE_CONFLICT, SPEC_VERSION_UNKNOWN).
+    PRODUCT_MISMATCH, SUPPLIER_CONFLICT 는 아직 탐지하지 않는다.
     """
     LOT_MISMATCH = "LOT_MISMATCH"
     PRODUCT_MISMATCH = "PRODUCT_MISMATCH"

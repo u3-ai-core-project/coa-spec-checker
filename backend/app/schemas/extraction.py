@@ -130,7 +130,7 @@ class ExtractionResult(BaseModel):
     expiry_date: date | None = None
     retest_date: date | None = None
     items: list[ExtractionItem]
-    document_issues: list[DocumentIssue] = []  # v1.4안. 탐지 규칙은 P1 (지금은 항상 빈 목록)
+    document_issues: list[DocumentIssue] = []  # v1.4. 탐지 규칙은 judgement/document_checks.py
     lot_recommendation: LotRecommendation
     summary: Summary
     review_status: ReviewStatus = ReviewStatus.PENDING
