@@ -129,7 +129,7 @@
                   "supplier_codes": ["OUT_OF_SPEC", "MISSING_REQUIRED"], "draft_mentions": ["Fe", "Mg"]}},
 
     {"id": "20", "title": "로트 간 동일 결과 반복", "mentor": "이상 패턴 경고 / 위조 판정 금지",
-     "pending": "이상 패턴 API(GET /documents/{id}/anomalies) 미구현 (담당 홍채령, 확장 범위)",
+     "note": "같은 협력사의 다른 로트와 실측값이 같으면 참고 경고(identical_values). 판정·로트 권고에는 영향 없음",
      "repeat_lots": ["DEMO-L01", "DEMO-L02", "DEMO-L03"],
      "expected": {"anomaly": true}}
   ]

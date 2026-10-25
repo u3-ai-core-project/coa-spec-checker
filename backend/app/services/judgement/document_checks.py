@@ -3,7 +3,8 @@
 항목 판정과 별개로 문서 단위 문제를 찾는다. 1개 이상이면 부적합이 없어도 보류 권고다 (lot_recommend).
 
   LOT_MISMATCH   입고 로트번호(업로드 때 입력) ≠ CoA 로트번호
-  DATE_CONFLICT  CoA 발행일이 시험일보다 앞섬, 또는 유효기한이 시험일보다 앞섬
+  DATE_CONFLICT  CoA 발행일이 시험일보다 앞섬, 유효기한이 시험일보다 앞섬,
+                 또는 입고일(일괄 접수의 입고 CSV)이 유효기한·재시험일을 지남
   SPEC_VERSION_UNKNOWN  CoA 적용 규격과 사내 규격 세트가 같은 규격의 다른 버전 (데모 18, E04)
                         예) CoA "YS/T 582-2023", 사내 세트 "YS/T 582-2013" → 어느 버전으로 판정할지 확인 필요
                         (새 코드를 만들면 결과 JSON 스키마 변경이라, 기존 코드에 메시지로 구분한다)
@@ -32,13 +33,18 @@ def check_lot(received_lot_no: str | None, coa_lot_no: str | None) -> DocumentIs
                          message=f"입고 로트 {received_lot_no.strip()} ≠ CoA 로트 {coa_lot_no.strip()}")
 
 
-def check_dates(extraction: ExtractionInput) -> DocumentIssue | None:
-    test, issue, expiry = extraction.test_date, extraction.issue_date, extraction.expiry_date
+def check_dates(extraction: ExtractionInput, received_date: date | None = None) -> DocumentIssue | None:
+    test, issue, expiry, retest = extraction.test_date, extraction.issue_date, extraction.expiry_date, extraction.retest_date
     problems: list[str] = []
     if test and issue and issue < test:
         problems.append(f"발행일 {_d(issue)}이 시험일 {_d(test)}보다 앞섬")
     if test and expiry and expiry < test:
         problems.append(f"유효기한 {_d(expiry)}이 시험일 {_d(test)}보다 앞섬")
+    # 입고 시점에 이미 유효기한·재시험일이 지난 원료 (생성기 v2 DATE_CONFLICT 사례)
+    if received_date and expiry and received_date > expiry:
+        problems.append(f"입고일 {_d(received_date)}이 유효기한 {_d(expiry)}을 지남")
+    if received_date and retest and received_date > retest:
+        problems.append(f"입고일 {_d(received_date)}이 재시험일 {_d(retest)}을 지남")
     if not problems:
         return None
     return DocumentIssue(code=D.DATE_CONFLICT, message=", ".join(problems))
@@ -66,15 +72,16 @@ def check_spec_version(applied_standard: str | None, spec_version: str | None) -
 
 
 def check_document(extraction: ExtractionInput, *, received_lot_no: str | None = None,
-                   spec_version: str | None = None) -> list[DocumentIssue]:
+                   spec_version: str | None = None, received_date: date | None = None) -> list[DocumentIssue]:
     """문서 정합성 오류 목록 (없으면 빈 목록).
 
     received_lot_no : 업로드 때 입력한 입고 로트번호
     spec_version    : 이 문서를 판정한 사내 규격 세트의 버전 (spec_sets.version)
+    received_date   : 입고일 (일괄 접수에서 입고 행과 연결된 경우만)
     """
     checks = (
         check_lot(received_lot_no, extraction.lot_no),
-        check_dates(extraction),
+        check_dates(extraction, received_date),
         check_spec_version(extraction.applied_standard, spec_version),
     )
     return [i for i in checks if i]

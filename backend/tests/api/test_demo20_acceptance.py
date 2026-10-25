@@ -115,7 +115,17 @@ def _check_anomaly(case, upload, auth_client):
     ids = [upload(f'demo20-{lot}', build_coa(case.get("patch"), lot_no=lot)) for lot in case["repeat_lots"]]
     r = auth_client.get(f"/api/v1/documents/{ids[-1]}/anomalies")
     assert r.status_code == 200, r.status_code
-    assert r.json()["data"], "이상 패턴 경고 없음"
+    anomalies = r.json()["data"]
+    assert anomalies, "이상 패턴 경고 없음"
+    assert {a["type"] for a in anomalies} == {"identical_values"}
+    # 실측값 항목 모두가 앞선 두 로트와 같다고 나온다
+    names = {i["normalized_name"] for i in build_coa(case.get("patch"))["items"]}
+    assert {a["item_name"] for a in anomalies} == names
+    assert all(sorted(a["related_document_ids"]) == sorted(ids[:-1]) for a in anomalies)
+    assert not any("위조" in a["message"] for a in anomalies)      # 멘토님 기준: 위조 판정 금지
+    # 참고 경고라 판정·로트 권고는 그대로 (base CoA 는 승인 권고)
+    result = auth_client.get(f"/api/v1/documents/{ids[-1]}/extraction").json()["data"]
+    assert result["lot_recommendation"] == "approve"
 
 
 def _why(result) -> str:
