@@ -53,9 +53,10 @@ NORM_SYNTHETIC = [
     # 항목이 아니거나 표준 목록에 없는 것
     ("LI2CO3", "Lot Size", NONE), ("LI2CO3", "Molecular weight", NONE), ("LI2CO3", "Bulk density", NONE),
     ("LI2CO3", "Total impurities", NONE), ("LI2CO3", "Silver (Ag)", NONE), ("LI2CO3", "Arsenic", NONE),
-    ("LI2CO3", "MgO", NONE),  # 서버가 환산하는 산화물은 Na2O·CaO·Fe2O3 뿐
-    ("LI2CO3", "Specific surface area (BET)", NONE), ("LI2CO3", "Expiry date", NONE),
-    ("LI2CO3", "Loss on ignition", NONE), ("LI2CO3", "Retest date", NONE),
+    ("LI2CO3", "Specific surface area (BET)", NONE), ("LI2CO3", "Expiry date", NONE), ("LI2CO3", "Retest date", NONE),
+    # 2026-10-25 규격 세트(PR #20)에 강열감량이 생기고 서버가 K2O·MgO 를 환산(PR #14)해 정답이 '없음'에서 바뀜.
+    # bench/README.md 의 10-18 결과표는 바꾸기 전 정답으로 잰 것
+    ("LI2CO3", "MgO", "Mg"), ("LI2CO3", "Loss on ignition", "강열감량"),
 ]
 
 

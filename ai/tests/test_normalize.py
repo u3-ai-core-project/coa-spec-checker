@@ -83,12 +83,54 @@ def test_assay_is_not_mapped_for_lithium_hydroxide():
 
 def test_material_specific_items():
     assert Normalizer("LIOH").map("Li₂CO₃").source == "ai"
+    assert Normalizer("LIOH").map("Li₂CO₃ 함량").source == "ai"  # 수산화리튬에서는 불순물이라 LiOH 함량이 아니다
     assert Normalizer("LI2CO3").map("LiOH (as LiOH)").source == "ai"
 
 
+@pytest.mark.parametrize("raw, expected", [
+    # 규격 세트 항목 (PR #20 LI2CO3-D3-2023)
+    ("Loss on ignition", "강열감량"),
+    ("Loss on Ignition (LOI)", "강열감량"),
+    ("LOI", "강열감량"),
+    ("L.O.I.", "강열감량"),
+    ("Ignition loss", "강열감량"),
+    ("灼烧失量", "강열감량"),
+    ("灼减量", "강열감량"),
+    ("강열감량", "강열감량"),
+    ("D99", "입도 D99"),
+    ("Particle size D99", "입도 D99"),
+    ("粒度 D99", "입도 D99"),
+    ("D99 (μm)", "입도 D99"),
+    # 산화물 표기: 서버가 raw_name 의 화학식으로 원소 환산 (PR #14)
+    ("K₂O", "K"),
+    ("K2O content", "K"),
+    ("氧化钾 K2O", "K"),
+    ("Potassium oxide (K₂O)", "K"),
+    ("MgO", "Mg"),
+    ("氧化镁MgO", "Mg"),
+    # 화학식·이름 + 함량 표기
+    ("Li₂CO₃ 함량", "순도"),
+    ("Li2CO3含量", "순도"),
+    ("Li2CO3 Assay", "순도"),
+    ("Li2CO3 purity", "순도"),
+    ("Li2CO3 (%)", "순도"),
+    ("Content of Li2CO3", "순도"),
+    ("탄산리튬 함량", "순도"),
+])
+def test_spec_set_items(raw, expected):
+    m = Normalizer("LI2CO3").map(raw)
+    assert (m.name, m.source) == (expected, "dictionary")
+
+
 def test_oxides_the_server_cannot_convert_stay_unmapped():
-    for raw in ("K₂O", "MgO", "Al₂O₃", "SiO₂"):
+    for raw in ("Al₂O₃", "SiO₂"):
         assert Normalizer("LI2CO3").map(raw).source == "ai"
+
+
+@pytest.mark.parametrize("raw", ["Potassium oxide", "Magnesium oxide", "Sodium oxide", "氧化钾", "산화칼륨"])
+def test_oxide_names_without_formula_are_not_guessed(raw):
+    # 서버는 raw_name 의 화학식(K2O 등)을 보고 환산한다. 화학식 없는 이름을 원소로 붙이면 환산 없이 판정된다
+    assert Normalizer("LI2CO3").map(raw).name == raw
 
 
 @pytest.mark.parametrize("material", ["li2co3", " LI2CO3 ", "LI2CO3"])
@@ -113,7 +155,7 @@ def test_fuzzy_match_is_capped():
     assert (m.name, m.source, m.cap) == ("불용분", "ai", AI_CAP)
 
 
-@pytest.mark.parametrize("raw", ["Loss at 500ºC", "Density", "염산에 녹는 상태", "Sb", ""])
+@pytest.mark.parametrize("raw", ["Loss at 500ºC", "Loss on drying", "건조감량", "Density", "염산에 녹는 상태", "Sb", ""])
 def test_unmapped_keeps_raw_name(raw):
     m = Normalizer("LI2CO3").map(raw)
     assert (m.name, m.source, m.cap) == (raw, "ai", AI_CAP)
