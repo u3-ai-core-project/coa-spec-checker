@@ -11,15 +11,16 @@ KST = ZoneInfo("Asia/Seoul")
 URL = "/api/v1/dashboard/summary"
 
 
-def make_doc(db, uploader, status, rec=None, decision=None, items=(), uploaded_at=None, minutes=10):
-    """items: (항목명, 판정) 목록. 처분 일시는 업로드 minutes 분 뒤."""
+def make_doc(db, uploader, status, rec=None, decision=None, items=(), uploaded_at=None, minutes=10,
+             material_code="LI2CO3"):
+    """items: (항목명, 판정) 또는 항목 dict 목록. 처분 일시는 업로드 minutes 분 뒤."""
     uploaded_at = uploaded_at or datetime(2026, 10, 5, 9, 0, tzinfo=KST)
     doc = Document(
         file_name="coa.pdf",
         file_path="x",
         file_size=1,
         content_type="application/pdf",
-        material_code="LI2CO3",
+        material_code=material_code,
         status=status,
         lot_recommendation=rec,
         final_decision=decision,
@@ -29,7 +30,7 @@ def make_doc(db, uploader, status, rec=None, decision=None, items=(), uploaded_a
         approved_at=uploaded_at + timedelta(minutes=minutes) if status == S.APPROVED else None,
     )
     doc.extraction = ExtractionResult(
-        result={"items": [{"normalized_name": n, "judgement": j} for n, j in items]}
+        result={"items": [i if isinstance(i, dict) else {"normalized_name": i[0], "judgement": i[1]} for i in items]}
     )
     db.add(doc)
     db.commit()
@@ -60,6 +61,9 @@ def test_user_default_is_mine(auth_client, docs):
         "pass_rate": 66.7,
         "avg_processing_time_sec": 1200.0,
         "recommendation_match_rate": 100.0,  # 승인→승인, 불합격→불합격 일치. 보류 권고 문서는 계산에서 제외
+        "auto_approve_rate": 50.0,           # 정상(승인) 2건 중 승인 권고 + 사람 확인 없음 1건
+        "reviewed_item_ratio": 0.0,
+        "reason_code_counts": {},
         "deviation_by_item": [
             {"item_name": "수분", "fail_count": 1, "undetermined_count": 1},
             {"item_name": "Na", "fail_count": 1, "undetermined_count": 0},
@@ -119,3 +123,50 @@ def test_invalid_scope(auth_client, db):
 
 def test_requires_login(client, db):
     assert client.get(URL).status_code == 401
+
+
+# ---- v1.4안 지표 (auto_approve_rate, reviewed_item_ratio, reason_code_counts, material_code) ----
+def item(name, judgement="pass", reason_code=None, reviewed=False, judgement_reason=None):
+    return {"normalized_name": name, "judgement": judgement, "reason_code": reason_code, "reviewed": reviewed,
+            "judgement_reason": judgement_reason}
+
+
+@pytest.fixture
+def v14_docs(db, user):
+    # 정상(승인) 3건: 자동 1, 사람이 확인한 뒤 승인 권고 1, 보류 권고였는데 승인 1
+    make_doc(db, user, S.APPROVED, R.APPROVE, D.ACCEPT, [item("Na"), item("Fe")])
+    make_doc(db, user, S.APPROVED, R.APPROVE, D.ACCEPT, [item("Na", reviewed=True), item("Fe")])
+    make_doc(db, user, S.APPROVED, R.HOLD, D.ACCEPT, [item("Fe", "check", "ND_NO_LOD")])
+    # 조건부 승인은 정상 문서에서 제외
+    make_doc(db, user, S.APPROVED, R.APPROVE, D.CONDITIONAL_ACCEPT, [item("Na")], material_code="LIOH")
+    # 불합격
+    make_doc(db, user, S.APPROVED, R.REJECT, D.REJECT,
+             [item("Ca", "fail", "OUT_OF_SPEC"), item("K", "undetermined", "BOUND_ABOVE_LIMIT", reviewed=True)])
+
+
+def test_auto_approve_rate_uses_normal_documents(auth_client, v14_docs):
+    data = auth_client.get(URL).json()["data"]
+    assert data["auto_approve_rate"] == 33.3        # 정상 3건 중 1건
+    assert data["reviewed_item_ratio"] == 25.0      # 전체 항목 8개 중 사람 확인 2개
+    assert data["reason_code_counts"] == {"BOUND_ABOVE_LIMIT": 1, "ND_NO_LOD": 1, "OUT_OF_SPEC": 1}
+
+
+def test_material_code_filter(auth_client, v14_docs):
+    lioh = auth_client.get(URL, params={"material_code": "LIOH"}).json()["data"]
+    assert (lioh["total_processed"], lioh["conditional_accept_count"]) == (1, 1)
+    assert lioh["auto_approve_rate"] == 0.0         # 정상(승인) 문서가 없음
+    li2co3 = auth_client.get(URL, params={"material_code": "LI2CO3"}).json()["data"]
+    assert li2co3["total_processed"] == 4
+    assert auth_client.get(URL, params={"material_code": "NONE"}).json()["data"]["total_processed"] == 0
+
+
+def test_reviewed_ratio_counts_all_items(auth_client, db, user):
+    """분모: 전체 항목 (누락·참고 항목 포함)."""
+    make_doc(db, user, S.APPROVED, R.HOLD, D.ACCEPT, [
+        item("Na", reviewed=True),
+        item("Fe"),
+        item("황산염", "missing", "MISSING_REQUIRED", reviewed=True, judgement_reason="CoA에 항목 없음"),
+        item("Mg", judgement_reason="규격 없음"),
+        item("외관", judgement_reason="정성 항목, 판정 제외"),
+    ])
+    assert auth_client.get(URL).json()["data"]["reviewed_item_ratio"] == 40.0   # 5개 중 2개 (참고 2개 포함)
