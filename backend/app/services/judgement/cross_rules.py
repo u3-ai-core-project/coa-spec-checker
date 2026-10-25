@@ -30,64 +30,69 @@ CrossRule = Callable[[list[ExtractionItem], Mapping[str, SpecRule], JudgementPol
 
 
 # ---------------------------------------------------------------------------
-# 중금속 총량 → Pb (v1.4안 2.3)
+# 중금속 총량 → Pb, 다른 중금속 (v1.4 2.3, 10.25 회의 결정 6)
 # ---------------------------------------------------------------------------
 def heavy_metal_total(
     items: list[ExtractionItem], specs: Mapping[str, SpecRule], policy: JudgementPolicy
 ) -> list[ExtractionItem]:
-    """CoA 에 Pb 단일값이 없고 "Heavy metals (as Pb)" 같은 중금속 총량만 있을 때 Pb 를 판정한다.
+    """CoA 에 개별 중금속 값이 없고 "Heavy metals (as Pb)" 같은 중금속 총량만 있을 때.
 
-      총량 ≤ Pb 사내 상한 → Pb 적합   (Pb ≤ 총량 이므로 보수적으로 성립)
+    Pb (heavy_metal_target_name)
+      총량 ≤ Pb 사내 상한 → Pb 적합   (총량은 Pb 기준으로 잰 값이고 Pb ≤ 총량 이므로 보수적으로 성립)
       총량 > Pb 사내 상한 → AMBIGUOUS_ANALYTE (기본: 확인 필요, Pb 단일값 요청)
+    다른 중금속 (heavy_metal_other_names, 기본 Cu)
+      총량 값과 관계없이 AMBIGUOUS_ANALYTE. Pb 기준 총량으로는 그 금속의 상한을 판단할 수 없다.
+      (생성기 v2 AMBIGUOUS_ANALYTE 사례: Cu 줄 대신 Heavy metals (as Pb) → Cu 확인 필요)
 
-    적용하지 않는 경우 (Pb 는 원래 판정 그대로, 보통 누락)
-      - Pb 사내 규격(상한)이 없음
-      - Pb 단일값이 CoA 에 있음, 또는 담당자가 Pb 값을 입력함
+    적용하지 않는 경우 (원래 판정 그대로, 보통 누락)
+      - 그 항목의 사내 규격(상한)이 없음, 또는 필수 항목이 아니라 누락 항목도 없음
+      - 그 항목의 단일값이 CoA 에 있음, 또는 담당자가 값을 입력함
       - 총량 항목이 없음, 또는 총량 값 자체가 예외(신뢰도 낮음, 규격 복사, 검출한계 미기재 등)
     """
-    target_key = name_key(policy.heavy_metal_target_name)
     total_key = name_key(policy.heavy_metal_total_name)
-    target_spec = specs.get(target_key)
-    if target_spec is None or target_spec.usl is None:
-        return items
-
-    idx = next((n for n, i in enumerate(items) if name_key(i.normalized_name) == target_key), None)
-    if idx is None:
-        return items  # Pb 가 필수가 아니어서 누락 항목도 없는 경우
-    target = items[idx]
-    # Pb 실측값이 있거나(CoA 에 있음) 담당자가 값을 넣었으면 규칙 대상이 아니다
-    if (target.mapping_source != MappingSource.SPEC or target.value_source is not None
-            or target.converted_value is not None):
-        return items
-
-    bound = _total_upper_bound(items, total_key, specs, target_spec, policy)
     out = list(items)
-    if bound is None:
-        out[idx] = _as_missing(target, target_spec, policy)  # 규칙 미적용 → 누락으로 (재계산 시 되돌리기)
-        return out
-
-    value, unit = bound, target_spec.unit
-    usl = target_spec.usl
-    if value <= usl:
-        out[idx] = target.model_copy(update={
-            "judgement": policy.judgement_for(None),
-            "judgement_reason": f"{policy.heavy_metal_total_name} {fmt_value(value, unit)} ≤ "
-                                f"{target.normalized_name} 사내 상한 {fmt_value(usl, unit)} (총량 ≥ 개별값이므로 적합)",
-            "reason_code": None,
-            "resolution": None,
-            "deviation": None,
-        })
-    else:
-        out[idx] = target.model_copy(update={
-            "judgement": policy.judgement_for(R.AMBIGUOUS_ANALYTE),
-            "judgement_reason": f"{policy.heavy_metal_total_name} {fmt_value(value, unit)} > "
-                                f"{target.normalized_name} 사내 상한 {fmt_value(usl, unit)}, "
-                                f"{target.normalized_name} 단일값을 알 수 없음",
-            "reason_code": R.AMBIGUOUS_ANALYTE,
-            "resolution": build_resolution(R.AMBIGUOUS_ANALYTE, item_name=target.normalized_name, spec=target_spec,
-                                           target_item=target.normalized_name),
-            "deviation": None,
-        })
+    for name in (policy.heavy_metal_target_name, *policy.heavy_metal_other_names):
+        key = name_key(name)
+        spec = specs.get(key)
+        if spec is None or spec.usl is None:
+            continue
+        idx = next((n for n, i in enumerate(out) if name_key(i.normalized_name) == key), None)
+        if idx is None:
+            continue  # 필수가 아니어서 누락 항목도 없는 경우
+        target = out[idx]
+        # 실측값이 있거나(CoA 에 있음) 담당자가 값을 넣었으면 규칙 대상이 아니다
+        if (target.mapping_source != MappingSource.SPEC or target.value_source is not None
+                or target.converted_value is not None):
+            continue
+        bound = _total_upper_bound(out, total_key, specs, spec, policy)
+        if bound is None:
+            out[idx] = _as_missing(target, spec, policy)  # 규칙 미적용 → 누락으로 (재계산 시 되돌리기)
+        elif key == name_key(policy.heavy_metal_target_name) and bound <= spec.usl:
+            out[idx] = target.model_copy(update={
+                "judgement": policy.judgement_for(None),
+                "judgement_reason": f"{policy.heavy_metal_total_name} {fmt_value(bound, spec.unit)} ≤ "
+                                    f"{target.normalized_name} 사내 상한 {fmt_value(spec.usl, spec.unit)} "
+                                    f"(총량 ≥ 개별값이므로 적합)",
+                "reason_code": None,
+                "resolution": None,
+                "deviation": None,
+            })
+        else:
+            if key == name_key(policy.heavy_metal_target_name):
+                reason = (f"{policy.heavy_metal_total_name} {fmt_value(bound, spec.unit)} > "
+                          f"{target.normalized_name} 사내 상한 {fmt_value(spec.usl, spec.unit)}, "
+                          f"{target.normalized_name} 단일값을 알 수 없음")
+            else:
+                reason = (f"{policy.heavy_metal_total_name}({policy.heavy_metal_target_name} 기준) "
+                          f"{fmt_value(bound, spec.unit)}만 있어 {target.normalized_name} 단일값을 알 수 없음")
+            out[idx] = target.model_copy(update={
+                "judgement": policy.judgement_for(R.AMBIGUOUS_ANALYTE),
+                "judgement_reason": reason,
+                "reason_code": R.AMBIGUOUS_ANALYTE,
+                "resolution": build_resolution(R.AMBIGUOUS_ANALYTE, item_name=target.normalized_name, spec=spec,
+                                               target_item=target.normalized_name),
+                "deviation": None,
+            })
     return out
 
 

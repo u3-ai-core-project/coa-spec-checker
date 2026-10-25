@@ -158,3 +158,78 @@ def test_result_json_has_new_fields():
     na = next(i for i in data["items"] if i["normalized_name"] == "Na")
     assert na["reason_code"] == "OUT_OF_SPEC" and na["resolution"]["type"] == "confirm"
     assert data["document_issues"] == []
+
+
+# ---- 중금속 총량 → 다른 중금속 (Cu, 10.25 회의 결정 6) -----------------------------
+CU = SpecRule("Cu", unit="ppm", usl=3)                      # 생성기 v2 평가 세트처럼 Cu 가 필수
+CU_OPTIONAL = SpecRule("Cu", unit="ppm", usl=5, is_required=False)  # D3·2013 세트처럼 Cu 가 선택
+
+
+def cu_of(result):
+    return next(i for i in result.items if i.normalized_name == "Cu")
+
+
+@pytest.mark.parametrize("total", ["0.5", "2", "10.15"])
+def test_cu_missing_with_total_is_ambiguous_regardless_of_value(total):
+    """Pb 기준 총량으로는 Cu 상한을 판단할 수 없어 총량 값과 관계없이 확인 필요 (생성기 v2 AMBIGUOUS_ANALYTE)."""
+    r = run(row("Na", "10"), row("중금속 총량", total, raw_name="Heavy metals (as Pb)"), specs=[NA, CU, TOTAL])
+    cu = cu_of(r)
+    assert (cu.judgement, cu.reason_code) == (J.CHECK, R.AMBIGUOUS_ANALYTE)
+    assert (cu.resolution.type, cu.resolution.target_item) == (T.SINGLE_VALUE, "Cu")
+    assert "Cu 단일값을 알 수 없음" in cu.judgement_reason
+    assert r.lot_recommendation == L.HOLD
+
+
+def test_cu_and_pb_together():
+    """Pb·Cu 둘 다 필수이고 총량 2 ppm 만 있으면 Pb 는 적합(총량 ≤ Pb 상한), Cu 는 확인 필요."""
+    r = run(row("중금속 총량", "2"), specs=[PB, CU, TOTAL])
+    assert (pb_of(r).judgement, pb_of(r).reason_code) == (J.PASS, None)
+    assert cu_of(r).reason_code == R.AMBIGUOUS_ANALYTE
+
+
+def test_cu_without_total_stays_missing():
+    r = run(row("Na", "10"), specs=[NA, CU, TOTAL])
+    assert (cu_of(r).judgement, cu_of(r).reason_code) == (J.MISSING, R.MISSING_REQUIRED)
+
+
+def test_cu_value_on_coa_is_judged_normally():
+    r = run(row("Cu", "1"), row("중금속 총량", "2"), specs=[CU, TOTAL])
+    assert (cu_of(r).judgement, cu_of(r).reason_code) == (J.PASS, None)
+
+
+def test_optional_cu_not_flagged():
+    """Cu 가 선택 항목이면(D3·2013 세트) 누락 항목이 없어 규칙도 적용하지 않는다."""
+    r = run(row("Na", "10"), row("중금속 총량", "2"), specs=[NA, CU_OPTIONAL, TOTAL])
+    assert all(i.normalized_name != "Cu" for i in r.items)
+    assert r.lot_recommendation == L.APPROVE
+
+
+def test_pb_only_specs_unchanged_by_cu_rule():
+    """Pb 만 있는 기존 세트(D1 등)는 Cu 규칙을 켜도 결과가 그대로다."""
+    for total, expected in [("2", (J.PASS, None)), ("10.15", (J.CHECK, R.AMBIGUOUS_ANALYTE))]:
+        with_cu_rule = run(row("Na", "10"), row("중금속 총량", total))
+        without = run(row("Na", "10"), row("중금속 총량", total), policy=POLICY.with_overrides(heavy_metal_other_names=()))
+        assert (pb_of(with_cu_rule).judgement, pb_of(with_cu_rule).reason_code) == expected
+        assert with_cu_rule.model_dump() == without.model_dump()
+
+
+def test_user_entered_cu_value_is_not_overwritten():
+    from app.core.enums import ValueQualifier as Q
+    from app.services.judgement.value_parser import ParsedValue
+    specs = [CU, TOTAL]
+    r = run(row("중금속 총량", "2"), specs=specs)
+    idx = next(n for n, i in enumerate(r.items) if i.normalized_name == "Cu")
+    r.items[idx] = evaluate_item(r.items[idx], CU, override=ParsedValue(Q.EXACT, 1), policy=POLICY)
+    refresh_summary(r, specs, POLICY)
+    assert (cu_of(r).judgement, cu_of(r).converted_value) == (J.PASS, 1)
+
+
+def test_refresh_restores_cu_missing_when_total_becomes_unusable():
+    specs = [CU, TOTAL]
+    r = run(row("중금속 총량", "2"), specs=specs)
+    idx = next(n for n, i in enumerate(r.items) if i.normalized_name == "중금속 총량")
+    r.items[idx] = r.items[idx].model_copy(update={"reason_code": R.LOW_CONFIDENCE, "judgement": J.CHECK})
+    refresh_summary(r, specs, POLICY)
+    assert (cu_of(r).judgement, cu_of(r).reason_code) == (J.MISSING, R.MISSING_REQUIRED)
+    refresh_summary(r, specs, POLICY)
+    assert cu_of(r).reason_code == R.MISSING_REQUIRED      # 다시 돌려도 같음
