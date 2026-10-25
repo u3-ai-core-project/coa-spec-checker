@@ -62,9 +62,10 @@ def test_not_detected_without_limit_check():
     assert (r.judgement, r.judgement_reason) == (J.CHECK, "검출한계 미기재")
 
 
-def test_result_equals_spec_text_undetermined():
+def test_result_equals_spec_text_check():
+    # 멘토님 판정표·데모 16: 결과 칸 규격 문구 반복 → 확인 필요 (10.25 기본값 변경, 이전 판정 불가)
     r = judge("≤ 25 ppm", NA, raw_spec="=<25ppm")
-    assert (r.judgement, r.judgement_reason) == (J.UNDETERMINED, "결과 칸이 규격 문구와 같음")
+    assert (r.judgement, r.judgement_reason) == (J.CHECK, "결과 칸이 규격 문구와 같음")
 
 
 def test_missing_item_from_spec():
@@ -81,8 +82,16 @@ def test_low_confidence_check_overrides_value():
 
 
 def test_no_spec_reference():
-    r = judge("1.2", None)
+    # 사전으로 매핑했는데 사내 규격에 없는 항목(B, D10 등)은 참고
+    r = judge("1.2", None, source=MappingSource.DICTIONARY)
     assert (r.judgement, r.judgement_reason) == (J.PASS, "규격 없음")
+
+
+def test_required_qualitative_missing_is_missing():
+    # 필수 정성 항목(외관)이 CoA 에 없으면 참고가 아니라 누락 (10.25)
+    missing = ExtractedItem(item_id="spec-001", normalized_name="외관", mapping_source=MappingSource.SPEC)
+    r = evaluate_item(missing, APPEARANCE, threshold=TH)
+    assert (r.judgement, r.reason_code) == (J.MISSING, "MISSING_REQUIRED")
 
 
 def test_qualitative_reference():

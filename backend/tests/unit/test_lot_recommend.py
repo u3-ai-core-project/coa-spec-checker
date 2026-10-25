@@ -62,7 +62,9 @@ def coa(**over):
             ExtractedItem(normalized_name="순도", raw_value="99.62", unit="%", confidence=0.97),
             ExtractedItem(normalized_name="Na", raw_value="< 20", unit="ppm", confidence=0.91),
             ExtractedItem(normalized_name="Fe", raw_value="3", unit="ppm", confidence=0.93),
-            ExtractedItem(normalized_name="외관", raw_value="White powder", confidence=0.9),
+            # 외관은 사전으로 매핑되는 참고 항목 (이 SPECS 에는 규격이 없음)
+            ExtractedItem(normalized_name="외관", raw_value="White powder", confidence=0.9,
+                          mapping_source=MappingSource.DICTIONARY),
         ],
     )
     data.update(over)

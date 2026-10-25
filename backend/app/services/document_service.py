@@ -44,8 +44,9 @@ def create_document(
     supplier: str | None,
     received_lot_no: str | None,
     spec_set_code: str | None = None,
+    batch_id: str | None = None,
 ) -> Document:
-    """파일을 검증·저장하고 queued 상태로 등록한다. commit 까지 한다."""
+    """파일을 검증·저장하고 queued 상태로 등록한다. commit 까지 한다. batch_id 는 일괄 접수(UC01)일 때만."""
     if not content:
         raise AppException(ErrorCode.INVALID_FILE, "빈 파일입니다")
     if len(content) > settings.MAX_UPLOAD_MB * 1024 * 1024:
@@ -66,6 +67,7 @@ def create_document(
         spec_set_id=spec_set.id,
         supplier=(supplier or "").strip() or None,
         received_lot_no=(received_lot_no or "").strip() or None,
+        batch_id=batch_id,
         status=DocumentStatus.QUEUED,
         uploaded_by=user.id,
     )
@@ -152,6 +154,7 @@ def to_detail(db: Session, doc: Document) -> DocumentDetail:
         spec_grade=spec_set.grade if spec_set else None,
         spec_set_code=spec_set.code if spec_set else None,
         spec_version=spec_set.version if spec_set else None,
+        batch_id=doc.batch_id,
         status=doc.status,
         lot_recommendation=doc.lot_recommendation,
         final_decision=doc.final_decision,
@@ -183,6 +186,7 @@ def list_documents(
     uploaded_by: int | None,
     page: int,
     size: int,
+    batch_id: str | None = None,
 ) -> tuple[int, list[Document]]:
     """최근 업로드 순. 검수 화면의 이전/다음 이동도 이 순서를 따른다 (명세 4.5)."""
     conditions = []
@@ -192,6 +196,8 @@ def list_documents(
         conditions.append(Document.lot_recommendation == lot_recommendation)
     if uploaded_by is not None:
         conditions.append(Document.uploaded_by == uploaded_by)
+    if batch_id:
+        conditions.append(Document.batch_id == batch_id)
 
     total = db.scalar(select(func.count()).select_from(Document).where(*conditions))
     rows = db.scalars(

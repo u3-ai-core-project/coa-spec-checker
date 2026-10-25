@@ -51,6 +51,7 @@ def doc_id(auth_client, db, tmp_path, monkeypatch):
     mock_dir.mkdir()
     (mock_dir / "coa.json").write_text(json.dumps(MOCK, ensure_ascii=False), encoding="utf-8")
     monkeypatch.setattr(settings, "MOCK_EXTRACTION_DIR", str(mock_dir))
+    monkeypatch.setattr(settings, "UNMAPPED_AI_ITEM", "check")   # 코드 기본값. 각자 .env 의 예전 값과 상관없이
     r = auth_client.post("/api/v1/documents", files={"file": ("coa.pdf", PDF)}, data={"material_code": "LI2CO3"})
     assert r.status_code == 201
     return r.json()["data"]["document_id"]
@@ -86,7 +87,8 @@ def test_get_extraction(auth_client, doc_id):
     assert items["순도"]["reason_code"] == "LOW_CONFIDENCE"
     assert items["Ca"]["reason_code"] == "MISSING_REQUIRED"
     assert items["Pb"]["reason_code"] == "AMBIGUOUS_ANALYTE"
-    assert items["칼슘"]["judgement_reason"] == "규격 없음"
+    # AI 가 추정한 "칼슘"은 사내 규격에 없어 확인 필요 (10.25 기본 정책: 잘못된 자동 매핑 금지)
+    assert (items["칼슘"]["judgement"], items["칼슘"]["reason_code"]) == ("check", "UNMAPPED_ITEM")
     assert data["lot_recommendation"] == "hold" and data["summary"]["pass"] >= 1
 
 
