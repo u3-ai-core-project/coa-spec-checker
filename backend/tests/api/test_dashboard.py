@@ -147,7 +147,7 @@ def v14_docs(db, user):
 def test_auto_approve_rate_uses_normal_documents(auth_client, v14_docs):
     data = auth_client.get(URL).json()["data"]
     assert data["auto_approve_rate"] == 33.3        # 정상 3건 중 1건
-    assert data["reviewed_item_ratio"] == 25.0      # 판정 대상 항목 8개 중 사람 확인 2개
+    assert data["reviewed_item_ratio"] == 25.0      # 전체 항목 8개 중 사람 확인 2개
     assert data["reason_code_counts"] == {"BOUND_ABOVE_LIMIT": 1, "ND_NO_LOD": 1, "OUT_OF_SPEC": 1}
 
 
@@ -160,8 +160,8 @@ def test_material_code_filter(auth_client, v14_docs):
     assert auth_client.get(URL, params={"material_code": "NONE"}).json()["data"]["total_processed"] == 0
 
 
-def test_reviewed_ratio_excludes_reference_includes_missing(auth_client, db, user):
-    """분모: 참고 항목(규격 없음·정성) 제외, 누락 항목 포함."""
+def test_reviewed_ratio_counts_all_items(auth_client, db, user):
+    """분모: 전체 항목 (누락·참고 항목 포함)."""
     make_doc(db, user, S.APPROVED, R.HOLD, D.ACCEPT, [
         item("Na", reviewed=True),
         item("Fe"),
@@ -169,4 +169,4 @@ def test_reviewed_ratio_excludes_reference_includes_missing(auth_client, db, use
         item("Mg", judgement_reason="규격 없음"),
         item("외관", judgement_reason="정성 항목, 판정 제외"),
     ])
-    assert auth_client.get(URL).json()["data"]["reviewed_item_ratio"] == 66.7   # 3개 중 2개 (참고 2개 제외)
+    assert auth_client.get(URL).json()["data"]["reviewed_item_ratio"] == 40.0   # 5개 중 2개 (참고 2개 포함)

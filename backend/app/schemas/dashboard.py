@@ -19,6 +19,6 @@ class DashboardSummary(BaseModel):
     avg_processing_time_sec: float
     recommendation_match_rate: float
     auto_approve_rate: float                 # v1.4안. 정상 문서 중 사람 수정·확인 없이 승인 권고된 비율
-    reviewed_item_ratio: float               # v1.4안. 사람이 수정·확인한 항목 / 판정 대상 항목 (참고 제외, 누락 포함)
+    reviewed_item_ratio: float               # v1.4안. 사람이 수정·확인한 항목 / 전체 항목 (누락·참고 포함)
     reason_code_counts: dict[str, int]       # v1.4안. 처분 시점에 남아 있는 사유코드별 항목 수 (많은 순)
     deviation_by_item: list[DeviationByItem]

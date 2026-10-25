@@ -11,10 +11,6 @@ from app.core.enums import DocumentStatus, FinalDecision, Judgement, LotRecommen
 from app.core.errors import AppException, ErrorCode
 from app.models import Document, User
 from app.schemas.dashboard import DashboardSummary, DeviationByItem
-from app.services.judgement.item_judge import REASON_NO_SPEC, REASON_QUALITATIVE
-
-# 참고 항목 (명세 2.3: 사내 규격에 없는 항목, 정성 항목 → 판정하지 않음). 판정 근거 문구로 구분한다.
-_REFERENCE_REASONS = {REASON_NO_SPEC, REASON_QUALITATIVE}
 
 # 로트 권고와 최종 처분이 "일치"하는 조합 (명세 4.18).
 # 보류 권고는 대응하는 처분이 없어 권고 일치율 계산에서 뺀다 (2026-10-11 팀 결정).
@@ -118,17 +114,13 @@ def _auto_approve_rate(docs: list[Document]) -> float:
 
 
 def _reviewed_item_ratio(docs: list[Document]) -> float:
-    """처분 완료 문서의 판정 대상 항목 중 담당자가 수정·확인한 항목 비율.
+    """처분 완료 문서의 전체 항목(누락·참고 항목 포함) 중 담당자가 수정·확인한 항목 비율.
 
-    분모는 참고 항목을 빼고 누락 항목은 넣는다 (2026-10-25 결정). 누락 항목은 담당자가 자체 시험값을
-    입력해 처리할 수 있지만, 참고 항목은 판정하지 않아 사람이 확인할 일이 없기 때문이다.
+    명세 v1.4안 문구('사람이 수정·확인한 항목 / 전체 항목')와 검수 화면의 '전체 항목' 개수에 맞춰
+    참고 항목도 분모에 넣는다 (2026-10-25 결정).
     """
-    items = [i for d in docs for i in _items(d) if not _is_reference(i)]
+    items = [i for d in docs for i in _items(d)]
     return _percent(sum(1 for i in items if i.get("reviewed")), len(items))
-
-
-def _is_reference(item: dict) -> bool:
-    return not item.get("reason_code") and item.get("judgement_reason") in _REFERENCE_REASONS
 
 
 def _reason_code_counts(docs: list[Document]) -> dict[str, int]:
