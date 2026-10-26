@@ -11,7 +11,8 @@
      한자·한글 이름 뒤에 붙은 잡음('钾κ', '水分1.0')
   4. 유사도 (6자 이상 별칭, 0.88 이상)                                       → ai, 신뢰도 상한 0.6
      스캔본 짐작: 앞 1~3 단어가 별칭과 같거나 비슷함(옆 칸 글자가 붙은 'Moisture % ww',
-     오타 'Suffate'), 한자 원소명 뒤 기호를 비슷한 한자로 읽음('硼日'). 합산 줄('Na+K')은 짐작하지 않는다
+     오타 'Suffate'), 한자 원소명 뒤 기호를 비슷한 한자로 읽음('硼日'). 합산 줄은 사전의 'Na+K' 로만 가고,
+     앞 단어('Sodium + …')나 앞 한자('钠+钾')만 보고 Na 로 붙이지 않는다
   5. 이름 전체가 표준 목록 밖 원소 기호 하나('Ti', 'Co²⁺'): 원문 그대로        → ai, 신뢰도 상한 0.6
   6. LLM 제안 (llm 을 넘겼을 때만, 후보 목록 + '없음' 중 하나로 답을 강제)     → ai, 신뢰도 상한 0.6
      단, 다른 원자재 전용 항목의 별칭(수산화리튬의 'Assay')은 일부러 매핑하지 않은 것이라 묻지 않는다
@@ -177,6 +178,9 @@ class Normalizer:
             if code:
                 return code
         # 한자·한글 이름 뒤의 잡음('钾κ', '水分1.0', '外观 一'): 앞의 한자·한글 이름만 본다
+        # 합산 줄('钠+钾')은 앞 한자만 보면 Na 가 되므로 하지 않는다
+        if "+" in cleaned:
+            return None
         m = re.match(rf"\s*([{_CJK}]+)", cleaned)
         return self._alias(m.group(1)) if m else None
 
@@ -279,8 +283,8 @@ class Normalizer:
             if code:
                 return code
 
-        # 한자·한글 이름 + 영문·기호: '钠Na', '外观Appearance', '酸不溶物Acid Insoluble'
-        m = re.match(rf"^([{_CJK}\s]+?)\s*([A-Za-z].*)$", raw)
+        # 한자·한글 이름 + 영문·기호: '钠Na', '外观Appearance', '酸不溶物Acid Insoluble', '钠+钾 Na+K'
+        m = re.match(rf"^([{_CJK}\s+]+?)\s*([A-Za-z].*)$", raw)
         if m:
             return self._alias(m.group(1)) or self._resolve(m.group(2))
 
