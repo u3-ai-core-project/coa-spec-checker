@@ -97,11 +97,11 @@
                   "items": {"Fe": {"judgement": "fail", "reason_code": "CONVERTED_OOS", "converted_value": 6.994}}}},
 
     {"id": "15", "title": "Na+K 합산만 존재", "mentor": "조건부 판정/확인 / 임의 분해 금지",
-     "pending": "Na+K 합산 규칙(SUM_ONLY) 미구현. 회의 안건 5 결정 후 구현",
+     "note": "원소별 판정(10.25 회의 결정 2). D1 Na ≤ 50, K ≤ 10 에서 합산 40 ppm → Na 는 합산 ≤ 상한이라 적합, K 는 개별값 요청",
      "patch": {"remove": ["Na", "K"], "set": {"Na+K": {"raw_name": "Na+K", "raw_value": "40", "unit": "ppm"}}},
      "expected": {"lot_recommendation": "hold",
-                  "items": {"Na": {"judgement": "check", "reason_code": "SUM_ONLY"}, "K": {"judgement": "check", "reason_code": "SUM_ONLY"}},
-                  "follow_up": "request_single_value"}},
+                  "items": {"Na": {"judgement": "pass", "reason_code": null}, "K": {"judgement": "check", "reason_code": "SUM_ONLY"}},
+                  "follow_up": "request_single_value", "supplier_codes": ["SUM_ONLY"]}},
 
     {"id": "16", "title": "결과 칸에 규격 문구 반복", "mentor": "확인 필요 / 실측값 여부 문의",
      "patch": {"set": {"Na": {"raw_value": "=<50", "raw_spec": "≤ 50"}}},

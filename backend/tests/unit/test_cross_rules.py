@@ -1,4 +1,4 @@
-"""[담당: 장수민] 교차 규칙 테스트 — 중금속 총량 → Pb (명세 v1.4안 2.3), 문서 정합성 오류 → 보류 (v1.4안 2.4)."""
+"""[담당: 장수민] 교차 규칙 테스트 — 중금속 총량 → Pb·Cu, Na+K 합산 → Na·K (명세 v1.4 2.3), 문서 정합성 오류 → 보류 (v1.4 2.4)."""
 import pytest
 
 from app.core.enums import (
@@ -96,7 +96,7 @@ def test_rule_can_be_disabled():
 
 def test_unknown_rule_name_rejected():
     with pytest.raises(ValueError):
-        run(row("Na", "1"), policy=POLICY.with_overrides(cross_rules=("na_k_sum",)))
+        run(row("Na", "1"), policy=POLICY.with_overrides(cross_rules=("no_such_rule",)))
 
 
 def test_user_entered_pb_value_is_not_overwritten():
@@ -233,3 +233,146 @@ def test_refresh_restores_cu_missing_when_total_becomes_unusable():
     assert (cu_of(r).judgement, cu_of(r).reason_code) == (J.MISSING, R.MISSING_REQUIRED)
     refresh_summary(r, specs, POLICY)
     assert cu_of(r).reason_code == R.MISSING_REQUIRED      # 다시 돌려도 같음
+
+
+# ---- Na+K 합산 → Na, K (원소별, 10.25 회의 결정 2, 멘토님 데모 15) ----------------------
+K = SpecRule("K", unit="ppm", usl=10)
+NA_K_SPECS = [NA, K]                                         # D1 처럼 Na ≤ 50, K ≤ 10
+
+
+def item_of(result, name):
+    return next(i for i in result.items if i.normalized_name == name)
+
+
+def na_k(raw_value, unit="ppm", **kw):
+    return row("Na+K", raw_value, unit=unit, **kw)
+
+
+def test_sum_judged_per_element():
+    """데모 15: Na+K 40 ppm → Na(≤ 50) 적합, K(≤ 10) 만 SUM_ONLY. 합산값을 나눠 추정하지 않는다."""
+    r = run(na_k("40"), specs=NA_K_SPECS)
+    na, k = item_of(r, "Na"), item_of(r, "K")
+    assert (na.judgement, na.reason_code, na.resolution) == (J.PASS, None, None)
+    assert "합산 ≥ 개별값" in na.judgement_reason
+    assert (k.judgement, k.reason_code) == (J.CHECK, R.SUM_ONLY)
+    assert (k.resolution.type, k.resolution.target_item) == (T.SINGLE_VALUE, "K")
+    assert "K 개별값을 알 수 없음" in k.judgement_reason
+    assert k.converted_value is None                         # 개별값을 만들어 넣지 않는다
+    assert r.lot_recommendation == L.HOLD
+
+
+def test_small_sum_passes_both():
+    r = run(na_k("8"), specs=NA_K_SPECS)
+    assert (item_of(r, "Na").judgement, item_of(r, "K").judgement) == (J.PASS, J.PASS)
+    assert r.lot_recommendation == L.APPROVE
+
+
+def test_sum_above_both_limits():
+    r = run(na_k("60"), specs=NA_K_SPECS)
+    assert (item_of(r, "Na").reason_code, item_of(r, "K").reason_code) == (R.SUM_ONLY, R.SUM_ONLY)
+
+
+def test_sum_equal_to_limit_passes():
+    assert item_of(run(na_k("10"), specs=NA_K_SPECS), "K").judgement == J.PASS
+
+
+@pytest.mark.parametrize("raw, unit, expected_k", [
+    ("< 5", "ppm", J.PASS),             # 상한값 표기도 상한으로 사용
+    ("0.0008 %", None, J.PASS),         # 8 ppm 으로 환산
+    ("ND (<5 ppm)", None, J.PASS),      # 검출 안 됨 → 검출한계가 상한
+    ("0.004 %", None, J.CHECK),         # 40 ppm > K 상한 10
+])
+def test_sum_value_formats(raw, unit, expected_k):
+    assert item_of(run(na_k(raw, unit=unit), specs=NA_K_SPECS), "K").judgement == expected_k
+
+
+def test_sum_only_judgement_follows_policy():
+    policy = POLICY.with_overrides(reason_judgement={**DEFAULT_REASON_JUDGEMENT, R.SUM_ONLY: J.UNDETERMINED})
+    assert item_of(run(na_k("40"), specs=NA_K_SPECS, policy=policy), "K").judgement == J.UNDETERMINED
+
+
+def test_element_on_coa_is_judged_normally():
+    """Na 개별값이 있으면 Na 는 그 값으로, 없는 K 만 합산으로 본다 (합산 - Na 로 계산하지 않음)."""
+    r = run(row("Na", "30"), na_k("38"), specs=NA_K_SPECS)
+    assert (item_of(r, "Na").judgement, item_of(r, "Na").converted_value) == (J.PASS, 30)
+    assert item_of(r, "K").reason_code == R.SUM_ONLY        # 38 - 30 = 8 ≤ 10 으로 보지 않는다
+
+
+def test_no_sum_keeps_elements_missing():
+    r = run(row("Fe", "1"), specs=NA_K_SPECS)
+    assert (item_of(r, "Na").judgement, item_of(r, "K").judgement) == (J.MISSING, J.MISSING)
+
+
+@pytest.mark.parametrize("sum_row", [
+    na_k("8", conf=0.5),                                     # 신뢰도 낮음
+    na_k("ND"),                                              # 검출한계 미기재
+    na_k("abc"),                                             # 값 해석 실패
+    na_k("≤ 10").model_copy(update={"raw_spec": "≤ 10"}),    # 결과 칸 = 규격 문구
+])
+def test_unusable_sum_keeps_elements_missing(sum_row):
+    r = run(sum_row, specs=NA_K_SPECS)
+    assert (item_of(r, "Na").reason_code, item_of(r, "K").reason_code) == (R.MISSING_REQUIRED, R.MISSING_REQUIRED)
+
+
+def test_sum_row_itself_is_reference():
+    """합산 줄은 사내 규격 항목이 아니라 참고. 판정은 Na, K 에만 붙는다."""
+    s = item_of(run(na_k("40"), specs=NA_K_SPECS), "Na+K")
+    assert (s.judgement, s.reason_code) == (J.PASS, None)
+
+
+def test_optional_element_not_flagged():
+    k_optional = SpecRule("K", unit="ppm", usl=10, is_required=False)
+    r = run(na_k("40"), specs=[NA, k_optional])
+    assert item_of(r, "Na").judgement == J.PASS
+    assert all(i.normalized_name != "K" for i in r.items)
+    assert r.lot_recommendation == L.APPROVE
+
+
+def test_na_k_rule_can_be_disabled():
+    r = run(na_k("40"), specs=NA_K_SPECS, policy=POLICY.with_overrides(cross_rules=("heavy_metal_total",)))
+    assert (item_of(r, "Na").judgement, item_of(r, "K").judgement) == (J.MISSING, J.MISSING)
+
+
+def test_sum_name_follows_policy():
+    policy = POLICY.with_overrides(na_k_sum_name="Na+K 합량")
+    r = run(row("Na+K 합량", "40"), specs=NA_K_SPECS, policy=policy)
+    assert item_of(r, "K").reason_code == R.SUM_ONLY
+
+
+def test_user_entered_k_value_is_not_overwritten():
+    from app.core.enums import ValueQualifier as Q
+    from app.services.judgement.value_parser import ParsedValue
+    r = run(na_k("40"), specs=NA_K_SPECS)
+    idx = next(n for n, i in enumerate(r.items) if i.normalized_name == "K")
+    r.items[idx] = evaluate_item(r.items[idx], K, override=ParsedValue(Q.EXACT, 3), policy=POLICY)
+    refresh_summary(r, NA_K_SPECS, POLICY)
+    assert (item_of(r, "K").judgement, item_of(r, "K").converted_value) == (J.PASS, 3)
+    assert r.lot_recommendation == L.APPROVE
+
+
+def test_na_k_refresh_is_idempotent():
+    r = run(na_k("40"), specs=NA_K_SPECS)
+    before = r.model_dump()
+    refresh_summary(r, NA_K_SPECS, POLICY)
+    refresh_summary(r, NA_K_SPECS, POLICY)
+    assert r.model_dump() == before
+
+
+def test_refresh_restores_missing_when_sum_becomes_unusable():
+    r = run(na_k("40"), specs=NA_K_SPECS)
+    idx = next(n for n, i in enumerate(r.items) if i.normalized_name == "Na+K")
+    r.items[idx] = r.items[idx].model_copy(update={"reason_code": R.LOW_CONFIDENCE, "judgement": J.CHECK})
+    refresh_summary(r, NA_K_SPECS, POLICY)
+    assert (item_of(r, "Na").reason_code, item_of(r, "K").reason_code) == (R.MISSING_REQUIRED, R.MISSING_REQUIRED)
+
+
+def test_na_k_and_heavy_metal_rules_together():
+    r = run(na_k("8"), row("중금속 총량", "2"), specs=[NA, K, PB, TOTAL])
+    assert [item_of(r, n).judgement for n in ("Na", "K", "Pb")] == [J.PASS, J.PASS, J.PASS]
+    assert r.lot_recommendation == L.APPROVE
+
+
+def test_heavy_metal_total_spec_copied_without_spec_entry_not_used():
+    """규격에 총량 항목이 없을 때도 결과 칸 = 규격 문구인 총량은 쓰지 않는다 (중금속·합산 공통)."""
+    total = row("중금속 총량", "≤ 3").model_copy(update={"raw_spec": "≤ 3"})
+    assert pb_of(run(total, specs=[NA, PB])).judgement == J.MISSING

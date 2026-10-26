@@ -48,14 +48,18 @@ class Settings(BaseSettings):
     # 사내 규격에 없는 항목 중 AI 가 항목명을 추정한 것: "check"(확인 필요, 기본) | "reference"(참고, 판정 안 함)
     # 멘토님 판정표 "항목명 모호·화학종 불명 → 확인 필요" (10.25 기본값 변경)
     UNMAPPED_AI_ITEM: str = "check"
-    # 켜 둘 교차 규칙 (여러 항목을 함께 보는 규칙). 사용 가능: heavy_metal_total
-    CROSS_RULES: list[str] = ["heavy_metal_total"]
+    # 켜 둘 교차 규칙 (여러 항목을 함께 보는 규칙). 사용 가능: heavy_metal_total, na_k_sum
+    CROSS_RULES: list[str] = ["heavy_metal_total", "na_k_sum"]
     # 중금속 총량 규칙에 쓰는 사내 표준 항목명 (규격 시드·매핑 사전의 normalized_name 과 같아야 함)
     HEAVY_METAL_TOTAL_NAME: str = "중금속 총량"
     HEAVY_METAL_TARGET_NAME: str = "Pb"
     # 중금속 총량(Pb 기준)만으로는 값을 알 수 없는 다른 중금속. 사내 필수 항목인데 CoA 에 없고 총량만 있으면 확인 필요
     # (총량은 Pb 기준으로 잰 값이라 Pb 상한 판단에만 쓰고, 다른 금속의 상한 판단에는 쓰지 않는다. 생성기 v2 AMBIGUOUS_ANALYTE)
     HEAVY_METAL_OTHER_NAMES: list[str] = ["Cu"]
+    # Na+K 합산 규칙에 쓰는 사내 표준 항목명. 합산 줄의 normalized_name 이 NA_K_SUM_NAME 이어야 규칙이 적용된다.
+    # 원소별 판정: 합산 ≤ 그 원소 상한이면 그 원소 적합, 아니면 그 원소만 SUM_ONLY (10.25 회의 결정 2)
+    NA_K_SUM_NAME: str = "Na+K"
+    NA_K_SUM_ELEMENTS: list[str] = ["Na", "K"]
 
     # 공급사 문의 초안 생성기 (v1.4안 4.22). "template" 이면 inquiry_draft.TemplateDrafter,
     # "ai" 면 app.pipeline.ai_drafter.AIDrafter (LLM_BASE_URL 필요, 실패하면 템플릿으로 대체).
