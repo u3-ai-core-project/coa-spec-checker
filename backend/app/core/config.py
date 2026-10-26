@@ -53,6 +53,9 @@ class Settings(BaseSettings):
     # 중금속 총량 규칙에 쓰는 사내 표준 항목명 (규격 시드·매핑 사전의 normalized_name 과 같아야 함)
     HEAVY_METAL_TOTAL_NAME: str = "중금속 총량"
     HEAVY_METAL_TARGET_NAME: str = "Pb"
+    # 중금속 총량(Pb 기준)만으로는 값을 알 수 없는 다른 중금속. 사내 필수 항목인데 CoA 에 없고 총량만 있으면 확인 필요
+    # (총량은 Pb 기준으로 잰 값이라 Pb 상한 판단에만 쓰고, 다른 금속의 상한 판단에는 쓰지 않는다. 생성기 v2 AMBIGUOUS_ANALYTE)
+    HEAVY_METAL_OTHER_NAMES: list[str] = ["Cu"]
 
     # 공급사 문의 초안 생성기 (v1.4안 4.22). "template" 이면 inquiry_draft.TemplateDrafter,
     # "ai" 면 app.pipeline.ai_drafter.AIDrafter (LLM_BASE_URL 필요, 실패하면 템플릿으로 대체).

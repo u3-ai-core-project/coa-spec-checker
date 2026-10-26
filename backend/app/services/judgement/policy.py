@@ -71,6 +71,7 @@ class JudgementPolicy:
     cross_rules: tuple[str, ...] = ("heavy_metal_total",)
     heavy_metal_total_name: str = "중금속 총량"
     heavy_metal_target_name: str = "Pb"
+    heavy_metal_other_names: tuple[str, ...] = ("Cu",)
 
     def judgement_for(self, code: R | None) -> Judgement:
         """사유코드 → 판정. 사유코드가 없으면 적합."""
@@ -96,6 +97,7 @@ class JudgementPolicy:
             cross_rules=tuple(s.CROSS_RULES),
             heavy_metal_total_name=s.HEAVY_METAL_TOTAL_NAME,
             heavy_metal_target_name=s.HEAVY_METAL_TARGET_NAME,
+            heavy_metal_other_names=tuple(s.HEAVY_METAL_OTHER_NAMES),
         )
 
 

@@ -129,3 +129,40 @@ def test_genv2_eval_set_limits(upload):
     items = by_name(r)
     assert items["Na"]["judgement"] == "pass"
     assert {n for n, i in items.items() if i["judgement"] == "missing"} == {"Cu", "Mn", "Si", "수분", "입도 D50", "외관"}
+
+
+# ---- 중금속 총량 → Cu (10.25 회의 결정 6, 홍채령 님 요청) ---------------------------
+def genv2_coa_with_heavy_metals() -> dict:
+    """생성기 v2 AMBIGUOUS_ANALYTE 사례처럼 Cu 줄 대신 Heavy metals (as Pb) 가 있는 CoA. 나머지 필수 항목은 기준 안."""
+    rows = [row("순도", "99.7", "%"), row("Na", "80"), row("K", "5"), row("Ca", "10"), row("Mg", "5"), row("Fe", "2"),
+            row("Mn", "1"), row("Si", "10"), row("황산염", "300"), row("염화물", "10"), row("수분", "0.1", "%"),
+            row("자성이물", "20", "ppb"), row("입도 D50", "6", "μm"), row("외관", "White powder", None),
+            {**row("중금속 총량", "0.8"), "raw_name": "Heavy metals (as Pb)"}]
+    return {"supplier": "생성기 v2", "lot_no": "G-001", "items": rows}
+
+
+def test_genv2_cu_is_ambiguous_with_heavy_metal_total(auth_client, seeded, tmp_path, monkeypatch):
+    """GENV2-EVAL: Cu 가 필수인데 중금속 총량만 있으면 누락이 아니라 확인 필요(AMBIGUOUS_ANALYTE, 개별값 요청)."""
+    mock_dir = tmp_path / "mock"
+    mock_dir.mkdir()
+    (mock_dir / "genv2.json").write_text(json.dumps(genv2_coa_with_heavy_metals(), ensure_ascii=False), encoding="utf-8")
+    monkeypatch.setattr(settings, "MOCK_EXTRACTION_DIR", str(mock_dir))
+    r = auth_client.post("/api/v1/documents", files={"file": ("genv2.pdf", PDF)},
+                         data={"material_code": "LI2CO3", "spec_set_code": "LI2CO3-GENV2-EVAL"})
+    doc_id = r.json()["data"]["document_id"]
+    result = auth_client.get(f"/api/v1/documents/{doc_id}/extraction").json()["data"]
+    items = by_name(result)
+    assert (items["Cu"]["judgement"], items["Cu"]["reason_code"]) == ("check", "AMBIGUOUS_ANALYTE")
+    assert [n for n, i in items.items() if i["judgement"] not in ("pass",)] == ["Cu"]
+    assert result["lot_recommendation"] == "hold"
+    f = auth_client.get(f"/api/v1/documents/{doc_id}/follow-ups").json()["data"]
+    assert f["suggested_follow_up"] == "request_single_value"
+
+
+def test_pb_sets_unchanged_with_heavy_metal_total(upload):
+    """Pb 만 있는 기존 세트(D1, DEMO-R)는 이전과 같다: 총량 2 ≤ Pb 상한 3 이면 Pb 적합."""
+    d1, demo = upload("fisher"), upload("fisher", "LI2CO3-DEMO-R")
+    assert (by_name(d1)["Pb"]["judgement"], by_name(d1)["Pb"]["reason_code"]) == ("pass", None)
+    assert (by_name(demo)["Pb"]["judgement"], demo["lot_recommendation"]) == ("pass", "approve")
+    assert "Cu" not in by_name(d1) and "Cu" not in by_name(demo)
+
