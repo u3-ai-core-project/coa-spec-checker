@@ -25,8 +25,9 @@ def get_summary(
     user_id: int | None = Query(None, description="담당자 필터 (ADMIN 전용)"),
     date_from: date | None = Query(None, alias="from", description="조회 시작일 (YYYY-MM-DD)"),
     date_to: date | None = Query(None, alias="to", description="조회 종료일 (YYYY-MM-DD, 포함)"),
+    material_code: str | None = Query(None, description="원자재 구분 (예: LI2CO3)"),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
     uploaded_by = dashboard_service.resolve_uploader_filter(user, scope, user_id)
-    return ok(dashboard_service.get_summary(db, uploaded_by, date_from, date_to))
+    return ok(dashboard_service.get_summary(db, uploaded_by, date_from, date_to, material_code))

@@ -56,7 +56,7 @@ class ReasonCode(StrEnum):
     SPEC_COPIED = "SPEC_COPIED"                # 결과 칸 = 규격 문구
     MISSING_REQUIRED = "MISSING_REQUIRED"      # 사내 필수 항목이 CoA 에 없음 → 누락 (고정)
     AMBIGUOUS_ANALYTE = "AMBIGUOUS_ANALYTE"    # 측정 대상 모호 (예: 중금속 총량만 있어 Pb 를 알 수 없음)
-    SUM_ONLY = "SUM_ONLY"                      # 합산값만 있음 (예: Na+K) — 규칙은 아직 없음, 자리만 둠
+    SUM_ONLY = "SUM_ONLY"                      # 합산값만 있음 (예: Na+K 합산 > 그 원소 상한). cross_rules.na_k_sum
     LOW_CONFIDENCE = "LOW_CONFIDENCE"          # 추출 신뢰도 기준값 미만
     UNMAPPED_ITEM = "UNMAPPED_ITEM"            # AI 가 추정한 항목명이 사내 규격과 맞지 않음 (정책 설정 시)
     # ---- v1.4안 목록 외 추가 (기존 판정 분기에 대응하는 코드가 없어 추가. 명세 반영 필요) ----
@@ -77,7 +77,9 @@ class ResolutionType(StrEnum):
 class DocumentIssueCode(StrEnum):
     """문서 정합성 오류 (명세 v1.4안 2.1 document_issues). 1개 이상이면 보류 권고.
 
-    탐지 규칙은 P1 에서 구현한다. 지금은 결과 JSON 형식과 로트 권고 연결만 준비해 둔다.
+    탐지 규칙: app/services/judgement/document_checks.py (LOT_MISMATCH, DATE_CONFLICT, SPEC_VERSION_UNKNOWN),
+    app/services/batch_service.link_by_lot (일괄 접수: LOT_MISMATCH, PRODUCT_MISMATCH = 입고 원자재 다름).
+    CoA 제품명(product_name) 비교와 SUPPLIER_CONFLICT 는 아직 탐지하지 않는다.
     """
     LOT_MISMATCH = "LOT_MISMATCH"
     PRODUCT_MISMATCH = "PRODUCT_MISMATCH"

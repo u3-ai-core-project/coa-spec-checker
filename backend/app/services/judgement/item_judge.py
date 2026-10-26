@@ -5,8 +5,9 @@
   사유코드가 없으면 적합(pass). 예외 항목에는 해결 조건(resolution)을 함께 붙인다.
 
 판정 순서 (위에서 먼저 걸리는 것으로 끝)
-  1. 사내 규격 없음 / 정성 항목  → 참고(pass). 단, 정책이 check 이고 AI 추정 항목명이면 UNMAPPED_ITEM
-  2. 누락 항목(mapping_source=spec, 입력값 없음) → MISSING_REQUIRED (누락)
+  1. 사내 규격 없음              → 참고(pass). 단, 정책이 check 이고 AI 추정 항목명이면 UNMAPPED_ITEM
+  2. 누락 항목(mapping_source=spec, 입력값 없음) → MISSING_REQUIRED (누락). 필수 정성 항목도 같다 (10.25)
+     정성 항목(값이 있음)         → 참고(pass)
   3. 신뢰도 기준값 미만 (검수 전) → LOW_CONFIDENCE   ※ 값 판정보다 우선
   4. 결과 칸 = 규격 문구 (검수 전) → SPEC_COPIED
   5. 값 해석 실패                → UNPARSEABLE_VALUE
@@ -164,12 +165,13 @@ def evaluate_item(
         if policy.unmapped_ai_item == UnmappedPolicy.CHECK and item.mapping_source == MappingSource.AI:
             return build(Verdict(R.UNMAPPED_ITEM, REASON_UNMAPPED))
         return build(Verdict(None, REASON_NO_SPEC))
-    if not spec.is_quantitative:
-        return build(Verdict(None, REASON_QUALITATIVE))
 
-    # 2. 누락
+    # 2. 누락. 정성 항목보다 먼저 본다: 필수 정성 항목(예: 외관)이 CoA 에 없으면 참고가 아니라 누락이다
+    #    (멘토님 범위 정의서 E06 "필수항목 미검사 → 보류"). 값이 있는 정성 항목은 아래에서 참고로 처리한다.
     if parsed is None:
         return build(Verdict(R.MISSING_REQUIRED, REASON_MISSING))
+    if not spec.is_quantitative:
+        return build(Verdict(None, REASON_QUALITATIVE))
 
     if override is None:
         # 3. 신뢰도 낮음 (값 판정보다 우선)

@@ -1,4 +1,5 @@
 """[담당: 장수민] POST /documents, GET /documents, GET /documents/{id}, GET /documents/{id}/file (명세 4.4~4.7)
+일괄 접수: POST /documents/batch, GET /documents/batch/{batch_id} (명세 v1.4 4.4-1, 4.4-2, 멘토님 UC01)
 
 router 는 router.py 에 이미 등록돼 있다. 이 파일에 엔드포인트만 추가하면 된다.
 """
@@ -13,8 +14,9 @@ from app.db.session import get_db
 from app.models import User
 from app.pipeline.worker import process_document
 from app.schemas.common import ApiResponse, Page
+from app.schemas.batch import BatchDetail, BatchUploadResponse
 from app.schemas.document import DocumentDetail, DocumentListItem, DocumentUploadResponse
-from app.services import document_service
+from app.services import batch_service, document_service
 
 router = APIRouter(prefix="/documents", tags=["documents"])
 
@@ -45,11 +47,37 @@ async def upload_document(
     return ok(DocumentUploadResponse(document_id=doc.id, file_name=doc.file_name, status=doc.status))
 
 
+@router.post("/batch", status_code=status.HTTP_201_CREATED, response_model=ApiResponse[BatchUploadResponse])
+async def upload_batch(
+    background_tasks: BackgroundTasks,
+    files: list[UploadFile] = File(..., description="CoA 파일 1~20개 (PDF, PNG, JPG)"),
+    material_code: str = Form(..., description="원자재 구분 (입고 CSV 에 material 이 없는 행과 연결되지 않은 파일에 적용)"),
+    spec_set_code: str | None = Form(None, description="기본 사내 규격 세트. 입고 CSV 의 spec_id 가 있으면 그것을 우선"),
+    receipts: UploadFile | None = File(None, description="입고 정보 CSV (receipt_id, received_lot 필수)"),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    uploads = [batch_service.UploadFile(name=f.filename or "upload", content=await f.read()) for f in files]
+    created = batch_service.create_batch(
+        db, user=user, files=uploads, material_code=material_code, spec_set_code=spec_set_code,
+        receipts_csv=await receipts.read() if receipts is not None else None,
+    )
+    for doc, _ in created.documents:
+        background_tasks.add_task(process_document, doc.id)
+    return ok(batch_service.to_upload_response(created))
+
+
+@router.get("/batch/{batch_id}", response_model=ApiResponse[BatchDetail])
+def get_batch(batch_id: str, db: Session = Depends(get_db), _: User = Depends(get_current_user)):
+    return ok(batch_service.get_batch(db, batch_id))
+
+
 @router.get("", response_model=ApiResponse[Page[DocumentListItem]])
 def list_documents(
     status_: str | None = Query(None, alias="status", description="쉼표로 여러 개 (예: extracted,in_review,on_hold)"),
     lot_recommendation: LotRecommendation | None = Query(None),
     uploaded_by: int | None = Query(None, description="업로드한 사용자 id"),
+    batch_id: str | None = Query(None, description="일괄 접수 묶음 ID (v1.4)"),
     page: int = Query(1, ge=1),
     size: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -60,6 +88,7 @@ def list_documents(
         statuses=document_service.parse_status_filter(status_),
         lot_recommendation=lot_recommendation,
         uploaded_by=uploaded_by,
+        batch_id=batch_id,
         page=page,
         size=size,
     )

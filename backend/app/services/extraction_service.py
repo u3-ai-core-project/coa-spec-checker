@@ -7,7 +7,8 @@ from sqlalchemy.orm import Session
 from app.core.enums import DocumentStatus, status_to_review_status
 from app.models import Document, ExtractionResult as ExtractionResultRow
 from app.schemas.extraction import ExtractionInput, ExtractionResult
-from app.services import spec_service
+from app.services import batch_service, spec_service
+from app.services.judgement.document_checks import check_document
 from app.services.judgement.engine import judge_document
 
 MSG_NO_ITEMS = "문서에서 시험 항목을 찾을 수 없습니다"
@@ -22,9 +23,16 @@ def save_extraction(db: Session, document: Document, extraction: ExtractionInput
     if not extraction.items:
         raise EmptyExtractionError(MSG_NO_ITEMS)
 
+    # 일괄 접수 문서는 CoA 로트로 입고 정보와 연결한다 (UC01·UC07). 연결되면 입고 행의 규격 세트로 바뀔 수 있어 먼저 한다
+    batch_issues = batch_service.link_by_lot(db, document, extraction)
     spec_set = document.spec_set or spec_service.get_default_set(db, document.material_code)
     specs = spec_service.get_rules(db, spec_set.id) if spec_set else []
-    result = judge_document(extraction, document_id=document.id, specs=specs)
+    # 문서 정합성 검사 (v1.4 2.1, 데모 12·18): 입고 로트 ≠ CoA 로트, 날짜 충돌(입고일 포함), 규격 버전 다름 → 보류 권고
+    receipt = batch_service.receipt_of(db, document)
+    issues = check_document(extraction, received_lot_no=document.received_lot_no,
+                            spec_version=spec_set.version if spec_set else None,
+                            received_date=receipt.received_date if receipt else None) + batch_issues
+    result = judge_document(extraction, document_id=document.id, specs=specs, issues=issues)
 
     # 업로드 때 입력한 협력사명이 있으면 그것을 우선한다
     document.supplier = document.supplier or extraction.supplier

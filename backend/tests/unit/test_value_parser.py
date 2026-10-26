@@ -44,6 +44,21 @@ def test_spec_oxide_to_element():
     assert p.value == pytest.approx(74.19)
 
 
+@pytest.mark.parametrize("raw_name, expected", [
+    ("Potassium (as K₂O)", 83.01),   # K2O 100 ppm → K 83.01 ppm (계수 0.8301)
+    ("MgO", 60.31),                  # MgO 100 ppm → Mg 60.31 ppm (계수 0.6031)
+])
+def test_k2o_mgo_to_element(raw_name, expected):
+    p = parse_value("100", unit="ppm", target_unit="ppm", raw_name=raw_name)
+    assert p.value == pytest.approx(expected) and p.oxide in ("K2O", "MgO")
+
+
+def test_element_name_is_not_oxide():
+    # 원소 표기(Mg, K)에는 환산을 적용하지 않는다
+    assert parse_value("100", raw_name="Magnesium (Mg)").value == 100
+    assert parse_value("100", raw_name="Potassium (K)").value == 100
+
+
 def test_spec_unparsable_is_error():
     p = parse_value("3.2-3.4")
     assert p.qualifier is None and p.value is None and p.error

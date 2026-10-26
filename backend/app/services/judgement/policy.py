@@ -5,15 +5,19 @@
   규칙 코드를 고치지 않고 설정값만 바꿔 대응할 수 있도록, 규칙은 "사유코드"만 내고
   사유코드 → 판정(5종) 대응은 이 정책 표에서 정한다.
 
-정책 항목 (기본값 = API 명세 v1.3 + v1.4안)
+정책 항목 (기본값 = API 명세 v1.4 + 멘토님 「유즈케이스 및 시나리오 범위 정의서」(10.11) 판정표)
   1. 사유코드별 판정 (REASON_JUDGEMENT)
      - 판정 불가(undetermined): 공급사에서 값을 더 받아야 풀리는 경우
      - 확인 필요(check)       : 담당자가 원본·검출한계·항목명을 확인해야 하는 경우
      - 부적합·누락 코드(OUT_OF_SPEC, CONVERTED_OOS, MISSING_REQUIRED)는 판정이 고정이라 바꿀 수 없다
-     - 쟁점(안건 2): SPEC_COPIED 는 기획안 v2 에선 확인 필요, 명세에선 판정 불가 → 기본값은 명세
+     - SPEC_COPIED·SUM_ONLY 는 확인 필요 (10.25 변경, 이전 기본값은 판정 불가).
+       멘토님 판정표·데모 16 "결과 칸 규격 문구 반복 → 확인 필요", 데모 15 "Na+K 합산만 → 조건부 판정/확인".
+       기획안 v2 7.1, 가상 CoA 생성기 v2 정답과도 같다.
   2. 검출한계 경계 (ND_LIMIT_INCLUSIVE): 검출한계 == 사내 상한이면 적합인지
-  3. 미등록 AI 항목명 (UNMAPPED_AI_ITEM): 참고로 둘지 확인 필요로 올릴지 (안건 3)
-  4. 교차 규칙 on/off (CROSS_RULES): 중금속 총량 → Pb 등 (안건 5)
+  3. 미등록 AI 항목명 (UNMAPPED_AI_ITEM): 기본값 확인 필요 (10.25 변경, 이전 기본값은 참고).
+     멘토님 판정표 "항목명 모호·화학종 불명 → 확인 필요, 잘못된 자동 매핑 금지".
+     AI 가 추정한 항목명에만 적용되고, 사전으로 매핑한 참고 항목(B, D10 등)은 그대로 참고다.
+  4. 교차 규칙 on/off (CROSS_RULES): 중금속 총량 → Pb·Cu, Na+K 합산 → Na·K (원소별)
 
 정책 값은 app/core/config.py 의 설정(.env)에서 읽는다. 잘못된 값이면 앱 시작 시 ValueError 로 알린다.
 
@@ -43,8 +47,8 @@ FIXED_REASON_JUDGEMENT: Mapping[R, Judgement] = MappingProxyType({
 # 정책으로 바꿀 수 있는 사유코드의 기본 판정 (API 명세 2.3, v1.4안 2.3 기준)
 DEFAULT_REASON_JUDGEMENT: Mapping[R, Judgement] = MappingProxyType({
     R.BOUND_ABOVE_LIMIT: Judgement.UNDETERMINED,         # 명세 2.3
-    R.SPEC_COPIED: Judgement.UNDETERMINED,               # 명세 2.3 (기획안 v2 7.1 은 check)
-    R.SUM_ONLY: Judgement.UNDETERMINED,                  # v1.4안 (기획안 v2 7.1 은 check)
+    R.SPEC_COPIED: Judgement.CHECK,                      # 멘토님 판정표·데모 16 (10.25 변경, 이전 undetermined)
+    R.SUM_ONLY: Judgement.CHECK,                         # 멘토님 데모 15 (10.25 변경, 이전 undetermined)
     R.LOD_ABOVE_LIMIT: Judgement.UNDETERMINED,           # 명세 2.3 표 외 기존 구현
     R.LOWER_LIMIT_UNVERIFIABLE: Judgement.UNDETERMINED,  # 명세 2.3 표 외 기존 구현
     R.ND_NO_LOD: Judgement.CHECK,                        # 명세 2.3
@@ -63,10 +67,13 @@ class JudgementPolicy:
     threshold: float = 0.8
     reason_judgement: Mapping[R, Judgement] = field(default_factory=lambda: dict(DEFAULT_REASON_JUDGEMENT))
     nd_limit_inclusive: bool = True
-    unmapped_ai_item: UnmappedPolicy = UnmappedPolicy.REFERENCE
-    cross_rules: tuple[str, ...] = ("heavy_metal_total",)
+    unmapped_ai_item: UnmappedPolicy = UnmappedPolicy.CHECK
+    cross_rules: tuple[str, ...] = ("heavy_metal_total", "na_k_sum")
     heavy_metal_total_name: str = "중금속 총량"
     heavy_metal_target_name: str = "Pb"
+    heavy_metal_other_names: tuple[str, ...] = ("Cu",)
+    na_k_sum_name: str = "Na+K"
+    na_k_sum_elements: tuple[str, ...] = ("Na", "K")
 
     def judgement_for(self, code: R | None) -> Judgement:
         """사유코드 → 판정. 사유코드가 없으면 적합."""
@@ -92,6 +99,9 @@ class JudgementPolicy:
             cross_rules=tuple(s.CROSS_RULES),
             heavy_metal_total_name=s.HEAVY_METAL_TOTAL_NAME,
             heavy_metal_target_name=s.HEAVY_METAL_TARGET_NAME,
+            heavy_metal_other_names=tuple(s.HEAVY_METAL_OTHER_NAMES),
+            na_k_sum_name=s.NA_K_SUM_NAME,
+            na_k_sum_elements=tuple(s.NA_K_SUM_ELEMENTS),
         )
 
 

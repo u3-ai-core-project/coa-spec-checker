@@ -3,8 +3,9 @@
 먼저 맞는 단계에서 끝낸다.
   1. DB 매핑 사전(item_mappings, 담당자 수정 누적)과 원문이 같으면 그대로   → dictionary
   2. 사전 별칭 (괄호 밖 이름: 'Sodium (Na)' → sodium)                       → dictionary
-  3. 규칙: 중금속, 입도 D10/D50/D90, 'Type: X measure', '(as X)', '(Na)',
-     '钠Na' 처럼 한자·한글 이름 + 기호, 이름 전체가 화학식('Na₂O')          → dictionary
+  3. 규칙: 중금속, 입도 D10/D50/D90/D99, 'Type: X measure', '(as X)', '(Na)',
+     '钠Na' 처럼 한자·한글 이름 + 기호, 화학식·이름 + 함량('Li₂CO₃ 함량', 'K2O content'),
+     이름 전체가 화학식('Na₂O')                                             → dictionary
      못 찾으면 스캔본(OCR) 잡음을 걷어 내고 한 번 더: 앞에 붙은 행 번호('4 钠Na'),
      첨자를 읽은 괄호·밑줄('Fe{2O3', 'Li2CO_3'), l·O 를 I·0 으로 읽은 기호('CI', 'S04'),
      한자·한글 이름 뒤에 붙은 잡음('钾κ', '水分1.0')
@@ -20,6 +21,8 @@
 LLM 제안도 마찬가지라 잘못 제안해도 자동 확정되지 않는다. 담당자가 확정하면 서버가 매핑 사전에 쌓는다.
 5단계는 LLM 이 목록 밖 원소(Ti, Co)를 비슷한 원소로 잘못 고르던 것(모델 테스트)을 규칙으로 막는다.
 'Heavy metals (as Pb)' 는 3단계에서 중금속 총량으로 먼저 잡혀 Pb 로 가지 않는다.
+산화물은 서버가 raw_name 의 화학식(K2O 등)을 보고 원소로 환산하므로, 화학식 없이 'oxide'·'氧化'만 있는
+이름('Potassium oxide')은 4단계부터 원소로 짐작하지 않고 원문 그대로 낸다.
 """
 from __future__ import annotations
 
@@ -44,14 +47,16 @@ NORM_SYSTEM = """너는 2차전지 원료 시험성적서(CoA)의 시험 항목�
 규칙:
 - 후보 목록에서 같은 측정 대상을 뜻하는 이름 하나를 고른다. 확실하지 않거나 후보에 없으면 "없음"을 고른다.
 - 총량을 Pb 기준으로 적은 중금속(예: heavy metals as Pb)은 Pb 가 아니라 중금속 총량이다.
-- 산화물은 Na2O, CaO, Fe2O3 만 각 원소(Na, Ca, Fe)로 본다. 다른 산화물은 "없음".
+- 산화물은 Na2O, K2O, CaO, MgO, Fe2O3 만 각 원소(Na, K, Ca, Mg, Fe)로 본다. 다른 산화물은 "없음".
 - 시험 항목이 아닌 것(로트 크기, 분자량, 날짜 등)은 "없음".
 JSON 으로만 답한다."""
 
 _SUPERSCRIPTS = "⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻"
 _SUBSCRIPT_DIGITS = str.maketrans("₀₁₂₃₄₅₆₇₈₉", "0123456789")
 _CJK = r"一-鿿㐀-䶿가-힣"
-_PARTICLE_RE = re.compile(r"(?<![a-z0-9])d\s?(10|50|90)(?![0-9])")
+_PARTICLE_RE = re.compile(r"(?<![a-z0-9])d\s?(10|50|90|99)(?![0-9])")
+_CONTENT = re.compile(r"\b(?:content|assay|purity)(?:\s+of)?\b|함량|含量|%", re.IGNORECASE)  # 'Li₂CO₃ 함량' 의 함량
+_OXIDE_WORD = re.compile(r"oxide|氧化|산화", re.IGNORECASE)
 _ROW_NO = re.compile(r"^\s*\d{1,2}[.)]?\s+(?=\S)")  # 스캔본에서 번호 칸이 항목명에 붙음
 _OCR_JUNK = re.compile(r"[{}_^]")
 _OCR_I = re.compile(r"(?<=[A-Z])I(?![a-z])")        # 'CI' → 'Cl', 'AI' → 'Al'
@@ -130,6 +135,8 @@ class Normalizer:
             for f in item.get("formulas", []):
                 self.formulas[f] = code
         self._fuzzy_keys = [a for a in self.aliases if len(a) >= 6]
+        # 원소 항목의 산화물 화학식 (Na2O, K2O …). 서버가 환산하는 것만 사전에 있다
+        self._oxides = [f for f, code in self.formulas.items() if self.names[code] in ELEMENTS and f != self.names[code]]
 
     # ------------------------------------------------------------------
     def map(self, raw_name: str) -> Mapping:
@@ -142,6 +149,8 @@ class Normalizer:
         code = self._exact(raw) or self._rules(raw) or self._ocr_retry(raw)
         if code:
             return Mapping(self.names[code], "dictionary", 1.0)
+        if self._oxide_without_formula(raw):
+            return Mapping(raw, "ai", AI_CAP)
 
         base = canon(_without_parens(raw))
         close = difflib.get_close_matches(base, self._fuzzy_keys, n=1, cutoff=0.88) if len(base) >= 6 else []
@@ -196,6 +205,13 @@ class Normalizer:
     def _other_material(self, raw: str) -> bool:
         return canon(_without_parens(raw)) in self._other_material_aliases or canon(raw) in self._other_material_aliases
 
+    def _oxide_without_formula(self, raw: str) -> bool:
+        """'Potassium oxide', '氧化钾': 산화물이라고만 하고 서버가 환산할 화학식(K2O 등)이 이름에 없다."""
+        if not _OXIDE_WORD.search(raw):
+            return False
+        text = strip_charges(unicodedata.normalize("NFKC", raw))
+        return not any(re.search(rf"(?<![A-Za-z0-9]){f}(?![a-z0-9])", text) for f in self._oxides)
+
     def _element_only(self, raw: str) -> bool:
         token = _formula_token(raw)
         return token in ELEMENTS and token not in self.formulas
@@ -238,9 +254,9 @@ class Normalizer:
     def _rules(self, raw: str) -> str | None:
         c = canon(raw)
 
-        # 입도 D10·D50·D90 ('度' 는 粒度 를 粮度·检度 로 잘못 읽은 스캔본도 받으려고)
+        # 입도 D10·D50·D90·D99 ('度' 는 粒度 를 粮度·检度 로 잘못 읽은 스캔본도 받으려고)
         m = _PARTICLE_RE.search(c)
-        if m and (c.strip() in {"d10", "d50", "d90"} or any(k in c for k in ("particle", "度", "입도", "psd", "size"))):
+        if m and (c.strip() in {"d10", "d50", "d90", "d99"} or any(k in c for k in ("particle", "度", "입도", "psd", "size"))):
             code = f"d{m.group(1)}"
             if code in self.names:
                 return code
@@ -267,6 +283,13 @@ class Normalizer:
         m = re.match(rf"^([{_CJK}\s]+?)\s*([A-Za-z].*)$", raw)
         if m:
             return self._alias(m.group(1)) or self._resolve(m.group(2))
+
+        # 화학식·이름 + 함량 표기: 'Li₂CO₃ 함량', 'Li2CO3含量', 'K₂O content', 'Content of Li2CO3', 'Li2CO3 (%)'
+        core = _CONTENT.sub(" ", _without_parens(raw)).strip(" ,:")
+        if core and core != raw.strip():
+            code = self._resolve(core)
+            if code:
+                return code
 
         # 이름 전체가 화학식: 'Li₂CO₃', 'Na₂O', 'SO₄', 'Cl'
         return self._formula(raw)
