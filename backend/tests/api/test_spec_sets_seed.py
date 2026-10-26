@@ -98,9 +98,7 @@ def test_seeded_item_names_are_ai_standard_names(db, seeded):
         pytest.skip("ai/coa_ai/vocab.json 없음")
     names = {v["name"] for v in json.loads(VOCAB.read_text(encoding="utf-8"))["items"].values()}
     seeded_names = set(db.scalars(select(SpecItem.item_name).distinct()))
-    # AI 사전에 아직 없는 항목 (고도영 님께 추가 요청). D3 세트의 선택 항목이라 판정에는 영향이 작다
-    known_gaps = {"강열감량", "입도 D99"}
-    assert seeded_names - names == known_gaps
+    assert seeded_names - names == set()
 
 
 # ---- 판정 (멘토님 데모 03·04, DEMO-R) ---------------------------------------
