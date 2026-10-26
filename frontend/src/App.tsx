@@ -10,6 +10,7 @@ import { reviewRoutes } from './features/review/routes'
 import { specsRoutes } from './features/specs/routes'
 import UploadPage from './features/upload/UploadPage'
 import DashboardPage from './features/dashboard/DashboardPage'
+import BatchPage from './features/dashboard/BatchPage'
 
 function ReviewSpecsRoutes() {
   const { user } = useAuth()
@@ -40,6 +41,7 @@ export default function App() {
               ))}
               <Route path="/upload" element={<UploadPage />} />
               <Route path="/dashboard" element={<DashboardPage />} />
+              <Route path="/dashboard/batches/:batchId" element={<BatchPage />} />
               <Route path="*" element={<ReviewSpecsRoutes />} />
             </Route>
           </Route>
