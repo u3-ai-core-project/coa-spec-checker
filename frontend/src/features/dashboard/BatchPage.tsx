@@ -7,6 +7,7 @@ import BatchQueue from './components/BatchQueue'
 import UnmatchedReceipts from './components/UnmatchedReceipts'
 import { useBatch } from './hooks/useBatch'
 import { allItems, formatKst } from './lib/batchView'
+import SupplierInquiries from './components/SupplierInquiries'
 
 function Pill({ children }: { children: ReactNode }) {
     return <span className="flex h-9 items-center rounded-lg border border-[#cfd4da] bg-white px-3.5 text-[13px] font-medium text-ink">{children}</span>
@@ -47,7 +48,7 @@ export default function BatchPage() {
                     <div className="grid grid-cols-1 items-start gap-4 xl:grid-cols-[minmax(0,1fr)_392px]">
                         <BatchQueue items={allItems(data)} />
                         <div className="flex flex-col gap-4">
-                            {/* 공급사별 문의 묶음 카드는 문의 초안 요청 함수를 확인한 뒤 여기에 추가 */}
+                            <SupplierInquiries items={allItems(data)} />
                             <UnmatchedReceipts receipts={data.unmatched_receipts} />
                         </div>
                     </div>
