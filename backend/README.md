@@ -113,7 +113,7 @@ EXTRACTOR=ai
 | `REASON_JUDGEMENT` | `{}` | 사유코드별 판정 덮어쓰기. 예: `{"SPEC_COPIED": "check"}`. 부적합·누락 코드는 바꿀 수 없음 |
 | `ND_LIMIT_INCLUSIVE` | `true` | 검출 안 됨: 검출한계 == 사내 상한이면 적합 |
 | `UNMAPPED_AI_ITEM` | `reference` | 사내 규격에 없는 AI 추정 항목명: `reference`(참고) / `check`(확인 필요) |
-| `CROSS_RULES` | `["heavy_metal_total"]` | 켤 교차 규칙. 중금속 총량 → Pb 판정 |
+| `CROSS_RULES` | `["heavy_metal_total", "na_k_sum"]` | 켤 교차 규칙. 중금속 총량 → Pb·Cu 판정, Na+K 합산 → Na·K 원소별 판정 |
 
 잘못된 값을 넣으면 서버가 시작할 때 오류로 알려 줍니다. 정책을 바꾸면 이후 판정부터 적용됩니다.
 
@@ -121,5 +121,5 @@ EXTRACTOR=ai
 - `item_judge.py`: 항목 1개 판정 (사유코드 → 판정, 해결 조건)
 - `policy.py`: 판정 정책
 - `resolutions.py`: 사유코드별 해결 조건 문구·수치
-- `cross_rules.py`: 여러 항목을 함께 보는 규칙 (중금속 총량 → Pb). Na+K 합산은 자리만 있음
+- `cross_rules.py`: 여러 항목을 함께 보는 규칙 (중금속 총량 → Pb·Cu, Na+K 합산 → Na·K 원소별)
 - `engine.py`: 문서 1건 전체 판정 (DB 없이 호출 가능 → 평가 스크립트에서 바로 사용 가능)

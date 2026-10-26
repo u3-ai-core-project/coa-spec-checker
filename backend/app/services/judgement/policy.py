@@ -17,7 +17,7 @@
   3. 미등록 AI 항목명 (UNMAPPED_AI_ITEM): 기본값 확인 필요 (10.25 변경, 이전 기본값은 참고).
      멘토님 판정표 "항목명 모호·화학종 불명 → 확인 필요, 잘못된 자동 매핑 금지".
      AI 가 추정한 항목명에만 적용되고, 사전으로 매핑한 참고 항목(B, D10 등)은 그대로 참고다.
-  4. 교차 규칙 on/off (CROSS_RULES): 중금속 총량 → Pb 등 (안건 5)
+  4. 교차 규칙 on/off (CROSS_RULES): 중금속 총량 → Pb·Cu, Na+K 합산 → Na·K (원소별)
 
 정책 값은 app/core/config.py 의 설정(.env)에서 읽는다. 잘못된 값이면 앱 시작 시 ValueError 로 알린다.
 
@@ -68,10 +68,12 @@ class JudgementPolicy:
     reason_judgement: Mapping[R, Judgement] = field(default_factory=lambda: dict(DEFAULT_REASON_JUDGEMENT))
     nd_limit_inclusive: bool = True
     unmapped_ai_item: UnmappedPolicy = UnmappedPolicy.CHECK
-    cross_rules: tuple[str, ...] = ("heavy_metal_total",)
+    cross_rules: tuple[str, ...] = ("heavy_metal_total", "na_k_sum")
     heavy_metal_total_name: str = "중금속 총량"
     heavy_metal_target_name: str = "Pb"
     heavy_metal_other_names: tuple[str, ...] = ("Cu",)
+    na_k_sum_name: str = "Na+K"
+    na_k_sum_elements: tuple[str, ...] = ("Na", "K")
 
     def judgement_for(self, code: R | None) -> Judgement:
         """사유코드 → 판정. 사유코드가 없으면 적합."""
@@ -98,6 +100,8 @@ class JudgementPolicy:
             heavy_metal_total_name=s.HEAVY_METAL_TOTAL_NAME,
             heavy_metal_target_name=s.HEAVY_METAL_TARGET_NAME,
             heavy_metal_other_names=tuple(s.HEAVY_METAL_OTHER_NAMES),
+            na_k_sum_name=s.NA_K_SUM_NAME,
+            na_k_sum_elements=tuple(s.NA_K_SUM_ELEMENTS),
         )
 
 
