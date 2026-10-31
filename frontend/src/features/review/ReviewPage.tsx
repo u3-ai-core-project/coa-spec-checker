@@ -4,7 +4,7 @@ import { ActionBar } from './components/ActionBar';
 import { ApprovalCancelDialog } from './components/ApprovalCancelDialog';
 import { ApprovalSummary } from './components/ApprovalSummary';
 import { CompleteDialog } from './components/CompleteDialog';
-import { ExceptionInfo } from './components/ExceptionInfo';
+import { ExceptionPanel } from './components/ExceptionPanel';
 import { FollowUpRow } from './components/FollowUpRow';
 import { HistoryCard } from './components/HistoryCard';
 import { ItemEditor, type ItemEditSubmit } from './components/ItemEditor';
@@ -12,11 +12,13 @@ import { ItemsPanel } from './components/ItemsPanel';
 import { MappingDialog } from './components/MappingDialog';
 import { PdfPanel } from './components/PdfPanel';
 import type { PdfHighlight } from './components/PdfViewer';
+import { ReplyResultStrip, ResolvedNote } from './components/ReplyResultStrip';
 import { type QueuePosition, ReviewHeader } from './components/ReviewHeader';
 import { useReviewData } from './hooks/useReviewData';
 import { hasFollowUp } from './lib/followUp';
 import { buildHistory } from './lib/history';
 import { writeLastViewed } from './lib/lastViewed';
+import { isResolved, type ReplyResult } from './lib/replyResult';
 import { Icon } from './shared/components/Icon';
 import { api } from './shared/api';
 import { errorMessage, isApiError } from './shared/api/errors';
@@ -49,6 +51,10 @@ function ReviewScreen({ documentId }: { documentId: string }) {
   const { data, error, reload } = useReviewData(documentId);
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  /** 원본 문서 아래에 여는 예외 상세 패널(시안 2-11). 예외가 있는 항목 또는 문서 단위 문제를 눌렀을 때 열립니다. */
+  const [detail, setDetail] = useState<{ kind: 'item'; id: string } | { kind: 'issue'; code: string } | null>(null);
+  /** 회신값을 넣고 서버가 다시 판정한 결과(시안 2-12b). 다음 수정, 확인을 시작하거나 닫으면 지웁니다. */
+  const [replyResult, setReplyResult] = useState<ReplyResult | null>(null);
   useEffect(() => writeLastViewed(documentId), [documentId]);
   const [page, setPage] = useState(1);
   /** null이면 아직 사용자가 정하지 않은 상태입니다. 처분된 문서는 접힌 채, 그 외에는 펼친 채 시작합니다. */
@@ -170,11 +176,38 @@ function ReviewScreen({ documentId }: { documentId: string }) {
         );
   // 승인 취소는 관리자만 할 수 있습니다.
   const canCancelApproval = readonly && user.role === 'ADMIN';
+  // 회신값으로 예외가 풀린 항목(사유 코드가 사라짐)의 상세는 닫고, 원래의 승인 이력 카드로 돌아갑니다(시안 2-12b).
+  const detailFound = detail?.kind === 'item' ? data.extraction.items.find((entry) => entry.item_id === detail.id) : undefined;
+  const detailItem = detailFound?.reason_code ? detailFound : null;
+
+  const extraction = data.extraction;
 
   function select(item: ExtractionItem) {
     setSelectedId(item.item_id);
     if (item.bbox) setPage(item.bbox.page);
+    // 예외가 있는 항목이면 예외 상세 패널을 열고, 아니면 닫습니다(원래의 승인 이력 카드로 돌아갑니다).
+    setDetail(item.reason_code ? { kind: 'item', id: item.item_id } : null);
   }
+
+  /** 문서 단위 문제(로트 불일치 등)의 상세를 엽니다. 항목 선택은 해제합니다. */
+  function selectIssue(code: string) {
+    setSelectedId(null);
+    setDetail({ kind: 'issue', code });
+  }
+
+  /**
+   * 회신값을 입력할 항목. 값을 받아야 하는 예외(resolution.type이 confirm이 아님)만 대상이고,
+   * 개별값 받기(single_value)는 resolution.target_item 항목에 입력합니다(예: 중금속 총량 → Pb).
+   */
+  function replyTargetOf(item: ExtractionItem): ExtractionItem | null {
+    const resolution = item.resolution;
+    if (!canEdit || !resolution || resolution.type === 'confirm') return null;
+    if (resolution.type === 'single_value' && resolution.target_item && resolution.target_item !== item.normalized_name) {
+      return extraction.items.find((entry) => entry.normalized_name === resolution.target_item) ?? null;
+    }
+    return item;
+  }
+  const detailReplyTarget = detailItem ? replyTargetOf(detailItem) : null;
 
   /** "판정 불가", "누락" 건수 칩: 해당 항목들의 후속 조치 줄을 펼치거나 접습니다(시안 2-8). */
   function toggleFollowUp(judgement: ExtractionItem['judgement']) {
@@ -197,6 +230,7 @@ function ReviewScreen({ documentId }: { documentId: string }) {
     setEditingId(item.item_id);
     setEditError(null);
     setActionError(null);
+    setReplyResult(null);
     setDocInfoChoice(true); // 편집 박스가 들어갈 자리를 만듭니다.
   }
 
@@ -212,9 +246,12 @@ function ReviewScreen({ documentId }: { documentId: string }) {
   async function submitEdit(item: ExtractionItem, { value, reason, valueSource, qualifier }: ItemEditSubmit) {
     setBusy(true);
     setEditError(null);
+    // 값을 받아야 하는 예외에 회신값을 넣는 경우에는 재판정 결과(시안 2-12b)를 보여 줍니다. 입력 전 값을 기억해 둡니다.
+    const reply = item.resolution != null && item.resolution.type !== 'confirm';
+    const before = { judgement: item.judgement, recommendation: extraction.lot_recommendation, summary: extraction.summary };
     try {
       // 판정과 이탈 폭은 서버가 다시 계산합니다. 응답으로 다시 불러와 화면에 반영합니다.
-      await api.patchItem(
+      const result = await api.patchItem(
         documentId,
         item.item_id,
         // 수정 사유는 값 수정에서 필수이고 요청에 함께 보냅니다(백엔드 확정 답변).
@@ -226,6 +263,20 @@ function ReviewScreen({ documentId }: { documentId: string }) {
       );
       await reload();
       setEditingId(null);
+      setReplyResult(
+        reply
+          ? {
+              itemId: item.item_id,
+              name: item.normalized_name,
+              beforeJudgement: before.judgement,
+              after: result.item,
+              beforeRecommendation: before.recommendation,
+              afterRecommendation: result.lot_recommendation,
+              beforeSummary: before.summary,
+              afterSummary: result.summary,
+            }
+          : null,
+      );
     } catch (failure) {
       await handleFailure(failure, setEditError);
     } finally {
@@ -236,6 +287,7 @@ function ReviewScreen({ documentId }: { documentId: string }) {
   async function verify(item: ExtractionItem) {
     setBusy(true);
     setActionError(null);
+    setReplyResult(null);
     try {
       await api.confirmItem(documentId, item.item_id);
       await reload();
@@ -255,7 +307,22 @@ function ReviewScreen({ documentId }: { documentId: string }) {
           page={page}
           onPageChange={setPage}
           highlights={highlights}
-          footer={readonly || data.approvalLogs.length > 0 ? <HistoryCard entries={history} /> : undefined}
+          footer={
+            detailItem || detail?.kind === 'issue' ? (
+              <ExceptionPanel
+                key={detail?.kind === 'item' ? detail.id : detail?.code}
+                item={detailItem}
+                issueCode={detail?.kind === 'issue' ? detail.code : undefined}
+                followUps={data.followUps}
+                onReply={detailReplyTarget && !busy ? () => openEditor(detailReplyTarget) : undefined}
+                replyTarget={detailItem && detailReplyTarget && detailReplyTarget !== detailItem ? detailReplyTarget.normalized_name : undefined}
+                onClose={() => setDetail(null)}
+                onRetry={() => void reload()}
+              />
+            ) : readonly || data.approvalLogs.length > 0 ? (
+              <HistoryCard entries={history} />
+            ) : undefined
+          }
         />
         <ItemsPanel
           data={data}
@@ -263,15 +330,22 @@ function ReviewScreen({ documentId }: { documentId: string }) {
           docInfoCollapsed={docInfoCollapsed}
           onToggleDocInfo={() => setDocInfoChoice(!docInfoCollapsed)}
           onSelect={select}
+          onSelectIssue={selectIssue}
           followUpKinds={followUpKinds}
           onToggleFollowUp={toggleFollowUp}
-          approvalSummary={readonly ? <ApprovalSummary doc={data.doc} /> : undefined}
+          approvalSummary={
+            readonly ? (
+              <ApprovalSummary doc={data.doc} />
+            ) : replyResult ? (
+              <ReplyResultStrip result={replyResult} onClose={() => setReplyResult(null)} />
+            ) : undefined
+          }
           getRowExtras={(item) => ({
             onEdit: canEdit && !busy ? () => openEditor(item) : undefined,
             onVerify: canEdit && !busy ? () => void verify(item) : undefined,
             onMap: canEdit && !busy ? () => { select(item); setMappingId(item.item_id); } : undefined,
-            // [v1.4안] 사유 코드와 해결 조건은 선택한 항목 아래에서만 보여 줍니다.
-            exception: selectedId === item.item_id ? <ExceptionInfo item={item} /> : undefined,
+            // 회신값으로 예외가 풀린 항목 아래에 "해결됨"을 보여 줍니다(시안 2-12b).
+            exception: replyResult && replyResult.itemId === item.item_id && isResolved(replyResult) ? <ResolvedNote result={replyResult} /> : undefined,
             followUp:
               canEdit && hasFollowUp(item) && followUpKinds.has(item.judgement) ? (
                 <FollowUpRow item={item} onRequest={requestFollowUp} />
