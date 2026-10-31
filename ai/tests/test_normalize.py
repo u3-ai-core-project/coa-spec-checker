@@ -225,7 +225,23 @@ def test_ocr_guesses_need_review(raw, expected):
     assert (m.name, m.source, m.cap) == (expected, "ai", AI_CAP)
 
 
-@pytest.mark.parametrize("raw", ["Sodium + Potassium (Na+K)", "销", "Tesi tom Unn", "Na and K"])
+@pytest.mark.parametrize("raw", ["Sodium + Potassium total", "销", "Tesi tom Unn", "Na and K"])
 def test_ocr_guess_does_not_split_combined_or_unknown(raw):
     # 합산 줄을 앞 단어(Sodium)만 보고 Na 로 붙이면 안 된다. 모르는 글자는 원문 그대로
     assert Normalizer("LI2CO3").map(raw).name == raw
+
+
+@pytest.mark.parametrize("raw", [
+    # 서버 Na+K 합산 규칙(#27)은 normalized_name 이 'Na+K' 인 줄에만 적용된다
+    "Na+K", "Na + K", "K+Na", "Sodium + Potassium", "Sodium + Potassium (Na+K)", "Sodium and Potassium (Na+K)",
+    "Potassium + Sodium", "钠+钾", "钾+钠", "钠+钾 Na+K", "Na+K (ppm)", "Na+K content",
+    "钾钠合量Na+K", "钾钠合量",  # 생성기 v2 양식 B
+])
+def test_na_k_sum_line(raw):
+    m = Normalizer("LI2CO3").map(raw)
+    assert (m.name, m.source) == ("Na+K", "dictionary")
+
+
+@pytest.mark.parametrize("raw, expected", [("Sodium (Na)", "Na"), ("钠 Na", "Na"), ("钠", "Na"), ("Potassium", "K"), ("钾K", "K")])
+def test_single_elements_stay_elements(raw, expected):
+    assert Normalizer("LI2CO3").map(raw).name == expected
