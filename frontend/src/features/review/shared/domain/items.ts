@@ -1,5 +1,5 @@
 import type { ExtractionItem, Judgement, ReviewLog } from '../api/types';
-import { HIGH_CONFIDENCE_THRESHOLD, LOW_CONFIDENCE_THRESHOLD } from './constants';
+import { HIGH_CONFIDENCE_THRESHOLD, LOW_CONFIDENCE_THRESHOLD, REASON_NO_SPEC } from './constants';
 import { formatNumber } from './format';
 
 export type ConfidenceLevel = '높음' | '보통' | '낮음';
@@ -25,11 +25,19 @@ export function processedItemIds(logs: ReviewLog[]): Set<string> {
 }
 
 /**
+ * 사내 규격에 없어 참고로만 기록된 항목(reason_code가 없고 판정 근거가 "규격 없음"). 판정과 로트 권고에 쓰지 않습니다.
+ * AI가 이름을 추정한 미등록 항목(UNMAPPED_ITEM)은 reason_code가 있어 참고 항목이 아닙니다.
+ */
+export function isReferenceItem(item: Pick<ExtractionItem, 'reason_code' | 'judgement_reason'>): boolean {
+  return !item.reason_code && item.judgement_reason === REASON_NO_SPEC;
+}
+
+/**
  * 아직 확인하거나 수정하지 않은 신뢰도 낮음 항목 수(N). 서버가 처분 가능 여부를 판단하는 기준(항목의 reviewed)과 같습니다.
- * 누락 항목(confidence null)은 세지 않습니다.
+ * 누락 항목(confidence null)과 참고 항목(신뢰도가 낮아도 처분을 막지 않음)은 세지 않습니다. 신뢰도 낮음 배지는 그대로 보입니다.
  */
 export function pendingLowConfidenceCount(items: ExtractionItem[]): number {
-  return items.filter((item) => isLowConfidence(item) && !item.reviewed).length;
+  return items.filter((item) => isLowConfidence(item) && !item.reviewed && !isReferenceItem(item)).length;
 }
 
 /** 항목마다 가장 최근 이력 */

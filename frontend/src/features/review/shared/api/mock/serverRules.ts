@@ -1,4 +1,4 @@
-import { LOW_CONFIDENCE_THRESHOLD } from '../../domain/constants';
+import { LOW_CONFIDENCE_THRESHOLD, REASON_NO_SPEC } from '../../domain/constants';
 import { emptySummary } from '../../domain/judgement';
 import type {
   ApproveBody,
@@ -193,7 +193,12 @@ export function evaluateItem(item: ExtractionItem, spec: SpecItem | undefined, o
 
   let verdict: Verdict;
   if (!spec) {
-    verdict = ok('규격 없음');
+    // 사내 규격에 없는 항목. AI가 이름을 추정했고 아직 확인하지 않았으면 UNMAPPED_ITEM(확인 필요)이고, 그 외에는 판정하지 않는 참고 항목입니다.
+    // 참고 항목은 reason_code가 없어 신뢰도가 낮아도 처분을 막지 않습니다(isReferenceItem).
+    verdict =
+      item.mapping_source === 'ai' && override === null && !reviewed
+        ? problem('UNMAPPED_ITEM', '사내 규격에 없는 항목명(AI 추정)')
+        : ok(REASON_NO_SPEC);
   } else if (spec.spec_type === '정성') {
     verdict = ok('정성 항목, 판정 제외');
   } else if (parsed === null) {
@@ -263,7 +268,7 @@ export type ApproveErrorCode =
 export interface ApproveCheckInput {
   status: DocumentStatus;
   recommendation: LotRecommendation;
-  /** 확인하거나 수정하지 않은(reviewed가 아닌) 신뢰도 낮음 항목 수 */
+  /** 확인하거나 수정하지 않은(reviewed가 아닌) 신뢰도 낮음 항목 수. 참고 항목(사내 규격에 없는 항목)은 세지 않습니다. */
   pendingLowConfidence: number;
   body: ApproveBody;
 }

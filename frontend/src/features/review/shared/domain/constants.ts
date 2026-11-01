@@ -5,6 +5,12 @@
 export const LOW_CONFIDENCE_THRESHOLD = 0.8;
 
 /**
+ * 사내 규격에 없어 판정하지 않고 참고로만 기록한 항목의 판정 근거 문구(서버 REASON_NO_SPEC).
+ * 이 문구이면서 reason_code가 없는 항목이 "참고 항목"입니다.
+ */
+export const REASON_NO_SPEC = '규격 없음';
+
+/**
  * 신뢰도 "높음/보통" 경계. 명세에 정해진 값이 없어 임시로 0.9를 씁니다.
  * TODO(백엔드 협의): 높음/보통 경계가 정해지면 이 상수 한 곳만 고칩니다.
  */
