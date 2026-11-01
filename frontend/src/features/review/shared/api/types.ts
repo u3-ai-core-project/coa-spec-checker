@@ -82,7 +82,8 @@ export type DocumentIssueCode =
   | 'PRODUCT_MISMATCH'
   | 'DATE_CONFLICT'
   | 'SUPPLIER_CONFLICT'
-  | 'SPEC_VERSION_UNKNOWN';
+  | 'SPEC_VERSION_UNKNOWN'
+  | 'SPEC_VERSION_MISMATCH';
 
 export interface DocumentIssue {
   code: DocumentIssueCode;
