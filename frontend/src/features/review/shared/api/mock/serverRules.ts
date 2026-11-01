@@ -142,7 +142,10 @@ function judgeValue(parsed: ParsedValue, spec: Pick<SpecItem, 'lsl' | 'usl' | 'u
     if (dl === null) return problem('ND_NO_LOD', '검출한계 미기재');
     // 하한이 있는 항목은 "검출 안 됨"이 하한 충족을 뜻하지 않아 확인 필요가 아니라 판정 불가입니다.
     if (lsl !== null) return problem('LOWER_LIMIT_UNVERIFIABLE', `검출 안 됨(검출한계 ${fmtValue(dl, unit)}), 사내 하한이 있는 항목`);
-    if (usl !== null && dl <= usl) return ok(`검출 안 됨(검출한계 ${fmtValue(dl, unit)})`);
+    // 정책으로 적합 처리한 것을 판정 근거에 밝힙니다(백엔드 PR #32 결정 6, 기본 정책: 검출한계 ≤ 사내 상한이면 적합).
+    if (usl !== null && dl <= usl) {
+      return ok(`검출 안 됨(검출한계 ${fmtValue(dl, unit)}), 사내 상한 ${fmtValue(usl, unit)} 이하 — 정책: 검출한계 ≤ 사내 상한이면 적합`);
+    }
     return problem('LOD_ABOVE_LIMIT', `검출한계 ${fmtValue(dl, unit)}가 사내 상한 ${fmtValue(usl, unit)}보다 큼`);
   }
 
