@@ -11,6 +11,12 @@ export const LOW_CONFIDENCE_THRESHOLD = 0.8;
 export const HIGH_CONFIDENCE_THRESHOLD = 0.9;
 
 /**
+ * AI 문의 초안(follow-ups?draft=ai) 요청의 클라이언트 타임아웃. 서버는 최대 3분(180초)까지 걸릴 수 있어
+ * 그보다 조금 길게 기다립니다.
+ */
+export const AI_DRAFT_TIMEOUT_MS = 200_000;
+
+/**
  * 원본 근거 좌표(bbox)의 단위. 페이지 크기 대비 0~1 비율, 원점은 좌상단, page는 1부터입니다(백엔드 확정 답변).
  */
 export const BBOX_UNIT = 'ratio' as const;

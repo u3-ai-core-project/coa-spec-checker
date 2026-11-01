@@ -30,6 +30,7 @@ const MESSAGES: Record<string, string> = {
   NOT_READY: '아직 추출이 끝나지 않은 문서입니다.',
   PENDING_LOW_CONFIDENCE_ITEMS: '신뢰도 낮음 항목을 모두 수정하거나 확인한 뒤에 검수를 완료할 수 있습니다.',
   INVALID_DECISION: '부적합 항목이 있는 로트는 승인할 수 없습니다.',
+  TIMEOUT: '서버 응답이 너무 오래 걸려 요청을 중단했습니다. 잠시 후 다시 시도해 주십시오.',
 };
 
 export const FALLBACK_ERROR_MESSAGE = '요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주십시오.';

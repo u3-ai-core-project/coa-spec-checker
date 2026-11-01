@@ -487,6 +487,14 @@ export interface OpenDocument {
   request_count: number;
 }
 
+/**
+ * GET /documents/{id}/follow-ups의 쿼리. draft=ai면 AI 초안("AI로 다듬기"), template이면 템플릿 초안,
+ * 없으면 서버 설정(기본 템플릿)을 따릅니다. 응답 모양은 같고 draft, combined_draft의 source만 달라집니다.
+ */
+export interface FollowUpsOptions {
+  draft?: 'ai' | 'template';
+}
+
 export interface FollowUpsResponse {
   document_id: string;
   supplier: string | null;

@@ -11,6 +11,7 @@ import type {
   DocumentListQuery,
   DocumentListResult,
   ExtractionResult,
+  FollowUpsOptions,
   FollowUpsResponse,
   HoldBody,
   HoldResult,
@@ -55,8 +56,12 @@ export interface Api {
   hold(documentId: string, body: HoldBody): Promise<HoldResult>;
   cancelApproval(documentId: string, body: CancelApprovalBody): Promise<CancelApprovalResult>;
   getApprovalLogs(documentId: string): Promise<ApprovalLog[]>;
-  /** [v1.4] 후속 조치 목록, 보류 후속 조치 추천, 공급사 문의 초안(같은 공급사의 열린 요청 묶음 포함). 읽기만 합니다. */
-  getFollowUps(documentId: string): Promise<FollowUpsResponse>;
+  /**
+   * [v1.4] 후속 조치 목록, 보류 후속 조치 추천, 공급사 문의 초안(같은 공급사의 열린 요청 묶음 포함). 읽기만 합니다.
+   * options.draft가 'ai'이면 AI 초안을 요청합니다. 최대 3분이 걸릴 수 있어 HttpApi는 200초 뒤에 요청을 끊고
+   * ApiError(code TIMEOUT)를 던집니다.
+   */
+  getFollowUps(documentId: string, options?: FollowUpsOptions): Promise<FollowUpsResponse>;
   /** 확장 기능. */
   getAnomalies(documentId: string): Promise<Anomaly[]>;
 
