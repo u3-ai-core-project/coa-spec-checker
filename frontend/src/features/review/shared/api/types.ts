@@ -387,10 +387,26 @@ export interface PatchSpecBody {
    * 변경 사유(백엔드 확정 답변, 필수). 규격 변경 이력(change-logs)에 남습니다.
    */
   reason: string;
+  /**
+   * true이면 이 규격 세트로 판정한 처분 전 문서(추출됨, 검수 중, 보류)를 새 규격으로 다시 판정합니다(백엔드 10.25 결정).
+   * 서버 기본값은 false라, 재판정하지 않을 때는 이 필드를 보내지 않습니다.
+   */
+  rejudge?: boolean;
 }
 
-/** PATCH /specs/{id} 응답. 수정된 규격 항목입니다. 규격 재판정(rejudge)은 서버에 없어 뺐습니다. */
-export type PatchSpecResult = SpecItem;
+/** 규격 변경 때 서버가 다시 판정한 문서 1건. 응답을 그대로 보여 주고 화면에서 다시 판단하지 않습니다. */
+export interface RejudgedDocument {
+  document_id: string;
+  lot_recommendation_before: LotRecommendation | null;
+  lot_recommendation_after: LotRecommendation | null;
+  /** 판정이 바뀐 항목명 */
+  changed_items: string[];
+}
+
+/** PATCH /specs/{id} 응답. 수정된 규격 항목이고, rejudge=true로 요청했을 때만 rejudged_documents가 채워집니다. */
+export interface PatchSpecResult extends SpecItem {
+  rejudged_documents: RejudgedDocument[];
+}
 
 /**
  * GET /specs/{id}/change-logs 의 변경 이력 1건(백엔드 PR #12 확정 형식). 서버는 오래된 순으로 줍니다.
