@@ -91,7 +91,10 @@ def judge_value(parsed: ParsedValue, spec: SpecRule, *, nd_limit_inclusive: bool
         if lsl is not None:
             return Verdict(R.LOWER_LIMIT_UNVERIFIABLE, f"검출 안 됨(검출한계 {_fmt(dl, unit)}), 사내 하한이 있는 항목")
         if dl < usl or (nd_limit_inclusive and dl == usl):
-            return Verdict(None, f"검출 안 됨(검출한계 {_fmt(dl, unit)})")
+            # 10.25 회의 결정 6: 정책으로 적합 처리한 것을 판정 근거에 밝힌다 (리포트·검수 화면에 그대로 표시)
+            rule = "≤" if nd_limit_inclusive else "<"
+            return Verdict(None, f"검출 안 됨(검출한계 {_fmt(dl, unit)}), 사내 상한 {_fmt(usl, unit)} 이하 "
+                                 f"— 정책: 검출한계 {rule} 사내 상한이면 적합")
         if dl == usl:
             return Verdict(R.LOD_ABOVE_LIMIT, f"검출한계 {_fmt(dl, unit)}가 사내 상한과 같음 (경계 미포함 정책)")
         return Verdict(R.LOD_ABOVE_LIMIT, f"검출한계 {_fmt(dl, unit)}가 사내 상한 {_fmt(usl, unit)}보다 큼")

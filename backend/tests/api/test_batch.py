@@ -117,9 +117,6 @@ def test_received_date_checked_after_lot_link(batch, auth_client):
 
 def test_same_lot_different_material_is_product_mismatch(batch, auth_client, db):
     """로트는 맞는데 입고 원자재가 다르면 PRODUCT_MISMATCH (생성기 v2 MATERIAL_MISMATCH). 입고 건은 연결된다."""
-    from app.models import SpecSet
-    db.add(SpecSet(code="LIOH-TEST", material_code="LIOH", material_name="수산화리튬", is_default=True))
-    db.commit()
     code, up = batch({"a": coa("LOT-A")}, csv=HEADER + "R1,,LIOH,LOT-A,,,\n")
     d = detail(auth_client, up["batch_id"])
     item = by_file(d)["a.pdf"]

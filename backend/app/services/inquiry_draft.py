@@ -47,6 +47,7 @@ ISSUE_LABELS = {
     D.DATE_CONFLICT: "날짜 충돌",
     D.SUPPLIER_CONFLICT: "공급사 판정 모순",
     D.SPEC_VERSION_UNKNOWN: "적용 규격 버전 불명",
+    D.SPEC_VERSION_MISMATCH: "적용 규격 버전 불일치",
 }
 
 

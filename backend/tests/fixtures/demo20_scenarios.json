@@ -119,8 +119,8 @@
     {"id": "18", "title": "구버전 사내 규격 설정", "mentor": "확인 필요/재판정 / 규격 버전 검증",
      "note": "CoA 는 YS/T 582-2023 인데 사내 세트는 2013판. 어느 버전으로 판정할지 확인",
      "spec_set": "LI2CO3-2013",
-     "expected": {"lot_recommendation": "hold", "document_issues": ["SPEC_VERSION_UNKNOWN"],
-                  "supplier_codes": [], "internal_codes": ["SPEC_VERSION_UNKNOWN"]}},
+     "expected": {"lot_recommendation": "hold", "document_issues": ["SPEC_VERSION_MISMATCH"],
+                  "supplier_codes": [], "internal_codes": ["SPEC_VERSION_MISMATCH"]}},
 
     {"id": "19", "title": "Fe 초과 + Mg 누락", "mentor": "부적합·누락 동시 표시 / 조치 2개 통합",
      "patch": {"set": {"Fe": {"raw_value": "12"}}, "remove": ["Mg"]},
