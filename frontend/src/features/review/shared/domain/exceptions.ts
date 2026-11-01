@@ -45,6 +45,7 @@ export const DOCUMENT_ISSUE_LABEL: Record<DocumentIssueCode, string> = {
   DATE_CONFLICT: '날짜 충돌',
   SUPPLIER_CONFLICT: '공급사 판정 모순',
   SPEC_VERSION_UNKNOWN: '적용 규격 버전 불명',
+  SPEC_VERSION_MISMATCH: '적용 규격 버전 불일치',
 };
 
 /** 담당자가 입력한 값의 출처. 첫 번째(correction)가 기본값입니다. */
