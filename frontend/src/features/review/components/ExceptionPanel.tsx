@@ -27,10 +27,15 @@ interface ExceptionPanelProps {
   onRetry?(): void;
   /** "AI로 다듬기": AI 초안 응답(받기 전에는 null)과 진행 상태. 없으면 버튼을 보이지 않습니다. */
   aiDraft?: {
+    /** 지금 보여 줄 AI 응답. 받기 전이거나 기본(템플릿) 초안을 보고 있으면 null입니다. */
     followUps: FollowUpsResponse | null;
+    /** AI 응답을 받은 적이 있는지(기본 초안으로 되돌린 뒤에도 true) */
+    hasResult: boolean;
     loading: boolean;
     error: string | null;
     onRequest(): void;
+    /** 서버 요청 없이 기본(템플릿) 초안으로 되돌립니다. */
+    onShowTemplate(): void;
   };
 }
 
@@ -70,8 +75,10 @@ export function ExceptionPanel({ item, issueCode, followUps, onReply, replyTarge
   const aiAction: DraftAiAction | undefined = aiDraft && {
     loading: aiDraft.loading,
     error: aiDraft.error,
-    hasResult: aiDraft.followUps !== null,
+    hasResult: aiDraft.hasResult,
     onRequest: aiDraft.onRequest,
+    // AI 응답(source ai 또는 template_fallback)을 보고 있을 때만 기본 초안으로 되돌리는 버튼을 보입니다.
+    onShowTemplate: aiDraft.followUps ? aiDraft.onShowTemplate : undefined,
   };
 
   return (

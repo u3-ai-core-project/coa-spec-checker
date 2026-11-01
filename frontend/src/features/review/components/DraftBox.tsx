@@ -15,6 +15,8 @@ export interface DraftAiAction {
   /** 이미 AI 초안을 받았으면 true(버튼이 "다시 다듬기"가 됩니다) */
   hasResult: boolean;
   onRequest(): void;
+  /** 있으면 "기본 초안으로 보기" 버튼을 보입니다(서버 요청 없이 템플릿 초안으로 되돌림). */
+  onShowTemplate?(): void;
 }
 
 type CopyState = 'idle' | 'copied' | 'failed';
@@ -42,6 +44,16 @@ export function DraftBox({ title, draft, ai }: { title: string; draft: InquiryDr
           </span>
         </span>
         <span className="flex items-center gap-1.5">
+          {ai?.onShowTemplate && (
+            <button
+              type="button"
+              disabled={ai.loading}
+              onClick={ai.onShowTemplate}
+              className="btn-show-template inline-flex h-7 items-center rounded-md border border-[#D0D4DA] bg-white px-2.5 text-[12px] font-semibold text-[#1F2328] disabled:cursor-not-allowed disabled:text-[#8A9099]"
+            >
+              기본 초안으로 보기
+            </button>
+          )}
           {ai && (
             <button
               type="button"

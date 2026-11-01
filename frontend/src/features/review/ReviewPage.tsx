@@ -320,7 +320,14 @@ function ReviewScreen({ documentId }: { documentId: string }) {
                 replyTarget={detailItem && detailReplyTarget && detailReplyTarget !== detailItem ? detailReplyTarget.normalized_name : undefined}
                 onClose={() => setDetail(null)}
                 onRetry={() => void reload()}
-                aiDraft={{ followUps: aiDraft.followUps, loading: aiDraft.loading, error: aiDraft.error, onRequest: () => void aiDraft.request() }}
+                aiDraft={{
+                  followUps: aiDraft.followUps,
+                  hasResult: aiDraft.hasResult,
+                  loading: aiDraft.loading,
+                  error: aiDraft.error,
+                  onRequest: () => void aiDraft.request(),
+                  onShowTemplate: aiDraft.showTemplate,
+                }}
               />
             ) : readonly || data.approvalLogs.length > 0 ? (
               <HistoryCard entries={history} />
