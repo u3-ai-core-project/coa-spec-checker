@@ -25,6 +25,9 @@ LABELS: dict[str, list[str]] = {
                r"lot(?!\s*size)", r"batch(?!\s*(?:size|quantity|qty|weight|disposition))"],
     "test_date": [r"quality\s*test\s*/\s*release\s*date", r"(?:test|analysis)\s*date", r"date\s+of\s+(?:test|analysis)",
                   r"sampled\s*/\s*tested", r"检\s*验\s*日\s*期", r"检\s*测\s*日\s*期", r"시험\s*일(?:자)?"],
+    "manufacture_date": [r"date\s+of\s+(?:manufacture|production)", r"manufactur(?:e|ing)\s*date", r"mfg\.?\s*date",
+                         r"production\s*date", r"生\s*产\s*日\s*期", r"制\s*造\s*日\s*期", r"제\s*조\s*일(?:\s*자)?",
+                         r"생\s*산\s*일(?:\s*자)?"],
     "issue_date": [r"date\s+of\s+issue", r"issue\s*date", r"issued(?:\s+on)?", r"报\s*告\s*日\s*期",
                    r"签\s*发\s*日\s*期", r"발행\s*일(?:자)?"],
     "expiry_date": [r"expiry\s*date", r"expiration\s*date", r"exp\.?\s*date", r"保\s*质\s*期", r"有\s*效\s*期",
@@ -41,7 +44,8 @@ LABELS: dict[str, list[str]] = {
 }
 _COMPILED = {f: [re.compile(rf"^(?:{p})(?=$|[\s:：])", re.IGNORECASE) for p in pats] for f, pats in LABELS.items()}
 
-_INLINE_FIELDS = {"lot_no", "test_date", "issue_date", "expiry_date", "retest_date"}  # 값 검사가 있어 콜론 없이 붙어도 된다
+DATE_FIELDS = ("test_date", "manufacture_date", "issue_date", "expiry_date", "retest_date")
+_INLINE_FIELDS = {"lot_no", *DATE_FIELDS}  # 값 검사가 있어 콜론 없이 붙어도 된다
 _INLINE_LABEL = re.compile(r"^conforms\s+to\s", re.IGNORECASE)  # 'Conforms to CVL-SPEC-…'
 _LOT_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9\-_/.]{2,}$")
 # 제품 규격 계열만 (ISO 9001 같은 품질 시스템, ASTM 시험법 번호는 적용 규격이 아님)
@@ -113,7 +117,7 @@ def _valid(field: str, value: str | None) -> str | None:
     if field == "lot_no":
         token = value.split()[0]
         return token if _LOT_RE.match(token) and re.search(r"\d", token) else None
-    if field in ("test_date", "issue_date", "expiry_date", "retest_date"):
+    if field in DATE_FIELDS:
         dates = find_dates(value)
         if not dates:
             return None
@@ -125,7 +129,7 @@ def extract_fields(pages: list[Page]) -> dict[str, str | None]:
     """첫 페이지(없으면 다음 페이지)에서 머리글 필드를 읽는다."""
     out: dict[str, str | None] = {k: None for k in
                                   ("supplier", "lot_no", "test_date", "origin", "applied_standard",
-                                   "product_name", "issue_date", "expiry_date", "retest_date")}
+                                   "product_name", "manufacture_date", "issue_date", "expiry_date", "retest_date")}
     page = next((p for p in pages if p.lines), None)
     if page is None:
         return out
@@ -144,7 +148,7 @@ def extract_fields(pages: list[Page]) -> dict[str, str | None]:
         if value and lab.field not in found:
             found[lab.field] = (lab.rank, value)
 
-    for key in ("lot_no", "test_date", "issue_date", "expiry_date", "retest_date", "origin", "product_name"):
+    for key in ("lot_no", *DATE_FIELDS, "origin", "product_name"):
         if key in found:
             out[key] = found[key][1]
     out["supplier"] = found.get("supplier", (0, None))[1] or _supplier(page, all_phrases, customer_values)

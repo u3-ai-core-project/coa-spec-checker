@@ -13,7 +13,8 @@ from coa_ai.models import Box, RawRow
 from coa_ai.pipeline import MSG_BROKEN, MSG_BROKEN_IMAGE, MSG_NO_TEXT, MSG_NOT_COA, OCR_CONFIDENCE_CAP
 from tests.fake_llm import FakeLLM
 
-INPUT_FIELDS = {"supplier", "lot_no", "test_date", "origin", "applied_standard", "items"}
+INPUT_FIELDS = {"supplier", "lot_no", "test_date", "origin", "applied_standard", "items",
+                "product_name", "manufacture_date", "issue_date", "expiry_date", "retest_date"}
 ITEM_FIELDS = {"raw_name", "normalized_name", "mapping_source", "raw_value", "raw_spec", "unit", "confidence", "bbox",
                "value_kind", "value_reason", "check_reasons"}  # 뒤의 세 칸은 팀 제안 (서버는 아직 무시)
 

@@ -64,7 +64,7 @@ pytest -q                                   # 단위 테스트 + 가상 CoA 3장
 | - | `llm.py`, `inquiry.py` | LLM 서버 클라이언트, 공급사 문의 초안 (아래 'LLM 기능') |
 
 결과에는 `ExtractionInput` 필드 외에 서버가 아직 쓰지 않는 칸도 들어 있습니다. 서버는 이 칸들을 버립니다(`extra="ignore"`).
-- 문서: `doc_type`, `product_name`, `issue_date`, `expiry_date`, `retest_date`(Suggested retest date·复检日期·재시험일). `doc_type` 을 뺀 넷은 PR #5가 요청한 제품 불일치·날짜 충돌(`DATE_CONFLICT`) 탐지용으로, 서버 `ExtractionInput` 의 같은 이름 칸으로 들어갑니다(서버 칸은 별도 PR `feat/backend/extraction-doc-fields`).
+- 문서: `doc_type`, `product_name`, `manufacture_date`(Date of Manufacture·Mfg. Date·生产日期·제조일자), `issue_date`, `expiry_date`, `retest_date`(Suggested retest date·复检日期·재시험일). `doc_type` 을 뺀 다섯은 제품 불일치·날짜 충돌(`DATE_CONFLICT`) 탐지용으로, 서버 `ExtractionInput` 의 같은 이름 칸으로 들어갑니다. 제조일은 10.25 결정(발행일이 제조일보다 앞서면 날짜 충돌)으로 추가했고, `08-2020`처럼 일자가 없으면 지어내지 않고 비웁니다.
 - 항목: `value_kind`, `value_reason`, `check_reasons` (아래 '팀 제안')
 
 ## 표준 항목명 (normalized_name)
