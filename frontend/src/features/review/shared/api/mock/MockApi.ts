@@ -21,6 +21,7 @@ import type {
   DocumentStatus,
   ExtractionItem,
   ExtractionResult,
+  FollowUpsOptions,
   FollowUpsResponse,
   HoldBody,
   HoldResult,
@@ -39,7 +40,7 @@ import type {
   SpecSet,
 } from '../types';
 import { type MockDoc, type MockState, type MockUser, createMockState } from './fixtures';
-import { getFollowUps } from './followUps';
+import { getFollowUps, MOCK_AI_TIMEOUT_DOCS } from './followUps';
 import { buildPdfBlob } from './mockPdf';
 import { checkApprove, checkSpecRange, currentOverride, evaluateItem, fmtValue, type ParsedValue, recommendLot, rejudgeItem, summarize } from './serverRules';
 
@@ -56,6 +57,13 @@ const READY_STATUSES: DocumentStatus[] = ['extracted', 'in_review', 'on_hold', '
 function delay<T>(value: T): Promise<T> {
   if (latencyMs === 0) return Promise.resolve(value);
   return new Promise((resolve) => setTimeout(() => resolve(value), latencyMs));
+}
+
+/** AI 초안 목업의 응답 지연(지연을 끈 테스트에서는 기다리지 않습니다). */
+const MOCK_AI_LATENCY_MS = 2500;
+
+function wait(ms: number): Promise<void> {
+  return latencyMs === 0 ? Promise.resolve() : new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 // 목업 시계: 시안과 같은 시각(수정 14:32, 확인 14:35, 처분 15:02 …)이 나오도록 이력 종류마다 시작 시각을 고정하고,
@@ -536,10 +544,14 @@ export class MockApi implements Api {
     return delay(sets);
   }
 
-  async getFollowUps(documentId: string): Promise<FollowUpsResponse> {
+  async getFollowUps(documentId: string, options: FollowUpsOptions = {}): Promise<FollowUpsResponse> {
     this.requireUser();
     const doc = this.findReadyDoc(documentId);
-    return delay(getFollowUps(doc, this.state.docs));
+    if (options.draft !== 'ai') return delay(getFollowUps(doc, this.state.docs, options.draft));
+    // AI 초안은 오래 걸립니다(실제 서버는 최대 3분). 목업은 로딩 표시를 볼 수 있을 만큼만 기다립니다.
+    await wait(MOCK_AI_LATENCY_MS);
+    if (MOCK_AI_TIMEOUT_DOCS.has(documentId)) throw new ApiError(0, 'TIMEOUT', '서버 응답이 너무 오래 걸림');
+    return getFollowUps(doc, this.state.docs, 'ai');
   }
 
   async patchSpec(specId: number, body: PatchSpecBody): Promise<PatchSpecResult> {

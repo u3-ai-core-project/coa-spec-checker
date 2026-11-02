@@ -1,5 +1,6 @@
 import { API_BASE } from '../config';
 import type { Api } from './Api';
+import { AI_DRAFT_TIMEOUT_MS } from '../domain/constants';
 import { ApiError } from './errors';
 import { getToken, handleUnauthorized } from './session';
 import type {
@@ -16,6 +17,7 @@ import type {
   DocumentListQuery,
   DocumentListResult,
   ExtractionResult,
+  FollowUpsOptions,
   FollowUpsResponse,
   HoldBody,
   HoldResult,
@@ -49,7 +51,8 @@ function buildQuery(params: Record<string, string | number | undefined>): string
   return text ? `?${text}` : '';
 }
 
-async function send(path: string, init: RequestInit = {}, auth = true): Promise<Response> {
+/** timeoutMs를 주면 그 시간 안에 응답이 오지 않을 때 요청을 끊고 ApiError(TIMEOUT)를 던집니다. */
+async function send(path: string, init: RequestInit = {}, auth = true, timeoutMs?: number): Promise<Response> {
   const headers = new Headers(init.headers);
   if (init.body !== undefined && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json');
@@ -57,11 +60,16 @@ async function send(path: string, init: RequestInit = {}, auth = true): Promise<
   const token = getToken();
   if (auth && token) headers.set('Authorization', `Bearer ${token}`);
 
+  const controller = timeoutMs === undefined ? null : new AbortController();
+  const timer = controller && setTimeout(() => controller.abort(), timeoutMs);
   let response: Response;
   try {
-    response = await fetch(`${API_BASE}${path}`, { ...init, headers });
+    response = await fetch(`${API_BASE}${path}`, { ...init, headers, signal: controller?.signal ?? init.signal });
   } catch {
+    if (controller?.signal.aborted) throw new ApiError(0, 'TIMEOUT', '서버 응답이 너무 오래 걸립니다.');
     throw new ApiError(0, 'NETWORK_ERROR', '서버에 연결하지 못했습니다.');
+  } finally {
+    clearTimeout(timer ?? undefined);
   }
 
   if (response.status === 401 && auth) {
@@ -81,8 +89,8 @@ async function readError(response: Response): Promise<ApiError> {
   return new ApiError(response.status, 'UNKNOWN_ERROR', '요청을 처리하지 못했습니다.');
 }
 
-async function request<T>(path: string, init: RequestInit = {}, auth = true): Promise<T> {
-  const response = await send(path, init, auth);
+async function request<T>(path: string, init: RequestInit = {}, auth = true, timeoutMs?: number): Promise<T> {
+  const response = await send(path, init, auth, timeoutMs);
   if (!response.ok) throw await readError(response);
   const body = (await response.json()) as Envelope<T>;
   if (!body.success || body.data === null) {
@@ -182,8 +190,14 @@ export class HttpApi implements Api {
     return request<SpecSet[]>(`/specs/sets${buildQuery({ material_code: materialCode })}`);
   }
 
-  getFollowUps(documentId: string): Promise<FollowUpsResponse> {
-    return request<FollowUpsResponse>(`/documents/${encodeURIComponent(documentId)}/follow-ups`);
+  getFollowUps(documentId: string, options: FollowUpsOptions = {}): Promise<FollowUpsResponse> {
+    // draft=ai는 LLM이 쓰는 초안이라 최대 3분이 걸립니다. 그 요청에만 긴 타임아웃을 둡니다.
+    return request<FollowUpsResponse>(
+      `/documents/${encodeURIComponent(documentId)}/follow-ups${buildQuery({ draft: options.draft })}`,
+      {},
+      true,
+      options.draft === 'ai' ? AI_DRAFT_TIMEOUT_MS : undefined,
+    );
   }
 
   patchSpec(specId: number, body: PatchSpecBody): Promise<PatchSpecResult> {

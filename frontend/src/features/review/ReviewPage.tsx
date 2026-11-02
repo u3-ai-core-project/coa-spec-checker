@@ -14,6 +14,7 @@ import { PdfPanel } from './components/PdfPanel';
 import type { PdfHighlight } from './components/PdfViewer';
 import { ReplyResultStrip, ResolvedNote } from './components/ReplyResultStrip';
 import { type QueuePosition, ReviewHeader } from './components/ReviewHeader';
+import { useAiDraft } from './hooks/useAiDraft';
 import { useReviewData } from './hooks/useReviewData';
 import { hasFollowUp } from './lib/followUp';
 import { buildHistory } from './lib/history';
@@ -49,6 +50,7 @@ function ReviewScreen({ documentId }: { documentId: string }) {
   const user = useCurrentUser();
   const navigate = useNavigate();
   const { data, error, reload } = useReviewData(documentId);
+  const aiDraft = useAiDraft(documentId, data?.followUps ?? null);
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   /** 원본 문서 아래에 여는 예외 상세 패널(시안 2-11). 예외가 있는 항목 또는 문서 단위 문제를 눌렀을 때 열립니다. */
@@ -318,6 +320,14 @@ function ReviewScreen({ documentId }: { documentId: string }) {
                 replyTarget={detailItem && detailReplyTarget && detailReplyTarget !== detailItem ? detailReplyTarget.normalized_name : undefined}
                 onClose={() => setDetail(null)}
                 onRetry={() => void reload()}
+                aiDraft={{
+                  followUps: aiDraft.followUps,
+                  hasResult: aiDraft.hasResult,
+                  loading: aiDraft.loading,
+                  error: aiDraft.error,
+                  onRequest: () => void aiDraft.request(),
+                  onShowTemplate: aiDraft.showTemplate,
+                }}
               />
             ) : readonly || data.approvalLogs.length > 0 ? (
               <HistoryCard entries={history} />
