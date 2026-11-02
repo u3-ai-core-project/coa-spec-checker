@@ -199,6 +199,30 @@ def _specs_of(db: Session, doc: Document) -> list[SpecRule]:
     return spec_service.get_rules(db, spec_set.id) if spec_set else []
 
 
+def rejudge_document(doc: Document, specs: list[SpecRule]) -> tuple[ExtractionResult, list[str]]:
+    """규격이 바뀐 뒤 문서를 새 규격으로 다시 판정해 저장한다 (검수 상태 유지, 문서 상태는 그대로).
+
+    돌려주는 값: (새 결과, 판정이 바뀐 항목명). commit 은 호출한 쪽에서 한다.
+    서버가 만든 누락 항목은 버리고 새 규격으로 다시 만든다. 담당자가 확인·입력한 항목은 그 상태를 유지한다.
+    """
+    result = extraction_service.get_result(doc)
+    policy = default_policy()
+    by_name = {name_key(s.item_name): s for s in specs}
+    before = {i.item_id: i.judgement for i in result.items}
+    names = {i.item_id: i.normalized_name for i in result.items}
+
+    result.items = [rejudge_item(i, by_name.get(name_key(i.normalized_name)), policy=policy)
+                    for i in result.items if not _is_untouched_missing(i)]
+    _sync_missing_items(result, specs, policy)
+    refresh_summary(result, specs, policy)
+
+    changed = [names[i.item_id] for i in result.items if i.item_id in before and before[i.item_id] != i.judgement]
+    doc.lot_recommendation = result.lot_recommendation
+    doc.extraction.result = result.to_json()
+    doc.extraction.updated_at = datetime.now(timezone.utc)
+    return result, changed
+
+
 def _find_item(result: ExtractionResult, item_id: str) -> tuple[int, ExtractionItem]:
     for n, i in enumerate(result.items):
         if i.item_id == item_id:

@@ -9,15 +9,19 @@
   - GET /specs/sets   : 세트 목록 (v1.4안, 명세 외 추가)
   - PATCH /specs/{id} : 관리자 수정. 이후 업로드되는 문서부터 적용하고, 이미 판정한 문서는 바꾸지 않는다 (명세 4.21).
                         변경 사유(reason)는 필수이고, 바뀐 값을 spec_change_logs 에 남긴다 (v1.4).
-                        규격 변경 시 재판정 옵션(v1.4안 rejudge)은 범위 결정(안건 5) 후 추가한다.
+                        rejudge=true 로 보내면 이 규격 세트로 판정한 처분 전 문서(추출됨·검수 중·보류)를 새 규격으로 다시 판정한다
+                        (10.25 회의 결정). 처분 완료·처리 중·실패 문서는 건드리지 않는다.
   - GET /specs/{id}/change-logs : 규격 변경 이력 (v1.4)
 """
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.errors import AppException, ErrorCode
-from app.models import SpecChangeLog, SpecItem, SpecSet, User
-from app.schemas.spec import SpecChangeLogOut, SpecItemOut, SpecSetOut, SpecUpdateRequest
+from app.core.enums import DocumentStatus
+from app.models import Document, SpecChangeLog, SpecItem, SpecSet, User
+from app.schemas.spec import (
+    RejudgedDocument, SpecChangeLogOut, SpecItemOut, SpecSetOut, SpecUpdateOut, SpecUpdateRequest,
+)
 from app.services.judgement.spec_rule import SpecRule
 
 
@@ -96,7 +100,7 @@ def list_set_summaries(db: Session, material_code: str | None = None) -> list[Sp
 _LOGGED_FIELDS = ("lsl", "usl", "unit")
 
 
-def update_item(db: Session, spec_id: int, req: SpecUpdateRequest, user: User) -> SpecItemOut:
+def update_item(db: Session, spec_id: int, req: SpecUpdateRequest, user: User) -> SpecUpdateOut:
     """PATCH /specs/{id}. 보낸 필드만 바꾸고 수정자·수정 일시와 변경 이력을 남긴다.
 
     검사 순서: 규격 없음 404 → 사유 누락 400 REASON_REQUIRED → 범위 오류 400 INVALID_SPEC_RANGE
@@ -129,9 +133,41 @@ def update_item(db: Session, spec_id: int, req: SpecUpdateRequest, user: User) -
         setattr(item, field, value)
     item.updated_by = user.id
     item.updated_at = func.now()
+    rejudged = rejudge_open_documents(db, item.spec_set_id) if req.rejudge else []
     db.commit()
     db.refresh(item)
-    return to_item_out(item)
+    return SpecUpdateOut(**to_item_out(item).model_dump(), rejudged_documents=rejudged)
+
+
+# 규격을 고쳤을 때 다시 판정하는 문서 상태. 처분 완료 문서는 당시 판정이 근거라 바꾸지 않는다.
+REJUDGE_STATUSES = (DocumentStatus.EXTRACTED, DocumentStatus.IN_REVIEW, DocumentStatus.ON_HOLD)
+
+
+def rejudge_open_documents(db: Session, spec_set_id: int) -> list[RejudgedDocument]:
+    """규격 세트를 쓰는 처분 전 문서를 모두 다시 판정한다. flush 만 하고 commit 은 호출한 쪽이 한다."""
+    from app.services import review_service  # review_service 가 spec_service 를 가져오므로 늦게 가져온다
+
+    spec_set = db.get(SpecSet, spec_set_id)
+    specs = get_rules(db, spec_set_id)
+    # 세트를 직접 고르지 않은 문서는 원자재의 기본 세트로 판정했으므로, 이 세트가 기본 세트면 함께 대상이다
+    condition = Document.spec_set_id == spec_set_id
+    if get_default_set(db, spec_set.material_code).id == spec_set_id:
+        condition = condition | (Document.spec_set_id.is_(None) & (Document.material_code == spec_set.material_code))
+    stmt = (select(Document).where(Document.status.in_(REJUDGE_STATUSES)).where(condition)
+            .order_by(Document.id).with_for_update())
+    out: list[RejudgedDocument] = []
+    for doc in db.scalars(stmt):
+        if doc.extraction is None:
+            continue
+        before = doc.lot_recommendation
+        result, changed = review_service.rejudge_document(doc, specs)
+        out.append(RejudgedDocument(document_id=doc.id, lot_recommendation_before=_val(before),
+                                    lot_recommendation_after=_val(result.lot_recommendation), changed_items=changed))
+    return out
+
+
+def _val(v) -> str | None:
+    return getattr(v, "value", v)
 
 
 def list_change_logs(db: Session, spec_id: int) -> list[SpecChangeLogOut]:

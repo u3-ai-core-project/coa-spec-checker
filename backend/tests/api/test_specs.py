@@ -169,3 +169,59 @@ def test_change_logs_not_found(auth_client, sets):
 
 def test_change_logs_require_login(client, sets):
     assert client.get(f"/api/v1/specs/{na_id(sets)}/change-logs").status_code == 401
+
+
+# ---- 규격 변경 시 재판정 (10.25 회의 결정) -------------------------------------
+PDF = b"%PDF-1.7\n" + b"0" * 50
+
+
+def upload(client):
+    return client.post("/api/v1/documents", files={"file": ("a.pdf", PDF)},
+                       data={"material_code": "LI2CO3"}).json()["data"]["document_id"]
+
+
+def na_judgement(client, doc_id):
+    items = client.get(f"/api/v1/documents/{doc_id}/extraction").json()["data"]["items"]
+    return next(i["judgement"] for i in items if i["normalized_name"] == "Na")
+
+
+def test_rejudge_open_documents(auth_client, sets, admin):
+    doc_id = upload(auth_client)
+    auth_client.login_as(admin)
+    r = auth_client.patch(f"/api/v1/specs/{na_id(sets)}", json={"usl": 10, "reason": "D1 개정", "rejudge": True})
+    assert r.status_code == 200, r.text
+    rejudged = r.json()["data"]["rejudged_documents"]
+    assert [d["document_id"] for d in rejudged] == [doc_id]
+    assert "Na" in rejudged[0]["changed_items"]
+    assert na_judgement(auth_client, doc_id) == "undetermined"      # 목업 Na "< 20" 이 새 상한 10 보다 넓다
+
+
+def test_rejudge_off_keeps_old_documents(auth_client, sets, admin):
+    doc_id = upload(auth_client)
+    auth_client.login_as(admin)
+    r = auth_client.patch(f"/api/v1/specs/{na_id(sets)}", json={"usl": 10, "reason": "D1 개정"})
+    assert r.json()["data"]["rejudged_documents"] == []
+    assert na_judgement(auth_client, doc_id) == "pass"
+
+
+def test_rejudge_skips_other_spec_sets(auth_client, sets, admin):
+    doc_id = upload(auth_client)                                       # 기본 세트(D1)로 판정된 문서
+    auth_client.login_as(admin)
+    r = auth_client.patch(f"/api/v1/specs/{na_id(sets, 'd3')}", json={"usl": 10, "reason": "D3 개정", "rejudge": True})
+    assert r.json()["data"]["rejudged_documents"] == []
+    assert na_judgement(auth_client, doc_id) == "pass"
+
+
+def test_rejudge_skips_approved_documents(auth_client, sets, admin):
+    doc_id = upload(auth_client)
+    items = auth_client.get(f"/api/v1/documents/{doc_id}/extraction").json()["data"]["items"]
+    for i in items:                                                    # 신뢰도 낮은 항목은 확인해야 처분할 수 있다
+        if i["confidence"] is not None and i["confidence"] < 0.8:
+            auth_client.post(f"/api/v1/documents/{doc_id}/extraction/{i['item_id']}/confirm")
+    r = auth_client.post(f"/api/v1/documents/{doc_id}/approve",
+                         json={"decision": "conditional_accept", "reason": "재판정 제외 확인용"})
+    assert r.status_code == 200, r.text
+    auth_client.login_as(admin)
+    r = auth_client.patch(f"/api/v1/specs/{na_id(sets)}", json={"usl": 10, "reason": "D1 개정", "rejudge": True})
+    assert r.json()["data"]["rejudged_documents"] == []
+    assert na_judgement(auth_client, doc_id) == "pass"

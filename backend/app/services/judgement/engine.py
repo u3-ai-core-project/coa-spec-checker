@@ -68,6 +68,7 @@ def judge_document(
         origin=extraction.origin,
         applied_standard=extraction.applied_standard,
         product_name=extraction.product_name,
+        manufacture_date=extraction.manufacture_date,
         issue_date=extraction.issue_date,
         expiry_date=extraction.expiry_date,
         retest_date=extraction.retest_date,

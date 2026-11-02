@@ -3,11 +3,11 @@
 항목 판정과 별개로 문서 단위 문제를 찾는다. 1개 이상이면 부적합이 없어도 보류 권고다 (lot_recommend).
 
   LOT_MISMATCH   입고 로트번호(업로드 때 입력) ≠ CoA 로트번호
-  DATE_CONFLICT  CoA 발행일이 시험일보다 앞섬, 유효기한이 시험일보다 앞섬,
+  DATE_CONFLICT  CoA 발행일이 시험일·제조일보다 앞섬, 유효기한이 시험일보다 앞섬,
                  또는 입고일(일괄 접수의 입고 CSV)이 유효기한·재시험일을 지남
-  SPEC_VERSION_UNKNOWN  CoA 적용 규격과 사내 규격 세트가 같은 규격의 다른 버전 (데모 18, E04)
+  SPEC_VERSION_MISMATCH CoA 적용 규격과 사내 규격 세트가 같은 규격의 다른 연도판 (데모 18, E04)
                         예) CoA "YS/T 582-2023", 사내 세트 "YS/T 582-2013" → 어느 버전으로 판정할지 확인 필요
-                        (새 코드를 만들면 결과 JSON 스키마 변경이라, 기존 코드에 메시지로 구분한다)
+                        (이전 이름 SPEC_VERSION_UNKNOWN 은 "모름"이라는 뜻이라 실제 상황과 달라 바꿨다. 10.25 회의 결정)
 
 한쪽 값이 없으면 검사하지 않는다 (모르는 것을 오류로 만들지 않는다).
 로트번호는 대소문자·공백·구분 기호(- _ / .)만 다른 경우 같은 로트로 본다 (예: "L-080" = "l080").
@@ -36,6 +36,8 @@ def check_lot(received_lot_no: str | None, coa_lot_no: str | None) -> DocumentIs
 def check_dates(extraction: ExtractionInput, received_date: date | None = None) -> DocumentIssue | None:
     test, issue, expiry, retest = extraction.test_date, extraction.issue_date, extraction.expiry_date, extraction.retest_date
     problems: list[str] = []
+    if extraction.manufacture_date and issue and issue < extraction.manufacture_date:
+        problems.append(f"발행일 {_d(issue)}이 제조일 {_d(extraction.manufacture_date)}보다 앞섬")
     if test and issue and issue < test:
         problems.append(f"발행일 {_d(issue)}이 시험일 {_d(test)}보다 앞섬")
     if test and expiry and expiry < test:
@@ -66,7 +68,7 @@ def check_spec_version(applied_standard: str | None, spec_version: str | None) -
     coa, ours = parse_standard(applied_standard), parse_standard(spec_version)
     if not coa or not ours or coa[0] != ours[0] or coa[1] == ours[1]:
         return None
-    return DocumentIssue(code=D.SPEC_VERSION_UNKNOWN,
+    return DocumentIssue(code=D.SPEC_VERSION_MISMATCH,
                          message=f"CoA 적용 규격 {applied_standard.strip()} ≠ 사내 규격 세트 버전 {spec_version.strip()} "
                                  f"(같은 규격의 다른 버전)")
 

@@ -178,3 +178,39 @@ def test_not_ready(auth_client, upload, db):
     db.commit()
     r = auth_client.get(f"/api/v1/documents/{doc_id}/follow-ups")
     assert r.status_code == 409 and r.json()["error"]["code"] == "NOT_READY"
+
+
+# ---- ?draft= 쿼리 (10.25 회의 결정 7: 기본은 템플릿, 요청할 때만 AI) ----------------
+def test_draft_query_ai_uses_ai_drafter(auth_client, upload, monkeypatch):
+    class FakeAI:
+        source = "ai"
+
+        def draft(self, supplier, lots):
+            return "AI 제목", f"{supplier}: {len(lots)}건"
+    monkeypatch.setattr(followup_service, "get_drafter",
+                        lambda mode=None: FakeAI() if mode == "ai" else followup_service.TemplateDrafter())
+    doc_id = upload("lot1")
+    default = follow_ups(auth_client, doc_id)["draft"]
+    r = auth_client.get(f"/api/v1/documents/{doc_id}/follow-ups?draft=ai")
+    assert default["source"] == "template"                       # 쿼리가 없으면 템플릿
+    assert r.json()["data"]["draft"]["source"] == "ai"
+
+
+def test_draft_query_ai_failure_falls_back_to_template(auth_client, upload, monkeypatch):
+    class Broken:
+        source = "ai"
+
+        def draft(self, supplier, lots):
+            raise RuntimeError("LLM 서버 응답 없음")
+    monkeypatch.setattr(followup_service, "get_drafter",
+                        lambda mode=None: Broken() if mode == "ai" else followup_service.TemplateDrafter())
+    doc_id = upload("lot1")
+    r = auth_client.get(f"/api/v1/documents/{doc_id}/follow-ups?draft=ai")
+    assert r.status_code == 200
+    d = r.json()["data"]
+    assert d["draft"]["source"] == "template_fallback" and d["supplier_lines"]   # 사유·조건은 그대로
+
+
+def test_draft_query_invalid_value(auth_client, upload):
+    r = auth_client.get(f"/api/v1/documents/{upload('lot1')}/follow-ups?draft=gpt")
+    assert r.status_code == 400 and r.json()["error"]["code"] == "VALIDATION_ERROR"

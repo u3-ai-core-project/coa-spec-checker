@@ -22,7 +22,9 @@ from app.core.enums import (
 from app.core.errors import AppException, ErrorCode
 from app.models import ApprovalLog, Document, User
 from app.schemas.approval import ApprovalLogOut
+from app.schemas.extraction import ExtractionItem
 from app.services import extraction_service
+from app.services.judgement.item_judge import REASON_NO_SPEC
 from app.services.judgement.policy import default_policy
 
 # 로트 권고와 "같은" 처분 (명세 4.12). 보류 권고에는 대응하는 처분이 없어 어떤 처분이든 사유가 필요하다.
@@ -75,13 +77,21 @@ def pending_low_confidence_items(doc: Document) -> list[str]:
     """신뢰도 기준값 미만인데 담당자가 확인·수정하지 않은 항목명 (명세 4.12).
 
     판정 결과 JSON 의 reviewed(검수 API 가 기록) 를 기준으로 본다. 기준값은 판정과 같은 설정값.
+    사내 규격에 없는 참고 항목(B, D10 등)은 판정·로트 권고에 쓰지 않으므로 처분 차단에서 뺀다
+    (10.25 회의 결정 8). AI 가 추정한 미등록 항목(UNMAPPED_ITEM)은 reason_code 가 있어 참고가 아니다.
     """
     result = extraction_service.get_result(doc)
     if result is None:
         return []
     threshold = default_policy().threshold
     return [i.normalized_name for i in result.items
-            if i.confidence is not None and i.confidence < threshold and not i.reviewed]
+            if i.confidence is not None and i.confidence < threshold and not i.reviewed
+            and not is_reference_item(i)]
+
+
+def is_reference_item(item: ExtractionItem) -> bool:
+    """사내 규격에 없어 참고로만 기록된 항목 (판정하지 않음, reason_code 없음)."""
+    return item.reason_code is None and item.judgement_reason == REASON_NO_SPEC
 
 
 # ---------------------------------------------------------------------------

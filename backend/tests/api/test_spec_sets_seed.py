@@ -164,3 +164,20 @@ def test_pb_sets_unchanged_with_heavy_metal_total(upload):
     assert (by_name(demo)["Pb"]["judgement"], demo["lot_recommendation"]) == ("pass", "approve")
     assert "Cu" not in by_name(d1) and "Cu" not in by_name(demo)
 
+
+
+# ---- 수산화리튬 시드 (10.25 회의 결정, 소성훈 님 LIOH 규격 사전) -------------------
+def test_lioh_set_loaded_as_material_default(db, seeded):
+    lioh = spec_service.get_default_set(db, "LIOH")
+    assert lioh.code == "LIOH-BG-V1" and lioh.version == "SYD-QS-LHM-BG v1"
+    items = {i.item_name: i for i in spec_service.get_specs(db, lioh.id)}
+    assert len(items) == 15 and all(i.is_required for i in items.values())
+    assert (items["LiOH 함량"].lsl, items["LiOH 함량"].usl) == (56.5, 57.5)
+    assert (items["Na"].usl, items["Cu"].usl, items["자성이물"].usl) == (30, 1, 50)
+    assert (items["입도 D50"].lsl, items["입도 D50"].usl) == (5, 15)
+    assert items["외관"].spec_type == "정성"
+    assert "B" not in items and "Ni" not in items               # 사내 규격 없는 항목은 참고용이라 넣지 않는다
+
+
+def test_lioh_does_not_change_li2co3_default(db, seeded):
+    assert spec_service.get_default_set(db, "LI2CO3").code == "LI2CO3-D1-2023"
