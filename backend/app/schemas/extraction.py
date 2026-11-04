@@ -101,6 +101,7 @@ class ExtractionItem(ExtractedItem):
     detection_limit: float | None = None
     spec_lsl: float | None = None
     spec_usl: float | None = None
+    spec_unit: str | None = None  # 사내 규격 단위. converted_value·detection_limit·spec_lsl/usl 의 단위. 규격 없는 항목은 null
     judgement: Judgement
     judgement_reason: str | None = None
     deviation: float | None = None

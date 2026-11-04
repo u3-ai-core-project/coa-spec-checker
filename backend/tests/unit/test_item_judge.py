@@ -167,3 +167,23 @@ def test_input_item_is_not_mutated():
     src = item("30", unit="ppm")
     evaluate_item(src, NA, threshold=TH)
     assert not hasattr(src, "judgement")
+
+
+# ---- spec_unit: 사내 규격 단위 (converted_value 등의 단위) -----------------------
+def test_spec_unit_is_internal_unit_not_raw_unit():
+    """원문 0.01 % 는 사내 단위 ppm 으로 환산된다. unit 은 원문 단위, spec_unit 은 사내 단위."""
+    r = judge("0.01", NA, unit="%")
+    assert (r.unit, r.spec_unit, r.converted_value) == ("%", "ppm", 100)
+
+
+def test_spec_unit_null_without_spec():
+    assert judge("12", None, unit="ppm").spec_unit is None
+
+
+def test_spec_unit_null_for_qualitative_spec():
+    assert judge("백색 분말", APPEARANCE).spec_unit is None
+
+
+def test_spec_unit_present_for_missing_item():
+    r = evaluate_item(item(None, source=MappingSource.SPEC), NA, threshold=TH)
+    assert (r.judgement, r.spec_unit) == (J.MISSING, "ppm")

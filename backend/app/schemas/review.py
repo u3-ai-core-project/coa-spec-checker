@@ -107,6 +107,7 @@ class ReviewedItem(BaseModel):
     converted_value: float | str | None
     value_qualifier: Q | None
     detection_limit: float | None = None
+    spec_unit: str | None = None  # 항목명을 고치면 규격이 바뀌어 단위도 바뀔 수 있다
     judgement: Judgement
     judgement_reason: str | None
     deviation: float | None
