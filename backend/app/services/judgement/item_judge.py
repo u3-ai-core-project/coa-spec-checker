@@ -152,6 +152,7 @@ def evaluate_item(
             detection_limit=parsed.detection_limit if parsed else None,
             spec_lsl=spec.lsl if spec else None,
             spec_usl=spec.usl if spec else None,
+            spec_unit=spec.unit if spec else None,
             judgement=policy.judgement_for(v.code),
             judgement_reason=v.reason,
             deviation=v.deviation,
