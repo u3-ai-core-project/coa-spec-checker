@@ -1,6 +1,6 @@
 import type { ExtractionItem, LotRecommendation } from '../shared/api/types';
 import { formatNumber } from '../shared/domain/format';
-import { formatConverted } from '../shared/domain/items';
+import { displayUnit, formatConverted } from '../shared/domain/items';
 import type { Disposition } from '../shared/domain/recommendation';
 
 /**
@@ -39,6 +39,7 @@ export function withEuro(text: string): string {
 export function suggestRejectReason(items: ExtractionItem[]): string {
   const failed = items.find((item) => item.judgement === 'fail' && item.spec_usl !== null && item.deviation !== null);
   if (!failed || failed.spec_usl === null) return '';
-  const unit = failed.unit ? ` ${failed.unit}` : '';
+  const shownUnit = displayUnit(failed);
+  const unit = shownUnit ? ` ${shownUnit}` : '';
   return `${failed.normalized_name} ${formatConverted(failed)}이 사내 상한 ${formatNumber(failed.spec_usl)}${unit}을 초과하여 불합격으로 처분합니다.`;
 }

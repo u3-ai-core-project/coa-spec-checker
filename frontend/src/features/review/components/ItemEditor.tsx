@@ -4,7 +4,7 @@ import { JudgementBadge } from '../shared/components/badges';
 import { Icon } from '../shared/components/Icon';
 import { RESOLUTION_ACTION_LABEL, VALUE_SOURCE_LABEL, VALUE_SOURCE_ORDER } from '../shared/domain/exceptions';
 import { formatNumber } from '../shared/domain/format';
-import { formatConverted, formatSpec, previewReply } from '../shared/domain/items';
+import { displayUnit, formatConverted, formatSpec, previewReply } from '../shared/domain/items';
 import { JUDGEMENT_META } from '../shared/domain/judgement';
 import { parseValue } from '../lib/parseValue';
 
@@ -90,7 +90,7 @@ export function ItemEditor({ item, busy, error, onCancel, onSubmit }: ItemEditor
   const replying = resolution != null && resolution.type !== 'confirm';
   const preview = value === null ? null : previewReply(qualifier, value, item.spec_lsl, item.spec_usl);
   const previewMeta = preview ? JUDGEMENT_META[preview] : null;
-  const unit = item.unit;
+  const unit = displayUnit(item);
   const limit = item.spec_usl ?? item.spec_lsl;
 
   let previewText = '';
