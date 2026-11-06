@@ -46,7 +46,7 @@ export default function KpiStrip({ data }: Props) {
                 )}
             </Cell>
 
-            <Cell label="평균 처리 시간">
+            <Cell label="평균 검수 소요 시간">
                 <div className="flex flex-wrap items-end gap-x-1.5">
                     <span className={`${VALUE} whitespace-nowrap`}>{data ? formatDuration(data.avg_processing_time_sec) : '—'}</span>
                     {data && <span className="whitespace-nowrap pb-1 text-xs text-ink-sub">건당 평균</span>}
