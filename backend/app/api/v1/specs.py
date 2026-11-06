@@ -10,7 +10,7 @@ from app.core.response import ok
 from app.db.session import get_db
 from app.models import User
 from app.schemas.common import ApiResponse
-from app.schemas.spec import SpecChangeLogOut, SpecItemOut, SpecSetOut, SpecUpdateRequest
+from app.schemas.spec import SpecChangeLogOut, SpecItemOut, SpecSetOut, SpecUpdateOut, SpecUpdateRequest
 from app.services import spec_service
 
 router = APIRouter(prefix="/specs", tags=["specs"])
@@ -37,10 +37,10 @@ def list_spec_sets(
     return ok(spec_service.list_set_summaries(db, material_code))
 
 
-@router.patch("/{spec_id}", response_model=ApiResponse[SpecItemOut])
+@router.patch("/{spec_id}", response_model=ApiResponse[SpecUpdateOut])
 def update_spec(spec_id: int, body: SpecUpdateRequest, db: Session = Depends(get_db),
                 user: User = Depends(require_admin)):
-    """규격 항목 수정 (관리자). 변경 사유 필수. 이후 업로드되는 문서부터 적용된다."""
+    """규격 항목 수정 (관리자). 변경 사유 필수. 기본은 이후 업로드되는 문서부터 적용, rejudge=true 면 처분 전 문서도 다시 판정."""
     return ok(spec_service.update_item(db, spec_id, body, user))
 
 

@@ -1,4 +1,4 @@
-import { LOW_CONFIDENCE_THRESHOLD } from '../../domain/constants';
+import { LOW_CONFIDENCE_THRESHOLD, REASON_NO_SPEC } from '../../domain/constants';
 import { emptySummary } from '../../domain/judgement';
 import type {
   ApproveBody,
@@ -142,7 +142,10 @@ function judgeValue(parsed: ParsedValue, spec: Pick<SpecItem, 'lsl' | 'usl' | 'u
     if (dl === null) return problem('ND_NO_LOD', '검출한계 미기재');
     // 하한이 있는 항목은 "검출 안 됨"이 하한 충족을 뜻하지 않아 확인 필요가 아니라 판정 불가입니다.
     if (lsl !== null) return problem('LOWER_LIMIT_UNVERIFIABLE', `검출 안 됨(검출한계 ${fmtValue(dl, unit)}), 사내 하한이 있는 항목`);
-    if (usl !== null && dl <= usl) return ok(`검출 안 됨(검출한계 ${fmtValue(dl, unit)})`);
+    // 정책으로 적합 처리한 것을 판정 근거에 밝힙니다(백엔드 PR #32 결정 6, 기본 정책: 검출한계 ≤ 사내 상한이면 적합).
+    if (usl !== null && dl <= usl) {
+      return ok(`검출 안 됨(검출한계 ${fmtValue(dl, unit)}), 사내 상한 ${fmtValue(usl, unit)} 이하 — 정책: 검출한계 ≤ 사내 상한이면 적합`);
+    }
     return problem('LOD_ABOVE_LIMIT', `검출한계 ${fmtValue(dl, unit)}가 사내 상한 ${fmtValue(usl, unit)}보다 큼`);
   }
 
@@ -193,7 +196,12 @@ export function evaluateItem(item: ExtractionItem, spec: SpecItem | undefined, o
 
   let verdict: Verdict;
   if (!spec) {
-    verdict = ok('규격 없음');
+    // 사내 규격에 없는 항목. AI가 이름을 추정했고 아직 확인하지 않았으면 UNMAPPED_ITEM(확인 필요)이고, 그 외에는 판정하지 않는 참고 항목입니다.
+    // 참고 항목은 reason_code가 없어 신뢰도가 낮아도 처분을 막지 않습니다(isReferenceItem).
+    verdict =
+      item.mapping_source === 'ai' && override === null && !reviewed
+        ? problem('UNMAPPED_ITEM', '사내 규격에 없는 항목명(AI 추정)')
+        : ok(REASON_NO_SPEC);
   } else if (spec.spec_type === '정성') {
     verdict = ok('정성 항목, 판정 제외');
   } else if (parsed === null) {
@@ -263,7 +271,7 @@ export type ApproveErrorCode =
 export interface ApproveCheckInput {
   status: DocumentStatus;
   recommendation: LotRecommendation;
-  /** 확인하거나 수정하지 않은(reviewed가 아닌) 신뢰도 낮음 항목 수 */
+  /** 확인하거나 수정하지 않은(reviewed가 아닌) 신뢰도 낮음 항목 수. 참고 항목(사내 규격에 없는 항목)은 세지 않습니다. */
   pendingLowConfidence: number;
   body: ApproveBody;
 }

@@ -12,7 +12,8 @@ import type { MockDoc } from './fixtures';
 
 /**
  * 후속 조치와 공급사 문의 초안 (GET /documents/{id}/follow-ups)의 목업 구현입니다.
- * 백엔드 services/inquiry_draft.py와 followup_service.py를 옮겼습니다(템플릿 초안만 있고 AI 초안은 없습니다).
+ * 백엔드 services/inquiry_draft.py와 followup_service.py를 옮겼습니다. 초안은 템플릿이고, draft=ai 요청에는
+ * 화면 확인용으로 문구만 조금 바꾼 AI 초안(source ai)을 돌려줍니다(실제 문구는 LLM이 씁니다).
  */
 
 // 공급사에 요청해야 해결되는 사유(나머지는 담당자가 내부에서 확인)
@@ -159,8 +160,27 @@ function draftOf(supplierName: string | null, requests: LotRequest[]): InquiryDr
   return { subject, body: [...body.slice(0, -1), ...CLOSING].join('\n'), source: 'template', lot_nos: lots.map((lot) => lot.lotNo) };
 }
 
+/** draft=ai 요청에서 AI를 쓸 수 없는 상황(source template_fallback)을 보여 줄 목업 문서 */
+export const MOCK_AI_FALLBACK_DOCS: ReadonlySet<string> = new Set(['A0390188']);
+/** draft=ai 요청이 시간 초과로 실패하는 상황을 보여 줄 목업 문서 */
+export const MOCK_AI_TIMEOUT_DOCS: ReadonlySet<string> = new Set(['A0266047']);
+
+/** AI 초안 목업. 템플릿 초안의 제목과 맺음 문구만 바꿉니다. */
+function aiDraftOf(template: InquiryDraft): InquiryDraft {
+  return {
+    ...template,
+    subject: template.subject.replace(' / ', ' '),
+    body: template.body.replace('확인 후 회신 부탁드립니다.', '확인되는 대로 회신해 주시면 감사하겠습니다.'),
+    source: 'ai',
+  };
+}
+
 /** 문서 1건의 후속 조치, 보류 후속 조치 추천, 문의 초안, 같은 공급사의 열린 요청 묶음 */
-export function getFollowUps(doc: MockDoc & { extraction: ExtractionResult }, allDocs: MockDoc[]): FollowUpsResponse {
+export function getFollowUps(
+  doc: MockDoc & { extraction: ExtractionResult },
+  allDocs: MockDoc[],
+  draftMode?: 'ai' | 'template',
+): FollowUpsResponse {
   const followUps = buildFollowUps(doc.extraction);
   const thisLot: LotRequest = { lotNo: doc.detail.lot_no, materialName: doc.detail.material_name, lines: followUps.supplierLines };
 
@@ -181,6 +201,11 @@ export function getFollowUps(doc: MockDoc & { extraction: ExtractionResult }, al
     }
   }
 
+  const toMode = (template: InquiryDraft | null): InquiryDraft | null => {
+    if (!template || draftMode !== 'ai') return template;
+    return MOCK_AI_FALLBACK_DOCS.has(doc.detail.document_id) ? { ...template, source: 'template_fallback' } : aiDraftOf(template);
+  };
+
   return {
     document_id: doc.detail.document_id,
     supplier: doc.detail.supplier,
@@ -188,8 +213,8 @@ export function getFollowUps(doc: MockDoc & { extraction: ExtractionResult }, al
     suggested_follow_up: suggestFollowUp(followUps),
     supplier_lines: followUps.supplierLines,
     internal_lines: followUps.internalLines,
-    draft: thisLot.lines.length > 0 ? draftOf(doc.detail.supplier, [thisLot]) : null,
+    draft: toMode(thisLot.lines.length > 0 ? draftOf(doc.detail.supplier, [thisLot]) : null),
     open_documents: openDocuments,
-    combined_draft: lots.length >= 2 ? draftOf(doc.detail.supplier, lots) : null,
+    combined_draft: toMode(lots.length >= 2 ? draftOf(doc.detail.supplier, lots) : null),
   };
 }

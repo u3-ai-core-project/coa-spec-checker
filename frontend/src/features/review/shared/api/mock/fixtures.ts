@@ -357,8 +357,19 @@ function itemsC(specs: SpecItem[]): ExtractionItem[] {
 /** 'nd'는 Fe가 "N.D."이고 검출한계가 적혀 있지 않은 문서(시안 2-11, 2-12). 예외는 Fe 하나뿐이라 회신값을 넣으면 승인 권고가 됩니다. */
 type Variant = 'allpass' | 'hold' | 'reject' | 'nd';
 
+/**
+ * 신뢰도가 낮은 추가 항목. 'reference'는 사내 규격에 없는 참고 항목(판정하지 않으므로 처분을 막지 않음),
+ * 'unmapped'는 AI가 이름을 추정한 미등록 항목(UNMAPPED_ITEM, 확인 전에는 처분을 막음)입니다.
+ */
+type Extra = 'reference' | 'unmapped';
+
+const EXTRA_ITEMS: Record<Extra, ItemDef> = {
+  reference: { id: 'b', name: 'B', rawName: 'Boron', rawValue: '5 ppm', rawSpec: '-', qualifier: 'exact', value: 5, confidence: 0.55 },
+  unmapped: { id: 'xyz', name: 'Xyz', rawName: 'Xyz', rawValue: '5 ppm', rawSpec: '-', qualifier: 'exact', value: 5, confidence: 0.55, source: 'ai' },
+};
+
 /** 목록에만 보이던 나머지 문서용 표준 항목 */
-function itemsStandard(specs: SpecItem[], variant: Variant): ExtractionItem[] {
+function itemsStandard(specs: SpecItem[], variant: Variant, extra: Extra | null = null): ExtractionItem[] {
   const pass = (def: ItemDef, value: number, rawValue: string): ItemDef => ({ ...def, value, rawValue, confidence: 0.95 });
   const defs: ItemDef[] = [
     pass(LI, 99.7, '99.7 %'),
@@ -368,10 +379,12 @@ function itemsStandard(specs: SpecItem[], variant: Variant): ExtractionItem[] {
     variant === 'reject' ? { ...CA, confidence: 0.92 } : pass(CA, 15, '15 ppm'),
     pass(CL, 10, '0.001 %'),
   ];
-  return [...defs.map((def) => makeItem(def, specs)), makeItem(
+  const items = [...defs.map((def) => makeItem(def, specs)), makeItem(
     { id: 'so4', name: '황산염', rawName: 'Sulfate', rawValue: '100 ppm', rawSpec: '<= 500 ppm', qualifier: 'exact', value: 100, confidence: 0.95 },
     specs,
   )];
+  if (extra) items.push(makeItem(EXTRA_ITEMS[extra], specs));
+  return items;
 }
 
 // ---------------------------------------------------------------------------
@@ -584,10 +597,10 @@ export function createMockState(options: MockOptions = {}): MockState {
     buildDoc({ lot: 'A0481544', supplier: 'Chengxin', po: 'PO-2026-1121', testDate: '2026-09-30', uploadedAt: '2026-10-05T15:41:00+09:00', status: 'extracted', fileSize: 497_000 }, itemsB(specs), { paper: paperB() }),
     buildDoc(
       { lot: 'A0390221', supplier: '대흥리튬', po: 'PO-2026-1115', testDate: '2026-09-29', uploadedAt: '2026-10-05T14:10:00+09:00', status: 'extracted', fileSize: 455_000 },
-      itemsStandard(specs, 'allpass'),
+      itemsStandard(specs, 'allpass', 'reference'),
       { documentIssues: options.scenario === 'issues' ? ISSUES_SAMPLE : [] },
     ),
-    buildDoc({ lot: 'A0390188', supplier: '대흥리튬', po: 'PO-2026-1112', testDate: '2026-09-29', uploadedAt: '2026-10-05T11:36:00+09:00', status: 'extracted', fileSize: 462_000 }, itemsStandard(specs, 'hold')),
+    buildDoc({ lot: 'A0390188', supplier: '대흥리튬', po: 'PO-2026-1112', testDate: '2026-09-29', uploadedAt: '2026-10-05T11:36:00+09:00', status: 'extracted', fileSize: 462_000 }, itemsStandard(specs, 'hold', 'unmapped')),
     buildDoc(
       { lot: 'A0377415', supplier: '서진소재', po: 'PO-2026-1108', testDate: '2026-09-27', uploadedAt: '2026-10-04T16:22:00+09:00', status: 'on_hold', fileSize: 431_000 },
       itemsStandard(specs, 'nd'),

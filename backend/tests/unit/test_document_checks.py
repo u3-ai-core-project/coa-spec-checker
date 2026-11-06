@@ -69,7 +69,7 @@ def test_dates_in_order_are_fine():
 # ---- 규격 버전 (데모 18) ------------------------------------------------------
 def test_same_standard_different_version():
     issues = check_document(coa(applied_standard="YS/T 582-2023 D1"), spec_version="YS/T 582-2013")
-    assert codes(issues) == [D.SPEC_VERSION_UNKNOWN]
+    assert codes(issues) == [D.SPEC_VERSION_MISMATCH]
     assert "YS/T 582-2023 D1" in issues[0].message and "YS/T 582-2013" in issues[0].message
 
 
@@ -98,4 +98,28 @@ def test_parse_standard(text, parsed):
 def test_several_issues_together():
     doc = coa(lot_no="L-1", test_date=date(2026, 9, 20), issue_date=date(2026, 9, 1), applied_standard="YS/T 582-2023")
     issues = check_document(doc, received_lot_no="L-2", spec_version="YS/T 582-2013")
-    assert codes(issues) == [D.LOT_MISMATCH, D.DATE_CONFLICT, D.SPEC_VERSION_UNKNOWN]
+    assert codes(issues) == [D.LOT_MISMATCH, D.DATE_CONFLICT, D.SPEC_VERSION_MISMATCH]
+
+
+# ---- 제조일, AI 제안 칸 (10.25 회의 결정) -------------------------------------
+def test_issue_date_before_manufacture_date():
+    issues = check_document(coa(manufacture_date=date(2026, 9, 10), issue_date=date(2026, 9, 5)))
+    assert codes(issues) == [D.DATE_CONFLICT]
+    assert "제조일" in issues[0].message
+
+
+def test_manufacture_date_before_issue_date_is_fine():
+    assert check_document(coa(manufacture_date=date(2026, 9, 1), issue_date=date(2026, 9, 5))) == []
+    assert check_document(coa(manufacture_date=date(2026, 9, 1))) == []   # 발행일을 모르면 검사하지 않음
+
+
+def test_ai_proposal_fields_are_kept_in_result():
+    from app.services.judgement.engine import judge_document
+    from app.services.judgement.spec_rule import SpecRule
+    inp = ExtractionInput.model_validate({"manufacture_date": "2026-09-01", "items": [
+        {"normalized_name": "Na", "raw_value": "30", "unit": "ppm", "confidence": 0.9,
+         "value_kind": "number", "value_reason": "숫자 + 단위", "check_reasons": ["x"]}]})
+    result = judge_document(inp, document_id="d", specs=[SpecRule("Na", unit="ppm", usl=50)]).to_json()
+    item = result["items"][0]
+    assert (item["value_kind"], item["value_reason"], item["check_reasons"]) == ("number", "숫자 + 단위", ["x"])
+    assert result["manufacture_date"] == "2026-09-01"

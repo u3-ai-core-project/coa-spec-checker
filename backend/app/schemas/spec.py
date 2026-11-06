@@ -53,6 +53,20 @@ class SpecUpdateRequest(BaseModel):
     usl: float | None = Field(None, description="상한. null 이면 상한 없음")
     unit: str | None = Field(None, description="단위")
     reason: str | None = Field(None, description="변경 사유 (v1.4, 필수)")
+    rejudge: bool = Field(False, description="true 이면 이 규격 세트로 판정한 처분 전 문서(추출됨·검수 중·보류)를 새 규격으로 다시 판정")
+
+
+class RejudgedDocument(BaseModel):
+    """규격 변경 때 다시 판정한 문서 1건. 판정이 바뀐 항목과 로트 권고 변화를 알려 준다."""
+    document_id: str
+    lot_recommendation_before: str | None
+    lot_recommendation_after: str | None
+    changed_items: list[str] = Field(description="판정이 바뀐 항목명")
+
+
+class SpecUpdateOut(SpecItemOut):
+    """PATCH /specs/{id} 응답. rejudge=true 로 요청했을 때만 rejudged_documents 가 채워진다."""
+    rejudged_documents: list[RejudgedDocument] = []
 
 
 class SpecChangeLogOut(BaseModel):

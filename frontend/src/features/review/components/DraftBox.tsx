@@ -4,14 +4,25 @@ import { Icon } from '../shared/components/Icon';
 
 const SOURCE_LABEL: Record<InquiryDraft['source'], string> = {
   template: '템플릿',
-  ai: 'AI',
+  ai: 'AI 초안',
   template_fallback: '템플릿(AI 실패로 대체)',
 };
+
+/** "AI로 다듬기" 버튼과 그 진행 상태 */
+export interface DraftAiAction {
+  loading: boolean;
+  error: string | null;
+  /** 이미 AI 초안을 받았으면 true(버튼이 "다시 다듬기"가 됩니다) */
+  hasResult: boolean;
+  onRequest(): void;
+  /** 있으면 "기본 초안으로 보기" 버튼을 보입니다(서버 요청 없이 템플릿 초안으로 되돌림). */
+  onShowTemplate?(): void;
+}
 
 type CopyState = 'idle' | 'copied' | 'failed';
 
 /** 문의 초안 한 통: 제목, 본문, 복사 버튼, 생성 방식(GET /documents/{id}/follow-ups의 draft, combined_draft) */
-export function DraftBox({ title, draft }: { title: string; draft: InquiryDraft }) {
+export function DraftBox({ title, draft, ai }: { title: string; draft: InquiryDraft; ai?: DraftAiAction }) {
   const [copy, setCopy] = useState<CopyState>('idle');
 
   async function copyDraft() {
@@ -32,15 +43,52 @@ export function DraftBox({ title, draft }: { title: string; draft: InquiryDraft 
             {SOURCE_LABEL[draft.source] ?? draft.source}
           </span>
         </span>
-        <button
-          type="button"
-          onClick={() => void copyDraft()}
-          className="btn-copy-draft inline-flex h-7 items-center gap-1 rounded-md border border-[#D0D4DA] bg-white px-2.5 text-[12px] font-semibold text-[#1F2328]"
-        >
-          <Icon name="copy" size={13} />
-          {copy === 'copied' ? '복사됨' : '복사'}
-        </button>
+        <span className="flex items-center gap-1.5">
+          {ai?.onShowTemplate && (
+            <button
+              type="button"
+              disabled={ai.loading}
+              onClick={ai.onShowTemplate}
+              className="btn-show-template inline-flex h-7 items-center rounded-md border border-[#D0D4DA] bg-white px-2.5 text-[12px] font-semibold text-[#1F2328] disabled:cursor-not-allowed disabled:text-[#8A9099]"
+            >
+              기본 초안으로 보기
+            </button>
+          )}
+          {ai && (
+            <button
+              type="button"
+              disabled={ai.loading}
+              aria-busy={ai.loading}
+              onClick={ai.onRequest}
+              className="btn-ai-draft inline-flex h-7 items-center gap-1 rounded-md border border-[#D0D4DA] bg-white px-2.5 text-[12px] font-semibold text-[#1F2328] disabled:cursor-not-allowed disabled:text-[#8A9099]"
+            >
+              <Icon name={ai.loading ? 'spinner' : 'spark'} size={13} className={ai.loading ? 'animate-spin' : undefined} />
+              {ai.hasResult ? 'AI로 다시 다듬기' : 'AI로 다듬기'}
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => void copyDraft()}
+            className="btn-copy-draft inline-flex h-7 items-center gap-1 rounded-md border border-[#D0D4DA] bg-white px-2.5 text-[12px] font-semibold text-[#1F2328]"
+          >
+            <Icon name="copy" size={13} />
+            {copy === 'copied' ? '복사됨' : '복사'}
+          </button>
+        </span>
       </div>
+      {ai?.loading && (
+        <span role="status" className="draft-ai-loading text-[11px] text-[#2B4FCB]">
+          AI가 문의 초안을 다듬는 중입니다 (최대 3분)
+        </span>
+      )}
+      {ai?.error && (
+        <span role="alert" className="draft-ai-error text-[11px] text-[#C0342E]">
+          {ai.error}
+        </span>
+      )}
+      {draft.source === 'template_fallback' && (
+        <span className="draft-fallback-notice text-[11px] text-[#8A5A00]">AI를 쓸 수 없어 기본 초안을 표시합니다</span>
+      )}
       <span className="draft-subject truncate text-[12px] font-semibold">{draft.subject}</span>
       <textarea
         readOnly

@@ -3,6 +3,7 @@ import json
 
 import pytest
 
+from evaluation import demo20
 from evaluation.data import parse_ground_truth, parse_prediction
 from evaluation.metrics import DocPair, classify_value_error, evaluate, value_match
 from evaluation.data import GTItem, PredItem
@@ -182,4 +183,28 @@ def test_cli_writes_report(tmp_path):
     assert report["system"]["overall"]["extraction"]["item_recall"] == 1.0
     assert report["meta"]["policy"]["LOW_CONFIDENCE_THRESHOLD"] == 0.8
     assert (out / "report.md").read_text(encoding="utf-8").startswith("# CoA 추출·판정 평가 리포트")
+
+
+def _demo_case(case_id):
+    return next(c for c in demo20.CASES if c["id"] == case_id)
+
+
+@pytest.mark.parametrize("case_id, recommendation, flagged", [
+    ("01", "approve", []),
+    ("04", "reject", ["Na"]),
+    ("11", "hold", ["자성이물"]),
+    ("12", "hold", []),  # 문서 정합성 오류만 있어 항목은 모두 적합
+])
+def test_demo20_judge_case(case_id, recommendation, flagged):
+    row = demo20.judge_case(_demo_case(case_id))
+    assert row["lot_recommendation"] == recommendation
+    assert row["flagged_items"] == flagged
+
+
+def test_demo20_report_counts():
+    report = demo20.build_report({c["id"]: "passed" for c in demo20.CASES})
+    assert (report["passed"], report["total"]) == (20, 20)
+    assert sum(report["lots"].values()) == 20
+    assert "20 / 20" in demo20.to_markdown(report)
+    assert "미측정" in demo20.to_markdown(report)
 

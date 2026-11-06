@@ -4,7 +4,7 @@ import { JudgementBadge } from '../shared/components/badges';
 import { Icon } from '../shared/components/Icon';
 import { DOCUMENT_ISSUE_LABEL, REASON_CODE_LABEL, RESOLUTION_ACTION_LABEL } from '../shared/domain/exceptions';
 import { formatConverted, formatSpec } from '../shared/domain/items';
-import { DraftBox } from './DraftBox';
+import { DraftBox, type DraftAiAction } from './DraftBox';
 
 /** 문서 단위 문제 줄의 target 값(GET /documents/{id}/follow-ups) */
 const DOCUMENT_TARGET = '문서';
@@ -25,6 +25,18 @@ interface ExceptionPanelProps {
   onClose(): void;
   /** follow-ups를 다시 불러옵니다. */
   onRetry?(): void;
+  /** "AI로 다듬기": AI 초안 응답(받기 전에는 null)과 진행 상태. 없으면 버튼을 보이지 않습니다. */
+  aiDraft?: {
+    /** 지금 보여 줄 AI 응답. 받기 전이거나 기본(템플릿) 초안을 보고 있으면 null입니다. */
+    followUps: FollowUpsResponse | null;
+    /** AI 응답을 받은 적이 있는지(기본 초안으로 되돌린 뒤에도 true) */
+    hasResult: boolean;
+    loading: boolean;
+    error: string | null;
+    onRequest(): void;
+    /** 서버 요청 없이 기본(템플릿) 초안으로 되돌립니다. */
+    onShowTemplate(): void;
+  };
 }
 
 /** 항목 하나 또는 문서 단위 문제 하나에 해당하는 follow-ups의 줄을 target과 code로 찾습니다. */
@@ -41,7 +53,7 @@ function findLine(followUps: FollowUpsResponse | null, item: ExtractionItem | nu
  * 데이터는 GET /documents/{id}/follow-ups의 supplier_lines, internal_lines(label, why, condition, raw_value)와 draft, combined_draft입니다.
  * 판정과 문구는 서버 응답을 그대로 보여 줍니다. follow-ups를 불러오지 못했으면 항목 자체의 사유와 해결 조건만 보여 줍니다.
  */
-export function ExceptionPanel({ item, issueCode, followUps, onReply, replyTarget, onClose, onRetry }: ExceptionPanelProps) {
+export function ExceptionPanel({ item, issueCode, followUps, onReply, replyTarget, onClose, onRetry, aiDraft }: ExceptionPanelProps) {
   const [showCombined, setShowCombined] = useState(false);
   const line = findLine(followUps, item, issueCode);
 
@@ -55,9 +67,19 @@ export function ExceptionPanel({ item, issueCode, followUps, onReply, replyTarge
   const resolutionType = item?.resolution?.type ?? null;
 
   const supplier = followUps?.supplier ?? null;
-  const combined = followUps?.combined_draft ?? null;
+  // AI 초안을 받았으면 그 응답의 draft, combined_draft를 그대로 보여 주고, 아니면 기존 템플릿 초안을 보여 줍니다.
+  const draftSource = aiDraft?.followUps ?? followUps;
+  const combined = draftSource?.combined_draft ?? null;
   const openCount = followUps?.open_documents.length ?? 0;
-  const draft = showCombined && combined ? combined : followUps?.draft ?? null;
+  const draft = showCombined && combined ? combined : draftSource?.draft ?? null;
+  const aiAction: DraftAiAction | undefined = aiDraft && {
+    loading: aiDraft.loading,
+    error: aiDraft.error,
+    hasResult: aiDraft.hasResult,
+    onRequest: aiDraft.onRequest,
+    // AI 응답(source ai 또는 template_fallback)을 보고 있을 때만 기본 초안으로 되돌리는 버튼을 보입니다.
+    onShowTemplate: aiDraft.followUps ? aiDraft.onShowTemplate : undefined,
+  };
 
   return (
     <div className="exception-panel shrink-0 overflow-hidden rounded-xl border border-[#E3E5E8] bg-white">
@@ -132,7 +154,7 @@ export function ExceptionPanel({ item, issueCode, followUps, onReply, replyTarge
             )}
           </div>
         ) : draft && (toSupplier || showCombined) ? (
-          <DraftBox title={showCombined ? '묶음 문의 초안 (같은 공급사)' : '문의 초안 (이 로트)'} draft={draft} />
+          <DraftBox title={showCombined ? '묶음 문의 초안 (같은 공급사)' : '문의 초안 (이 로트)'} draft={draft} ai={aiAction} />
         ) : (
           <div className="exception-draft-none flex items-center text-[12px] text-[#8A9099]">
             {toSupplier ? '이 로트의 문의 초안이 없습니다.' : '내부에서 확인하는 항목이라 공급사 문의 초안이 없습니다.'}

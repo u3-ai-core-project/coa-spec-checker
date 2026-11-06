@@ -42,6 +42,10 @@ class ExtractedItem(BaseModel):
     unit: str | None = None
     confidence: float | None = Field(default=None, ge=0, le=1)
     bbox: BBox | None = None
+    # AI 제안 칸 (10.25 회의 결정). 저장·표시용이며 판정에는 쓰지 않는다 (값 해석과 비교는 서버 코드가 한다)
+    value_kind: str | None = None    # number | bound | nd | spec_copy | pass_text | description
+    value_reason: str | None = None  # 값 종류를 그렇게 본 근거 한 줄
+    check_reasons: list[str] = Field(default_factory=list)  # AI 자체 검증에 걸린 이유
 
 
 class ExtractionInput(BaseModel):
@@ -56,6 +60,7 @@ class ExtractionInput(BaseModel):
     applied_standard: str | None = None
     # v1.4안 2.5: 제품 불일치·날짜 충돌(document_issues) 판단용 (PR #5 요청, AI 가 CoA 에서 읽은 그대로)
     product_name: str | None = None
+    manufacture_date: date | None = None
     issue_date: date | None = None
     expiry_date: date | None = None
     retest_date: date | None = None
@@ -96,6 +101,7 @@ class ExtractionItem(ExtractedItem):
     detection_limit: float | None = None
     spec_lsl: float | None = None
     spec_usl: float | None = None
+    spec_unit: str | None = None  # 사내 규격 단위. converted_value·detection_limit·spec_lsl/usl 의 단위. 규격 없는 항목은 null
     judgement: Judgement
     judgement_reason: str | None = None
     deviation: float | None = None
@@ -126,6 +132,7 @@ class ExtractionResult(BaseModel):
     origin: str | None = None
     applied_standard: str | None = None
     product_name: str | None = None  # 아래 넷은 ExtractionInput 에서 그대로 옮긴 값
+    manufacture_date: date | None = None
     issue_date: date | None = None
     expiry_date: date | None = None
     retest_date: date | None = None

@@ -6,9 +6,10 @@ import pytest
 from jose import jwt
 
 from app.core.config import settings
-from app.core.enums import SpecType
+from app.core.enums import Role, SpecType
 from app.core.security import create_access_token
 from app.models import SpecItem, SpecSet
+from tests.conftest import _make_user
 
 
 def bearer(token: str) -> dict:
@@ -144,6 +145,29 @@ def test_user_can_hold(client, user, upload):
                     headers=bearer(create_access_token(user.id)))
     assert r.status_code == 200
     assert r.json()["data"]["status"] == "on_hold"
+
+
+@pytest.mark.parametrize("path, content_type", [
+    ("", "application/json"),
+    ("/extraction", "application/json"),
+    ("/file", "application/pdf"),
+    ("/report", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
+])
+def test_user_can_view_others_document(client, db, upload, path, content_type):
+    """USER 도 다른 담당자의 문서·리포트를 볼 수 있다 (10.25 회의 안건 8. 배치·공급사별 문의 묶음에 필요)."""
+    doc_id = upload("approve")
+    other = _make_user(db, "user2", "이사용", Role.USER)
+    r = client.get(f"/api/v1/documents/{doc_id}{path}", headers=bearer(create_access_token(other.id)))
+    assert r.status_code == 200
+    assert r.headers["content-type"].startswith(content_type)
+
+
+def test_user_sees_others_document_in_list(client, db, upload):
+    doc_id = upload("approve")
+    other = _make_user(db, "user2", "이사용", Role.USER)
+    r = client.get("/api/v1/documents", headers=bearer(create_access_token(other.id)))
+    assert r.status_code == 200
+    assert doc_id in [d["document_id"] for d in r.json()["data"]["items"]]
 
 
 def test_user_cannot_update_spec(client, user, admin, spec_na):

@@ -38,16 +38,19 @@ class Drafter(Protocol):
     def draft(self, supplier: str | None, lots: list[LotRequest]) -> tuple[str, str]: ...
 
 
-def get_drafter() -> Drafter:
-    if settings.INQUIRY_DRAFTER == "template":
+def get_drafter(mode: str | None = None) -> Drafter:
+    """mode: "template" / "ai". 없으면 설정 INQUIRY_DRAFTER (기본 template)."""
+    mode = mode or settings.INQUIRY_DRAFTER
+    if mode == "template":
         return TemplateDrafter()
-    if settings.INQUIRY_DRAFTER == "ai":
+    if mode == "ai":
         from app.pipeline.ai_drafter import AIDrafter  # ai/ 패키지가 필요해서 지연 import
         return AIDrafter()
-    raise ValueError(f"알 수 없는 INQUIRY_DRAFTER 설정: {settings.INQUIRY_DRAFTER}")
+    raise ValueError(f"알 수 없는 INQUIRY_DRAFTER 설정: {mode}")
 
 
-def get_follow_ups(db: Session, document_id: str) -> FollowUpsResponse:
+def get_follow_ups(db: Session, document_id: str, draft_mode: str | None = None) -> FollowUpsResponse:
+    """draft_mode: "ai" 면 AI 초안, "template" 이면 템플릿, 없으면 설정값 (10.25 결정 7: 기본은 템플릿, 요청할 때만 AI)."""
     doc = db.get(Document, document_id, options=[joinedload(Document.extraction)])
     if doc is None:
         raise AppException(ErrorCode.DOCUMENT_NOT_FOUND)
@@ -85,13 +88,13 @@ def get_follow_ups(db: Session, document_id: str) -> FollowUpsResponse:
         suggested_follow_up=suggest_follow_up(follow),
         supplier_lines=[_line_out(ln) for ln in follow.supplier_lines],
         internal_lines=[_line_out(ln) for ln in follow.internal_lines],
-        draft=_draft(doc.supplier, [this_lot]) if this_lot.lines else None,
+        draft=_draft(doc.supplier, [this_lot], draft_mode) if this_lot.lines else None,
         open_documents=open_docs,
-        combined_draft=_draft(doc.supplier, lots) if len(lots) >= 2 else None,
+        combined_draft=_draft(doc.supplier, lots, draft_mode) if len(lots) >= 2 else None,
     )
 
 
-def _draft(supplier: str | None, lots: list[LotRequest]) -> InquiryDraftOut:
+def _draft(supplier: str | None, lots: list[LotRequest], mode: str | None = None) -> InquiryDraftOut:
     """설정된 생성기로 초안을 만들고, 실패하면 템플릿으로 대신한다.
 
     생성기 준비(get_drafter)도 try 안에서 한다. INQUIRY_DRAFTER=ai 인데 ai 패키지가 없거나 설정값이 잘못되면
@@ -99,14 +102,15 @@ def _draft(supplier: str | None, lots: list[LotRequest]) -> InquiryDraftOut:
     """
     drafter: Drafter | None = None
     try:
-        drafter = get_drafter()
+        drafter = get_drafter(mode) if mode else get_drafter()
         subject, body = drafter.draft(supplier, lots)
         source = drafter.source
     except Exception:
-        if isinstance(drafter, TemplateDrafter) or (drafter is None and settings.INQUIRY_DRAFTER == "template"):
+        used = mode or settings.INQUIRY_DRAFTER
+        if isinstance(drafter, TemplateDrafter) or (drafter is None and used == "template"):
             raise
         stage = "준비" if drafter is None else "생성"
-        logger.exception("문의 초안 생성기 %s 실패 (INQUIRY_DRAFTER=%s), 템플릿으로 대체", stage, settings.INQUIRY_DRAFTER)
+        logger.exception("문의 초안 생성기 %s 실패 (mode=%s), 템플릿으로 대체", stage, used)
         subject, body = TemplateDrafter().draft(supplier, lots)
         source = "template_fallback"
     return InquiryDraftOut(subject=subject, body=body, source=source, lot_nos=[lot.lot_no for lot in lots])
