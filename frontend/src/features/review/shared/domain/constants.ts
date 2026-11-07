@@ -12,7 +12,6 @@ export const REASON_NO_SPEC = '규격 없음';
 
 /**
  * 신뢰도 "높음/보통" 경계. 명세에 정해진 값이 없어 임시로 0.9를 씁니다.
- * 참고: 서버에는 낮음 기준(0.8)만 있고 높음/보통 경계는 없어 화면 표시용 임시값입니다. 정해지면 이 상수 한 곳만 고칩니다.
  */
 export const HIGH_CONFIDENCE_THRESHOLD = 0.9;
 

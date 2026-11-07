@@ -98,7 +98,6 @@ function spec(
 /**
  * [v1.4] 수산화리튬(LIOH, 보조 원자재) 규격 자리표시. 항목 이름과 단위만 두고 하한/상한은 비웠습니다.
  * 한계값이 정해지지 않은 항목은 화면에 "-"로 보입니다.
- * 참고: 소성훈 님 작성본은 백엔드 시드에 LIOH-BG-V1(15항목, 한계값 있음)로 들어갔지만 목업은 자리표시(3항목) 그대로입니다. 목업에서 보여야 하면 그 항목과 값으로 교체합니다.
  */
 function liohSpec(id: number, itemName: string, unit: string): SpecItem {
   return {
@@ -315,7 +314,6 @@ function itemsB(specs: SpecItem[]): ExtractionItem[] {
   ];
   const items = defs.map((def) => makeItem(def, specs));
   // AI가 항목명을 'Pb'로 추정했지만 사내 규격에는 없는 이름입니다. 신뢰도가 낮아 확인 필요로 내려 준 시연용 항목입니다.
-  // 참고: 서버는 규격에 없는 AI 추정 이름을 UNMAPPED_ITEM(확인 필요)으로 판정합니다(백엔드 item_judge). 이 항목은 LOW_CONFIDENCE로 고정했고, UNMAPPED_ITEM은 'unmapped' 추가 항목이 보여 줍니다.
   items.push({
     item_id: 'hm',
     raw_name: 'Heavy metals (as Pb)',
