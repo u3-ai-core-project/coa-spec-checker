@@ -23,7 +23,10 @@ from app.core.enums import Judgement, SpecType
 from app.schemas.extraction import DocumentIssue, ExtractionInput
 from app.services.judgement.engine import judge_document
 from app.services.judgement.spec_rule import SpecRule
-from tests.api.test_demo20_acceptance import CASES, build_coa
+from tests.api.test_demo20_acceptance import CASES as ALL_CASES
+from tests.api.test_demo20_acceptance import build_coa
+
+CASES = [c for c in ALL_CASES if int(c["id"]) <= 20]   # 결과표는 범위 정의서의 20 로트만 (21·22번은 팀 추가 사례)
 
 BACKEND = Path(__file__).resolve().parents[1]
 SEED_ITEMS = BACKEND / "seeds" / "data" / "spec_items_li2co3.csv"

@@ -123,3 +123,32 @@ def test_ai_proposal_fields_are_kept_in_result():
     item = result["items"][0]
     assert (item["value_kind"], item["value_reason"], item["check_reasons"]) == ("number", "숫자 + 단위", ["x"])
     assert result["manufacture_date"] == "2026-09-01"
+
+
+# ---- 제품명 (UC07): 접수 원자재와 다른 원자재를 가리킬 때만 -------------------------
+@pytest.mark.parametrize("name, material", [
+    ("Lithium Hydroxide Monohydrate Battery Grade", "LI2CO3"),
+    ("수산화리튬 일수화물", "LI2CO3"),
+    ("氢氧化锂", "LI2CO3"),
+    ("Lithium Carbonate Battery Grade", "LIOH"),
+    ("碳酸锂", "LIOH"),
+])
+def test_product_name_points_to_other_material(name, material):
+    issues = check_document(coa(product_name=name), material_code=material)
+    assert codes(issues) == [D.PRODUCT_MISMATCH]
+    assert name in issues[0].message
+
+
+@pytest.mark.parametrize("name, material", [
+    ("Lithium Carbonate Battery Grade", "LI2CO3"),
+    ("LI2CO3 99.5%", "li2co3"),
+    ("Lithium Hydroxide Monohydrate", "LIOH"),
+    ("Battery Grade Lithium", "LI2CO3"),      # 어느 원자재인지 알 수 없는 표기 → 경고하지 않는다
+    ("Lithium Carbonate / Lithium Hydroxide", "LI2CO3"),  # 접수 원자재 키워드가 있으면 경고하지 않는다
+    ("", "LI2CO3"),
+    (None, "LI2CO3"),
+    ("Lithium Hydroxide", "NI"),             # 키워드를 모르는 원자재는 검사하지 않는다
+    ("Lithium Hydroxide", None),
+])
+def test_product_name_no_issue(name, material):
+    assert check_document(coa(product_name=name), material_code=material) == []

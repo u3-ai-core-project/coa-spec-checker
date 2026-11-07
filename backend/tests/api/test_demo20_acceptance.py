@@ -24,9 +24,10 @@ SCENARIOS = json.loads((Path(__file__).resolve().parents[1] / "fixtures" / "demo
 CASES = SCENARIOS["cases"]
 
 
-def build_coa(patch: dict | None, *, lot_no: str | None = None) -> dict:
-    """base CoA 에 patch(set: 항목 추가·덮어쓰기, remove: 항목 삭제)를 적용한 목업 추출 JSON."""
-    coa = copy.deepcopy(SCENARIOS["base"])
+def build_coa(patch: dict | None, *, lot_no: str | None = None, base: str = "base") -> dict:
+    """base CoA 에 patch(set: 항목 추가·덮어쓰기, remove: 항목 삭제)를 적용한 목업 추출 JSON.
+    base: 기본은 탄산리튬 base, 수산화리튬 사례(22번)는 "lioh_base"."""
+    coa = copy.deepcopy(SCENARIOS[base])
     patch = patch or {}
     rows = {r["normalized_name"]: r for r in coa["items"] if r["normalized_name"] not in patch.get("remove", [])}
     for name, fields in patch.get("set", {}).items():
@@ -49,9 +50,10 @@ def upload(auth_client, db, tmp_path, monkeypatch):
     monkeypatch.setattr(settings, "MOCK_EXTRACTION_DIR", str(mock_dir))
     monkeypatch.setattr(settings, "UNMAPPED_AI_ITEM", "check")   # 로컬 .env 와 무관하게 기본 정책으로
 
-    def _upload(name: str, coa: dict, *, spec_set: str | None = None, received_lot_no: str | None = None) -> str:
+    def _upload(name: str, coa: dict, *, spec_set: str | None = None, received_lot_no: str | None = None,
+                material_code: str = "LI2CO3") -> str:
         (mock_dir / f"{name}.json").write_text(json.dumps(coa, ensure_ascii=False), encoding="utf-8")
-        data = {"material_code": "LI2CO3"}
+        data = {"material_code": material_code}
         if spec_set:
             data["spec_set_code"] = spec_set
         if received_lot_no:
@@ -75,8 +77,10 @@ def test_demo_lot(case, upload, auth_client):
         _check_anomaly(case, upload, auth_client)
         return
 
-    doc_id = upload(f'demo{case["id"]}', build_coa(case.get("patch")),
-                    spec_set=case.get("spec_set"), received_lot_no=case.get("received_lot_no"))
+    coa = build_coa(case.get("patch"), base=case.get("base", "base"))
+    material = case.get("material_code", "LI2CO3")
+    doc_id = upload(f'demo{case["id"]}', coa, spec_set=case.get("spec_set"),
+                    received_lot_no=case.get("received_lot_no"), material_code=material)
     result = auth_client.get(f"/api/v1/documents/{doc_id}/extraction").json()["data"]
     items = {i["normalized_name"]: i for i in result["items"]}
 
@@ -110,6 +114,21 @@ def test_demo_lot(case, upload, auth_client):
             assert f["draft"] and word in f["draft"]["body"], f["draft"]
 
 
+    # ---- 같은 CoA 를 다른 규격 세트로 올렸을 때 (21번: 규격 세트에 따라 판정이 달라진다) ----
+    for n, other in enumerate(case.get("versus", []), start=1):
+        other_id = upload(f'demo{case["id"]}-versus{n}', coa, spec_set=other["spec_set"], material_code=material)
+        other_result = auth_client.get(f"/api/v1/documents/{other_id}/extraction").json()["data"]
+        other_items = {i["normalized_name"]: i for i in other_result["items"]}
+        assert other_result["lot_recommendation"] == other["expected"]["lot_recommendation"], _why(other_result)
+        for name, fields in other["expected"].get("items", {}).items():
+            for field, value in fields.items():
+                actual = other_items[name][field]
+                if isinstance(value, float | int) and not isinstance(value, bool) and actual is not None:
+                    assert actual == pytest.approx(value, abs=1e-3), (name, field, actual)
+                else:
+                    assert actual == value, (name, field, actual)
+
+
 def _check_anomaly(case, upload, auth_client):
     """데모 20: 여러 로트에 같은 결과가 반복되면 이상 패턴 경고 (위조 판정은 하지 않음)."""
     ids = [upload(f'demo20-{lot}', build_coa(case.get("patch"), lot_no=lot)) for lot in case["repeat_lots"]]
@@ -133,5 +152,15 @@ def _why(result) -> str:
                      for i in result["items"] if i["judgement"] != "pass") or "모두 적합"
 
 
-def test_scenario_file_covers_20_lots():
-    assert [c["id"] for c in CASES] == [f"{n:02d}" for n in range(1, 21)]
+def test_scenario_file_covers_22_lots():
+    """1~20번은 멘토님 범위 정의서 6장, 21·22번은 팀이 추가한 사례(규격 세트별 판정, 수산화리튬 기본 세트)."""
+    assert [c["id"] for c in CASES] == [f"{n:02d}" for n in range(1, 23)]
+
+
+def test_product_name_of_other_material_holds(upload, auth_client):
+    """UC07: 탄산리튬으로 접수했는데 CoA 제품명이 수산화리튬이면 PRODUCT_MISMATCH 로 보류 (값은 모두 적합해도)."""
+    coa = build_coa(None, lot_no="DEMO-PN1")
+    coa["product_name"] = "Lithium Hydroxide Monohydrate Battery Grade"
+    result = auth_client.get(f"/api/v1/documents/{upload('product-name', coa)}/extraction").json()["data"]
+    assert [i["code"] for i in result["document_issues"]] == ["PRODUCT_MISMATCH"]
+    assert result["lot_recommendation"] == "hold"

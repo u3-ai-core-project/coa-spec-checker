@@ -164,7 +164,7 @@ def test_queue_order(batch, auth_client):
 
 def test_demo_lots_as_one_batch(batch, auth_client):
     """멘토님 데모 로트(단일 로트 사례 중 구현된 18건)를 한 묶음으로 올려도 사례별 권고가 같고, 검토 큐가 순서대로 나온다 (UC10 20건 혼합 배치)."""
-    cases = [c for c in CASES if not c.get("pending") and "repeat_lots" not in c]   # 데모 20 은 여러 로트 사례
+    cases = [c for c in CASES if not c.get("pending") and "repeat_lots" not in c and "material_code" not in c]   # 데모 20 은 여러 로트 사례
     coas, rows = {}, []
     for c in cases:
         name, lot = f'demo{c["id"]}', f'DEMO-L{c["id"]}'
