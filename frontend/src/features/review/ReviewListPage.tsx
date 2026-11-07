@@ -9,7 +9,7 @@ import { EmptyState, ErrorNotice } from './shared/components/EmptyState';
 import { Icon } from './shared/components/Icon';
 import { formatDateTime } from './shared/domain/format';
 import { dispositionOf } from './shared/domain/recommendation';
-import { STATUS_META, STATUS_ORDER, type StatusKey, statusKey } from './shared/domain/status';
+import { STATUS_META, STATUS_ORDER, type StatusKey } from './shared/domain/status';
 import { readLastViewed } from './lib/lastViewed';
 import { useAsync } from './shared/hooks/useAsync';
 import { PageIntro } from './shell/PageIntro';
@@ -22,36 +22,78 @@ function isOpenable(doc: DocumentListItem): boolean {
   return ['extracted', 'in_review', 'on_hold', 'approved'].includes(doc.status);
 }
 
+/** 한 페이지에 불러오는 문서 수(서버 size 상한과 같음). 넘으면 이전/다음으로 넘깁니다. */
 const PAGE_SIZE = 100;
+
+/** 필터 탭이 서버에 보내는 status 값(쉼표로 여러 개). "전체"는 보내지 않습니다. */
+const FILTER_STATUS: Record<StatusKey, string> = {
+  queued: 'queued',
+  processing: 'processing',
+  reviewing: 'extracted,in_review',
+  on_hold: 'on_hold',
+  done: 'approved',
+  failed: 'failed',
+};
+
+/** 탭 개수를 받아 오는 순서: 전체, 그리고 상태별 */
+const TAB_KEYS: Filter[] = ['all', ...STATUS_ORDER];
 
 /** 시안 2-7 검수 목록 (빈 상태는 시안 2-0) */
 export function ReviewListPage() {
   const user = useCurrentUser();
   const navigate = useNavigate();
   const [filter, setFilter] = useState<Filter>('all');
+  const [page, setPage] = useState(1);
 
-  // 사용자는 uploaded_by로 본인 문서만, 관리자는 전체를 봅니다.
+  // 사용자는 uploaded_by로 본인 문서만, 관리자는 전체를 봅니다. 상태 필터와 페이지는 서버에 맡기고 total로 전체 개수를 압니다.
+  const uploadedBy = user.role === 'USER' ? user.id : undefined;
   const { data, error, loading, reload } = useAsync(
-    () => api.listDocuments({ uploaded_by: user.role === 'USER' ? user.id : undefined, size: PAGE_SIZE }),
+    () =>
+      api.listDocuments({
+        uploaded_by: uploadedBy,
+        status: filter === 'all' ? undefined : FILTER_STATUS[filter],
+        page,
+        size: PAGE_SIZE,
+      }),
+    [user.id, user.role, filter, page],
+  );
+  // 탭마다 보여 줄 개수: 상태별로 size 1만 요청해 total만 받습니다(현재 페이지에 없는 문서도 센다).
+  const countsQuery = useAsync(
+    () =>
+      Promise.all(
+        TAB_KEYS.map((key) =>
+          api.listDocuments({ uploaded_by: uploadedBy, status: key === 'all' ? undefined : FILTER_STATUS[key], size: 1 }).then((result) => result.total),
+        ),
+      ),
     [user.id, user.role],
   );
 
   const docs = useMemo(() => data?.items ?? [], [data]);
+  const total = data?.total ?? 0;
+  const lastPage = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  // 마지막 페이지가 줄어든 뒤(문서가 처분되어 필터에서 빠지는 등)에도 빈 페이지에 머물지 않게 합니다.
+  if (data && page > lastPage) setPage(lastPage);
   const counts = useMemo(() => {
-    const result = { all: docs.length } as Record<Filter, number>;
-    for (const key of STATUS_ORDER) result[key] = 0;
-    for (const doc of docs) result[statusKey(doc.status)] += 1;
-    return result;
-  }, [docs]);
+    const totals = countsQuery.data;
+    if (!totals) return null;
+    return Object.fromEntries(TAB_KEYS.map((key, index) => [key, totals[index]])) as Record<Filter, number>;
+  }, [countsQuery.data]);
   // 마지막으로 본 문서(없으면 다음에 검수할 문서)의 행을 연하게 강조합니다.
   const lastViewed = readLastViewed();
   const highlightId =
     docs.find((doc) => doc.document_id === lastViewed)?.document_id ??
     docs.find((doc) => ['extracted', 'in_review', 'on_hold'].includes(doc.status))?.document_id ??
     null;
-  const visible = filter === 'all' ? docs : docs.filter((doc) => statusKey(doc.status) === filter);
+  const firstShown = docs.length === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
+  const lastShown = (page - 1) * PAGE_SIZE + docs.length;
 
-  const scopeLabel = user.role === 'USER' ? `${user.name} 담당 ${docs.length}건` : `전체 ${docs.length}건`;
+  // 필터와 관계없는 전체 문서 수(탭 개수를 받기 전에는 "전체" 필터일 때만 알 수 있습니다)
+  const scopeTotal = counts?.all ?? (filter === 'all' ? total : null);
+  const scopeLabel = `${user.role === 'USER' ? `${user.name} 담당` : '전체'} ${scopeTotal ?? '-'}건`;
+  function selectFilter(next: Filter) {
+    setFilter(next);
+    setPage(1);
+  }
   const header = (
     <PageIntro title="검수 목록" subtitle="업로드된 문서를 상태별로 확인하고 검수를 시작합니다." />
   );
@@ -61,13 +103,20 @@ export function ReviewListPage() {
       <>
         {header}
         <main className="body flex min-h-0 flex-1 items-center justify-center">
-          <ErrorNotice message={errorMessage(error)} onRetry={reload} />
+          <ErrorNotice
+            message={errorMessage(error)}
+            onRetry={() => {
+              reload();
+              countsQuery.reload();
+            }}
+          />
         </main>
       </>
     );
   }
 
-  if (!loading && docs.length === 0) {
+  // 문서가 하나도 없을 때만 빈 화면(시안 2-0)입니다. 필터 결과가 비는 것은 표 안에서 안내합니다.
+  if (!loading && filter === 'all' && data && data.total === 0) {
     return (
       <>
         <PageIntro title="검수" />
@@ -98,14 +147,14 @@ export function ReviewListPage() {
       <main className="body flex min-h-0 flex-1 flex-col gap-4">
         <div className="list-toolbar flex items-center justify-between">
           <div className="filter-tabs flex items-center gap-2">
-            <FilterTab label="전체" count={counts.all} active={filter === 'all'} onClick={() => setFilter('all')} />
+            <FilterTab label="전체" count={counts?.all ?? null} active={filter === 'all'} onClick={() => selectFilter('all')} />
             {STATUS_ORDER.map((key) => (
               <FilterTab
                 key={key}
                 label={STATUS_META[key].label}
-                count={counts[key]}
+                count={counts?.[key] ?? null}
                 active={filter === key}
-                onClick={() => setFilter(key)}
+                onClick={() => selectFilter(key)}
               />
             ))}
           </div>
@@ -125,10 +174,10 @@ export function ReviewListPage() {
                 </tr>
               </thead>
               <tbody>
-                {visible.map((doc, index) => (
-                  <DocRow key={doc.document_id} doc={doc} index={index} highlighted={doc.document_id === highlightId} onOpen={() => navigate(`${REVIEW_PATH}/${doc.document_id}`)} />
+                {docs.map((doc, index) => (
+                  <DocRow key={doc.document_id} doc={doc} index={(page - 1) * PAGE_SIZE + index} highlighted={doc.document_id === highlightId} onOpen={() => navigate(`${REVIEW_PATH}/${doc.document_id}`)} />
                 ))}
-                {visible.length === 0 && (
+                {docs.length === 0 && !loading && (
                   <tr>
                     <td colSpan={7} className="px-5 py-10 text-center text-[13px] text-[#8A9099]">
                       해당 상태의 문서가 없습니다.
@@ -140,8 +189,17 @@ export function ReviewListPage() {
           </div>
           <div className="list-footer mt-auto flex items-center justify-between border-t border-[#E3E5E8] px-5 py-2.5 text-[12px] text-[#5B616A]">
             <span>{scopeLabel} · 행을 선택하면 검수 화면으로 이동합니다.</span>
-            <span className="tabular-nums">
-              {`${visible.length === 0 ? 0 : 1}–${visible.length}`} / {visible.length}
+            <span className="flex items-center gap-3">
+              <span className="list-range tabular-nums">
+                {firstShown}–{lastShown} / {total}
+              </span>
+              <span className="list-pager flex items-center gap-1.5">
+                <PagerButton label="이전" disabled={page <= 1 || loading} onClick={() => setPage(page - 1)} />
+                <span className="list-page tabular-nums">
+                  {page} / {lastPage} 페이지
+                </span>
+                <PagerButton label="다음" disabled={page >= lastPage || loading} onClick={() => setPage(page + 1)} />
+              </span>
             </span>
           </div>
         </section>
@@ -150,7 +208,20 @@ export function ReviewListPage() {
   );
 }
 
-function FilterTab({ label, count, active, onClick }: { label: string; count: number; active: boolean; onClick: () => void }) {
+function PagerButton({ label, disabled, onClick }: { label: string; disabled: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      className="btn-page flex h-7 items-center rounded-md border border-[#D0D4DA] bg-white px-2.5 text-[12px] font-semibold text-[#1F2328] disabled:cursor-not-allowed disabled:text-[#B6BBC4]"
+    >
+      {label}
+    </button>
+  );
+}
+
+function FilterTab({ label, count, active, onClick }: { label: string; count: number | null; active: boolean; onClick: () => void }) {
   return (
     <button
       type="button"
@@ -160,7 +231,7 @@ function FilterTab({ label, count, active, onClick }: { label: string; count: nu
       }`}
     >
       {label}
-      <b className={`tabular-nums font-semibold ${active ? 'text-white/80' : 'text-[#8A9099]'}`}>{count}</b>
+      <b className={`tabular-nums font-semibold ${active ? 'text-white/80' : 'text-[#8A9099]'}`}>{count ?? '–'}</b>
     </button>
   );
 }
