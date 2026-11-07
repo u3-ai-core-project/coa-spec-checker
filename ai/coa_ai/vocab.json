@@ -29,7 +29,7 @@
     "acid_insol": {"name": "불용분", "meaning": "insoluble matter",
                    "aliases": ["insoluble matter", "insolubles", "insoluble", "insoluble material", "acid insoluble",
                                "acid insoluble matter", "hcl insoluble", "insoluble in dilute hcl",
-                               "酸不溶物", "盐酸不溶物", "불용분", "산불용분"]},
+                               "酸不溶物", "盐酸不溶物", "불용분", "산불용분", "염산에 녹는 상태"]},
     "mag": {"name": "자성이물", "meaning": "magnetic impurities",
             "aliases": ["magnetic impurities", "magnetic impurity", "magnetic substance", "magnetic substances",
                         "magnetic material", "magnetic materials", "磁性物质", "磁性异物", "자성이물", "자성 이물"]},

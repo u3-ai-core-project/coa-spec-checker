@@ -158,7 +158,7 @@ def test_fuzzy_match_is_capped():
     assert (m.name, m.source, m.cap) == ("불용분", "ai", AI_CAP)
 
 
-@pytest.mark.parametrize("raw", ["Loss at 500ºC", "Loss on drying", "건조감량", "Density", "염산에 녹는 상태", "Sb", ""])
+@pytest.mark.parametrize("raw", ["Loss at 500ºC", "Loss on drying", "건조감량", "Density", "Sb", ""])
 def test_unmapped_keeps_raw_name(raw):
     m = Normalizer("LI2CO3").map(raw)
     assert (m.name, m.source, m.cap) == (raw, "ai", AI_CAP)
@@ -248,3 +248,24 @@ def test_na_k_sum_line(raw):
 @pytest.mark.parametrize("raw, expected", [("Sodium (Na)", "Na"), ("钠 Na", "Na"), ("钠", "Na"), ("Potassium", "K"), ("钾K", "K")])
 def test_single_elements_stay_elements(raw, expected):
     assert Normalizer("LI2CO3").map(raw).name == expected
+
+
+@pytest.mark.parametrize("raw, name", [
+    ("Impurity content (Fe)", "Fe"), ("Impurity content (Iron)", "Fe"), ("Impurity content (Potassium)", "K"),
+    ("Impurity content (K+Na)", "Na+K"), ("Impurity content (Na + K)", "Na+K"), ("Impurity content (SO4)", "황산염"),
+])
+def test_generic_impurity_name_with_analyte_in_parens(raw, name):
+    # 수산화리튬 H36379 양식 D·E: 'Impurity content' 뒤 괄호에 원소 이름이나 합산 표기
+    m = Normalizer("LIOH").map(raw)
+    assert (m.name, m.source) == (name, "dictionary")
+
+
+def test_analyte_word_in_parens_needs_generic_name():
+    assert Normalizer("LIOH").map("Appearance (Color)").name == "외관"
+    assert Normalizer("LIOH").map("Impurity content (CO2)").source == "ai"
+    assert Normalizer("LIOH").map("Loss on drying (Sodium)").source == "ai"
+
+
+def test_dissolving_in_hcl_is_acid_insoluble():
+    # 대정화금 '염산에 녹는 상태' (실물 라벨: acid_insol)
+    assert Normalizer("LI2CO3").map("염산에 녹는 상태").name == "불용분"

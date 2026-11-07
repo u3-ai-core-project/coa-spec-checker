@@ -335,8 +335,47 @@ def test_colon_list_rows(tmp_path):
     rows = {r.name: r.value for r in parse_tables(pages)}
     assert rows == {
         "Appearance": "White crystalline powder", "Assay": "57.5%", "Fe": "0.5ppm", "K+Na": "11.5ppm",
-        "Chloride content": "34.2ppm", "Carbonate content": "2560ppm (as CO2)", "Insolubles": "<0.1% (in Water)",
-    }
+        "Chloride content": "34.2ppm", "Carbonate content (as CO2)": "2560ppm", "Insolubles (in Water)": "<0.1%",
+    }  # 값 뒤 괄호는 항목명으로 옮긴다. 서버가 '<0.1% (in Water)' 를 값으로 해석하지 못한다 (PR #43 후속)
+
+
+def test_analyte_in_value_cell_moves_to_generic_name(make_pdf):
+    # H36379 양식 D (글자 PDF): 'Impurity content:' 칸 옆 결과 칸에 '0.3ppm (Fe)'
+    path = make_pdf([[(50, "Result Name"), (250, "Test Value")],
+                     [(50, "Assay:"), (250, "57.5%")],
+                     [(50, "Impurity content:"), (250, "0.3ppm (Fe)")],
+                     [(50, "Impurity content:"), (250, "24.6ppm(K+Na)")],
+                     [(50, "Chloride content:"), (250, "47ppm")],
+                     [(50, "Insolubles:"), (250, "<0.01% (in Water)")]])
+    rows = parse_tables(read_pages(path))
+    assert [(r.name, r.value) for r in rows] == [
+        ("Assay", "57.5%"), ("Impurity content (Fe)", "0.3ppm"), ("Impurity content (K+Na)", "24.6ppm"),
+        ("Chloride content", "47ppm"), ("Insolubles (in Water)", "<0.01%")]
+
+
+def test_analyte_prefix_in_spec_cell_moves_to_generic_name(make_pdf):
+    # H36379 양식 E: 규격 칸 앞에 'Fe:', 'Na + K:', 2026년 발행본은 'Iron, Fe:' 처럼 원소 이름도 붙는다
+    path = make_pdf([[(50, "Result Name"), (170, "Units"), (230, "Specifications"), (450, "Test Value")],
+                     [(50, "Impurity content"), (170, "ppm"), (230, "Fe: <=10ppm (<=0.001%)"), (450, "0.3")],
+                     [(50, "Impurity content"), (170, "ppm"), (230, "Na + K: <=3000ppm (<=0.3%)"), (450, "24.6")],
+                     [(50, "Chloride content"), (170, "ppm"), (230, "<=500ppm (<=0.05%)"), (450, "47")],
+                     [(50, "Impurity content"), (170, "ppm"), (230, "Sodium + Potassium, Na + K: <=3000ppm"), (450, "64")]])
+    rows = parse_tables(read_pages(path))
+    assert [(r.name, r.spec, r.value) for r in rows] == [
+        ("Impurity content (Fe)", "<=10ppm (<=0.001%)", "0.3"), ("Impurity content (Na + K)", "<=3000ppm (<=0.3%)", "24.6"),
+        ("Chloride content", "<=500ppm (<=0.05%)", "47"), ("Impurity content (Na + K)", "<=3000ppm", "64")]
+
+
+def test_appearance_line_below_table(make_pdf):
+    # 대정화금: 시험 항목 표 아래에 'Appearance : 흰색의 … PASSES TEST' 한 줄
+    path = make_pdf([[(50, "TEST ITEM"), (250, "SPECIFICATION"), (400, "TEST RESULT")],
+                     [(50, "Fe"), (250, "50.0 ppm max"), (400, "50.0 ppm max")],
+                     [(50, "SO4"), (250, "2000 ppm max"), (400, "2000 ppm max")],
+                     "Appearance : White fine crystalline powder PASSES TEST",
+                     "Conclusion : Pass"])
+    rows = parse_tables(read_pages(path))
+    assert [(r.name, r.value) for r in rows][-1] == ("Appearance", "White fine crystalline powder PASSES TEST")
+    assert "Conclusion" not in [r.name for r in rows]
 
 
 def test_colon_list_needs_three_lines(tmp_path):
