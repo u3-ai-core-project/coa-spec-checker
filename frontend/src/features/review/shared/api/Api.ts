@@ -7,6 +7,7 @@ import type {
   CancelApprovalBody,
   CancelApprovalResult,
   ConfirmItemResult,
+  DocumentDeleted,
   DocumentDetail,
   DocumentListQuery,
   DocumentListResult,
@@ -42,6 +43,11 @@ export interface Api {
   // --- 문서 (검수) ----------------------------------------------------------
   listDocuments(query?: DocumentListQuery): Promise<DocumentListResult>;
   getDocument(documentId: string): Promise<DocumentDetail>;
+  /**
+   * 문서 삭제(DELETE /documents/{id}, 백엔드 PR #45). 올린 사람 본인 또는 ADMIN만 지울 수 있습니다.
+   * 처분 완료 문서는 409 ALREADY_APPROVED, 추출 중 문서는 409 NOT_READY, 권한이 없으면 403 FORBIDDEN입니다.
+   */
+  deleteDocument(documentId: string): Promise<DocumentDeleted>;
   /** 원본 파일. 토큰이 필요하므로 fetch로 받아 Blob으로 돌려주고, 화면이 Blob URL로 바꿉니다. */
   getDocumentFile(documentId: string): Promise<Blob>;
   getExtraction(documentId: string): Promise<ExtractionResult>;

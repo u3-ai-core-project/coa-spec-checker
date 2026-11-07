@@ -13,6 +13,7 @@ import type {
   CancelApprovalBody,
   CancelApprovalResult,
   ConfirmItemResult,
+  DocumentDeleted,
   DocumentDetail,
   DocumentListQuery,
   DocumentListResult,
@@ -123,6 +124,10 @@ export class HttpApi implements Api {
 
   getDocument(documentId: string): Promise<DocumentDetail> {
     return request<DocumentDetail>(`/documents/${encodeURIComponent(documentId)}`);
+  }
+
+  deleteDocument(documentId: string): Promise<DocumentDeleted> {
+    return request<DocumentDeleted>(`/documents/${encodeURIComponent(documentId)}`, { method: 'DELETE' });
   }
 
   async getDocumentFile(documentId: string): Promise<Blob> {

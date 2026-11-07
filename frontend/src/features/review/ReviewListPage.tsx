@@ -10,6 +10,7 @@ import { Icon } from './shared/components/Icon';
 import { formatDateTime } from './shared/domain/format';
 import { dispositionOf } from './shared/domain/recommendation';
 import { STATUS_META, STATUS_ORDER, type StatusKey } from './shared/domain/status';
+import { DeleteDocumentDialog } from './components/DeleteDocumentDialog';
 import { readLastViewed } from './lib/lastViewed';
 import { useAsync } from './shared/hooks/useAsync';
 import { PageIntro } from './shell/PageIntro';
@@ -20,6 +21,13 @@ type Filter = 'all' | StatusKey;
 /** 추출이 끝나 검수 화면을 열 수 있는 상태 */
 function isOpenable(doc: DocumentListItem): boolean {
   return ['extracted', 'in_review', 'on_hold', 'approved'].includes(doc.status);
+}
+
+/** 삭제 버튼을 누를 수 없는 문서와 그 이유(툴팁). 서버가 같은 상태에서 409로 거절합니다. */
+function deleteBlockReason(doc: DocumentListItem): string | null {
+  if (doc.status === 'approved') return '처분 완료 문서는 삭제할 수 없습니다. 처분 취소 후 삭제하세요.';
+  if (doc.status === 'processing') return '추출 중인 문서는 삭제할 수 없습니다. 추출이 끝난 뒤 삭제하세요.';
+  return null;
 }
 
 /** 한 페이지에 불러오는 문서 수(서버 size 상한과 같음). 넘으면 이전/다음으로 넘깁니다. */
@@ -44,6 +52,7 @@ export function ReviewListPage() {
   const navigate = useNavigate();
   const [filter, setFilter] = useState<Filter>('all');
   const [page, setPage] = useState(1);
+  const [deleting, setDeleting] = useState<DocumentListItem | null>(null);
 
   // 사용자는 uploaded_by로 본인 문서만, 관리자는 전체를 봅니다. 상태 필터와 페이지는 서버에 맡기고 total로 전체 개수를 압니다.
   const uploadedBy = user.role === 'USER' ? user.id : undefined;
@@ -94,6 +103,12 @@ export function ReviewListPage() {
     setFilter(next);
     setPage(1);
   }
+  // 사용자는 본인이 올린 문서에만, 관리자는 전체에 삭제 버튼을 보입니다(서버도 같은 규칙으로 403을 줍니다).
+  const canDelete = (doc: DocumentListItem) => user.role === 'ADMIN' || doc.uploaded_by === user.name;
+  const refreshAfterDelete = () => {
+    reload();
+    countsQuery.reload();
+  };
   const header = (
     <PageIntro title="검수 목록" subtitle="업로드된 문서를 상태별로 확인하고 검수를 시작합니다." />
   );
@@ -170,16 +185,21 @@ export function ReviewListPage() {
                   <th className="px-2 py-2.5 font-semibold">업로드 일시</th>
                   <th className="px-2 py-2.5 font-semibold">상태</th>
                   <th className="px-2 py-2.5 font-semibold">AI 권고</th>
-                  <th className="px-2 py-2.5 pr-5 font-semibold">담당자 처분</th>
+                  <th className="px-2 py-2.5 font-semibold">담당자 처분</th>
+                  <th className="w-14 px-2 py-2.5 pr-5 text-center font-semibold">삭제</th>
                 </tr>
               </thead>
               <tbody>
                 {docs.map((doc, index) => (
-                  <DocRow key={doc.document_id} doc={doc} index={(page - 1) * PAGE_SIZE + index} highlighted={doc.document_id === highlightId} onOpen={() => navigate(`${REVIEW_PATH}/${doc.document_id}`)} />
+                  <DocRow key={doc.document_id} doc={doc} index={(page - 1) * PAGE_SIZE + index} highlighted={doc.document_id === highlightId}
+                    onOpen={() => navigate(`${REVIEW_PATH}/${doc.document_id}`)}
+                    deletable={canDelete(doc)}
+                    onDelete={() => setDeleting(doc)}
+                  />
                 ))}
                 {docs.length === 0 && !loading && (
                   <tr>
-                    <td colSpan={7} className="px-5 py-10 text-center text-[13px] text-[#8A9099]">
+                    <td colSpan={8} className="px-5 py-10 text-center text-[13px] text-[#8A9099]">
                       해당 상태의 문서가 없습니다.
                     </td>
                   </tr>
@@ -204,6 +224,17 @@ export function ReviewListPage() {
           </div>
         </section>
       </main>
+      {deleting && (
+        <DeleteDocumentDialog
+          doc={deleting}
+          onClose={() => setDeleting(null)}
+          onDone={() => {
+            setDeleting(null);
+            refreshAfterDelete();
+          }}
+          onStale={refreshAfterDelete}
+        />
+      )}
     </>
   );
 }
@@ -236,8 +267,19 @@ function FilterTab({ label, count, active, onClick }: { label: string; count: nu
   );
 }
 
-function DocRow({ doc, index, highlighted, onOpen }: { doc: DocumentListItem; index: number; highlighted: boolean; onOpen: () => void }) {
+interface DocRowProps {
+  doc: DocumentListItem;
+  index: number;
+  highlighted: boolean;
+  onOpen: () => void;
+  /** 삭제 버튼을 보일지(USER는 본인 문서만) */
+  deletable: boolean;
+  onDelete: () => void;
+}
+
+function DocRow({ doc, index, highlighted, onOpen, deletable, onDelete }: DocRowProps) {
   const openable = isOpenable(doc);
+  const blockReason = deleteBlockReason(doc);
   const disposition = dispositionOf(doc);
   return (
     <tr
@@ -259,8 +301,24 @@ function DocRow({ doc, index, highlighted, onOpen }: { doc: DocumentListItem; in
           <span className="text-[#B6BBC4]">-</span>
         )}
       </td>
-      <td className="px-2 py-2 pr-5">
+      <td className="px-2 py-2">
         {disposition ? <DispositionBadge disposition={disposition} compact /> : <span className="text-[#B6BBC4]">-</span>}
+      </td>
+      {/* 삭제 칸은 행 클릭(검수 화면 열기)과 겹치지 않도록 클릭이 행으로 올라가지 않게 막습니다. */}
+      <td className="doc-delete-cell px-2 py-2 pr-5 text-center" onClick={(event) => event.stopPropagation()}>
+        {deletable && (
+          <span title={blockReason ?? '문서 삭제'} className="inline-flex">
+            <button
+              type="button"
+              disabled={blockReason !== null}
+              aria-label={`${doc.file_name} 삭제`}
+              onClick={onDelete}
+              className="btn-delete-row flex h-7 w-7 items-center justify-center rounded-md border border-[#D0D4DA] bg-white text-[#C0342E] hover:bg-[#FBEAE9] disabled:cursor-not-allowed disabled:text-[#B6BBC4] disabled:hover:bg-white"
+            >
+              <Icon name="trash" size={14} />
+            </button>
+          </span>
+        )}
       </td>
     </tr>
   );
