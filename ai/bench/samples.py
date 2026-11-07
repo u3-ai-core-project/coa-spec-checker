@@ -2,7 +2,8 @@
 
 정답은 같은 PDF 를 텍스트 경로(coa_ai.extract)로 읽은 결과다. 텍스트 PDF 는 글자가 정확하고,
 가상 3장은 이 결과가 정답 라벨과 같음을 확인했다.
-열화 값은 소성훈 님 열화 조건 표를 받기 전 임시 값이다 (LEVELS).
+열화 값(LEVELS)은 모델을 고를 때(2026-10-18) 쓴 값이다. 결과표를 비교할 수 있게 그대로 둔다.
+최신 조건(생성기 v2)은 tools/degrade.py 의 DEFAULT_LEVELS 다.
 
 실물 CoA 는 라이선스 문제로 저장소에 넣지 않으므로 결과는 gitignore 대상인 ai/data/generated/bench 에 쓴다.
 

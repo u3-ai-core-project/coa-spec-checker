@@ -35,8 +35,9 @@ cd ai
 python tools/degrade.py data/raw/real/*.pdf --out data/generated/degraded              # 기본 4단계
 python tools/degrade.py a.pdf --out out --levels levels.json --format png             # 단계 직접 지정, PNG
 ```
-- 기본 단계는 모델 테스트와 같은 임시값입니다: 원본 200dpi, 저해상도 100dpi, 기울기 2°, 흐림(가우시안 1.5).
-- 단계 설정 JSON 예: `{"fax": {"dpi": 150, "rotate": 1.0, "blur": 0.8, "jpeg_quality": 40}}`. 소성훈 님 열화 조건 표를 받으면 이 JSON만 바꾸면 됩니다.
+- 기본 단계는 생성기 v2(`generator/coa_degrade.py`)와 같은 조건입니다: 원본 200dpi, 저해상도(회색조 72~90dpi, JPEG 35~55), 기울기(150dpi, ±1.5~4°, 잡음, JPEG 60~80), 흐림(150dpi, 1.2~2.0px, JPEG 60~80). 생성기와 달리 여러 쪽 PDF·이미지 파일도 받습니다.
+- 범위 값은 원본·단계마다 뽑고, 뽑힌 값은 `manifest.csv`의 `params`에 남습니다. 같은 `--seed`면 같은 값이 나옵니다.
+- 단계 설정 JSON 예: `{"fax": {"dpi": 150, "rotate": 1.0, "blur": 0.8, "jpeg_quality": 40}}`. 쓸 수 있는 키는 `tools/degrade.py` 맨 위 설명에 있습니다.
 - `manifest.csv`의 `group`은 원본 이름입니다. 같은 원본에서 만든 변형본은 개발용과 평가용에 나눠 넣지 마세요(기획안 v2 분리 원칙).
 
 ## 테스트
