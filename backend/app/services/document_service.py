@@ -1,8 +1,8 @@
-"""[담당: 장수민] 문서 업로드 검증·저장, 목록·상세 조회 (명세 4.4~4.7). 문서 삭제 (홍채령 추가)."""
+"""[담당: 장수민] 문서 업로드 검증·저장, 목록·상세 조회 (명세 4.4~4.7). 문서 삭제 (홍채령 추가), 재처리·멈춘 문서 정리."""
 import logging
 from pathlib import Path
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.config import settings
@@ -136,6 +136,57 @@ def delete_document(db: Session, document_id: str, user: User) -> str:
         except OSError:
             logger.warning("원본 파일 삭제 실패: %s", path)
     return document_id
+
+
+# ---------------------------------------------------------------------------
+# 재처리
+# ---------------------------------------------------------------------------
+MSG_INTERRUPTED = "서버가 재시작되어 추출이 중단되었습니다. 다시 처리해 주세요"
+
+
+def retry_document(db: Session, document_id: str, user: User) -> Document:
+    """POST /documents/{id}/retry. 추출에 실패한(failed) 문서를 queued 로 되돌린다. commit 까지 한다.
+
+    추출을 다시 시작하는 일(process_document 등록)은 호출한 쪽(라우터)에서 한다.
+    - 권한: 올린 사람 본인 또는 ADMIN. 아니면 403 FORBIDDEN (삭제와 같은 규칙)
+    - failed 가 아니면 409 NOT_FAILED. 추출 중·대기 중 문서는 이미 처리 중이므로 다시 처리하지 않는다
+    - 원본 파일이 없으면 404 DOCUMENT_NOT_FOUND
+    """
+    doc = get_document(db, document_id)
+    if user.role != Role.ADMIN and doc.uploaded_by != user.id:
+        raise AppException(ErrorCode.FORBIDDEN, "본인이 올린 문서만 다시 처리할 수 있습니다")
+    if doc.status != DocumentStatus.FAILED:
+        raise AppException(ErrorCode.NOT_FAILED)
+    get_file_path(doc)
+
+    # failed 일 때만 바꾼다. 거의 동시에 두 번 눌러도 한 번만 대기열에 들어간다
+    claimed = db.execute(
+        update(Document)
+        .where(Document.id == doc.id, Document.status == DocumentStatus.FAILED)
+        .values(status=DocumentStatus.QUEUED, error_message=None)
+    )
+    if claimed.rowcount == 0:
+        db.rollback()
+        raise AppException(ErrorCode.NOT_FAILED)
+    db.commit()
+    db.refresh(doc)
+    return doc
+
+
+def recover_stuck_documents(db: Session) -> int:
+    """서버 시작 시 호출. 대기·처리 중으로 남은 문서를 failed 로 바꾸고 바꾼 건수를 돌려준다. commit 까지 한다.
+
+    추출은 서버 안의 백그라운드 작업이라 서버가 꺼지면 사라진다. 그대로 두면 문서가 영원히 대기·처리 중으로 남아
+    삭제할 수도(처리 중 문서는 삭제 불가), 다시 처리할 수도 없다. failed 로 바꿔 두면 재처리나 삭제를 할 수 있다.
+    서버 1개(프로세스 1개)로 돌린다는 전제다. 여러 개를 동시에 띄우면 다른 서버가 처리 중인 문서도 failed 가 된다.
+    """
+    result = db.execute(
+        update(Document)
+        .where(Document.status.in_([DocumentStatus.QUEUED, DocumentStatus.PROCESSING]))
+        .values(status=DocumentStatus.FAILED, error_message=MSG_INTERRUPTED)
+    )
+    db.commit()
+    return result.rowcount
 
 
 def get_file_path(doc: Document) -> Path:

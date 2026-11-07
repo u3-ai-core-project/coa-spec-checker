@@ -1,6 +1,7 @@
 """[담당: 장수민] POST /documents, GET /documents, GET /documents/{id}, GET /documents/{id}/file (명세 4.4~4.7)
 일괄 접수: POST /documents/batch, GET /documents/batch/{batch_id} (명세 v1.4 4.4-1, 4.4-2, 멘토님 UC01)
 문서 삭제: DELETE /documents/{id} (홍채령 추가, 명세 추가 예정)
+문서 재처리: POST /documents/{id}/retry (명세 추가 예정)
 
 router 는 router.py 에 이미 등록돼 있다. 이 파일에 엔드포인트만 추가하면 된다.
 """
@@ -122,3 +123,16 @@ def delete_document(document_id: str, db: Session = Depends(get_db), user: User 
     """문서 삭제. 올린 사람 본인 또는 ADMIN. 처분 완료·추출 중 문서는 지울 수 없다."""
     deleted_id = document_service.delete_document(db, document_id, user)
     return ok(DocumentDeleted(document_id=deleted_id))
+
+
+@router.post("/{document_id}/retry", response_model=ApiResponse[DocumentUploadResponse])
+def retry_document(
+    document_id: str,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """추출에 실패한(failed) 문서를 다시 처리한다. 올린 사람 본인 또는 ADMIN. 응답 상태는 queued."""
+    doc = document_service.retry_document(db, document_id, user)
+    background_tasks.add_task(process_document, doc.id)
+    return ok(DocumentUploadResponse(document_id=doc.id, file_name=doc.file_name, status=doc.status))
