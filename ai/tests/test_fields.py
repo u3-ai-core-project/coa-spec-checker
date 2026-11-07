@@ -6,10 +6,12 @@ from coa_ai.pdf_text import read_pages
 
 
 @pytest.mark.parametrize("name, expected", [
-    ("COA_A_0007.pdf", {"lot_no": "SL25-0008", "test_date": None, "expiry_date": "2027-12-27",
+    ("COA_A_0007.pdf", {"lot_no": "SL25-0008", "test_date": None, "manufacture_date": "2025-12-27",
+                        "expiry_date": "2027-12-27",
                         "supplier": "Selmora Lithium S.A.", "product_name": "LiOH Monohydrate (BG)",
                         "applied_standard": None, "origin": None}),
-    ("COA_B_0005.pdf", {"lot_no": "LH26022103", "test_date": "2026-02-24", "issue_date": "2026-02-26",
+    ("COA_B_0005.pdf", {"lot_no": "LH26022103", "test_date": "2026-02-24", "manufacture_date": "2026-02-21",
+                        "issue_date": "2026-02-26",
                         "expiry_date": "2027-02-21", "supplier": "RUILAN LITHIUM (YICHUN) CO., LTD.",
                         "applied_standard": "GB/T 26008-2020 (D1)"}),
     ("COA_D_0007.pdf", {"lot_no": "KB26-063-02", "test_date": "2026-03-05",
@@ -62,7 +64,37 @@ def test_lot_size_is_not_a_lot_number(make_pdf):
 def test_manufacture_date_is_not_used_as_test_date(make_pdf):
     path = make_pdf([[(50, "Date of Manufacture"), (200, "27-Dec-2025")], [(50, "Lot Number"), (200, "A0266047")]])
     f = extract_fields(read_pages(path))
-    assert (f["lot_no"], f["test_date"]) == ("A0266047", None)
+    assert (f["lot_no"], f["test_date"], f["manufacture_date"]) == ("A0266047", None, "2025-12-27")
+
+
+@pytest.mark.parametrize("label", ["Date of Manufacture", "Mfg. Date", "Mfg date", "Manufacturing Date",
+                                   "Manufacture Date", "Production Date"])
+def test_manufacture_date(make_pdf, label):
+    """제조일 (10.25 결정: 서버가 발행일이 제조일보다 앞서면 DATE_CONFLICT). 시험일·유효기한과 섞이지 않아야 한다."""
+    path = make_pdf([[(50, "Lot Number"), (200, "A0421609")],
+                     [(50, label), (200, "2026-02-21")],
+                     [(50, "Test Date"), (200, "2026-02-24")],
+                     [(50, "Expiry Date"), (200, "2027-02-21")]])
+    f = extract_fields(read_pages(path))
+    assert (f["manufacture_date"], f["test_date"], f["expiry_date"]) == ("2026-02-21", "2026-02-24", "2027-02-21")
+
+
+@pytest.mark.parametrize("label", ["生产日期", "制造日期", "제조일자", "제조일", "생산일자"])
+def test_manufacture_date_labels_cjk(label):
+    from coa_ai.fields import _COMPILED
+    assert any(p.match(label) for p in _COMPILED["manufacture_date"])
+
+
+def test_manufacturer_is_not_a_manufacture_date(make_pdf):
+    path = make_pdf([[(50, "Manufacturer"), (200, "Acros Organics")], [(50, "Lot Number"), (200, "A0266047")]])
+    f = extract_fields(read_pages(path))
+    assert (f["manufacture_date"], f["supplier"]) == (None, "Acros Organics")
+
+
+def test_month_only_manufacture_date_is_not_guessed(make_pdf):
+    # Piochem 'Mfg. date 08-2020': 일자가 없으면 1일로 지어내지 않는다 (지어낸 날짜로 날짜 충돌이 날 수 있음)
+    path = make_pdf([[(50, "Mfg. date"), (200, "08-2020")], [(50, "Lot Number"), (200, "L080820103")]])
+    assert extract_fields(read_pages(path))["manufacture_date"] is None
 
 
 @pytest.mark.parametrize("label", ["Lot:", "LOT", "Lot", "Batch:", "BATCH"])

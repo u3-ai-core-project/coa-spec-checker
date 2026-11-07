@@ -108,3 +108,15 @@ def test_particle_size_order_fine_or_not_comparable(values):
 
 def test_particle_sizes_on_different_pages_are_not_compared():
     assert reasons(item("D10", "17", normalized="입도 D10", page=1), item("D50", "5.8", normalized="입도 D50", page=2)) == [[], []]
+
+
+@pytest.mark.parametrize("value", ["98%", "98.0 %", "99.5"])
+def test_lioh_content_on_monohydrate_basis(value):
+    # Piochem 'Assay 98%' 는 LiOH·H2O 기준 (LiOH 로 바꾸면 55.9%). LiOH 함량 규격(56.5~57.5%)과 바로 비교하면 안 된다
+    (r,) = reasons(item("Assay", value, "96.5-98.7%", normalized="LiOH 함량"))
+    assert len(r) == 1 and "수화물" in r[0]
+
+
+@pytest.mark.parametrize("value", ["57.1%", "56.5 %", "≥ 56.5 %"])
+def test_lioh_content_on_lioh_basis_passes(value):
+    assert reasons(item("Assay", value, normalized="LiOH 함량")) == [[]]

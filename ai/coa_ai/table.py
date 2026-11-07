@@ -16,10 +16,10 @@ import difflib
 import re
 import statistics
 import unicodedata
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 from coa_ai.models import Box, Line, Page, RawRow, Word
-from coa_ai.normalize import ELEMENTS
+from coa_ai.normalize import ELEMENTS, GENERIC_NAME_RE
 from coa_ai.pdf_text import phrases
 
 CONF_CLEAN = 0.95    # 머리글이 있는 표에서 깨끗하게 읽은 행
@@ -433,6 +433,12 @@ _COLON_NOT_ITEM_RE = re.compile(r"\b(?:lot|batch|product|catalog|cat|order|cas|n
 _COLON_TEXT_LABEL_RE = re.compile(r"^(?:appearance|外观|외관|성상)$", re.IGNORECASE)
 _COLON_IMPURITY_RE = re.compile(r"^impurity(?:\s+content)?$", re.IGNORECASE)
 COLON_MIN_LINES = 3  # '항목: 값' 줄이 이만큼 있는 쪽만 목록으로 본다
+_TRAILING_PARENS_RE = re.compile(r"^(?P<value>.*?\S)\s*(?P<parens>[(（][^()（）]*[)）])$")
+_LEAD_VALUE_RE = re.compile(r"^(?P<value>(?:(?:[<>≤≥＜＞]=?|=<|=>)\s*)?[-+]?\d+(?:[.,]\d+)?\s*(?:%|ppm|ppb|mg/kg)?)\s*(?P<rest>[(（A-Za-z].{0,19})$",
+                            re.IGNORECASE)
+_SPEC_ANALYTE_RE = re.compile(r"^(?:[A-Za-z][A-Za-z\s+]{0,30},\s*)?(?P<analyte>[A-Za-z][A-Za-z0-9]{0,4}"
+                              r"(?:\s*\+\s*[A-Za-z][A-Za-z0-9]{0,4})*)\s*:\s*(?P<spec>.+)$")
+_APPEARANCE_LINE_RE = re.compile(r"^(?P<name>appearance|外\s*观|외\s*관|성\s*상)\s*[:：]\s*(?P<value>\S.*)$", re.IGNORECASE)
 
 
 def _colon_rows(page: Page) -> list[RawRow]:
@@ -461,11 +467,50 @@ def _colon_rows(page: Page) -> list[RawRow]:
                 continue
         elif _COLON_VALUE_RE.match(rest):
             name, value = label, rest
+            tail = _TRAILING_PARENS_RE.match(rest)
+            if tail:  # '<0.1% (in Water)' → 항목명 'Insolubles (in Water)', 값 '<0.1%' (서버가 값으로 읽게)
+                name, value = f"{label} {tail['parens']}", tail["value"]
         else:
             continue
         rows.append(RawRow(page=page.number, name=name, value=value, spec=None, unit=None,
                            value_box=ln.box, row_box=ln.box, confidence=CONF_LIST))
     return rows if len(rows) >= COLON_MIN_LINES else []
+
+
+def _with_analyte(row: RawRow) -> RawRow:
+    """이름 끝의 ':' 를 떼고, 이름이 'Impurity content' 처럼 원소 정보가 없으면 결과 칸 뒤('0.3ppm (Fe)')나
+    규격 칸 앞('Fe: <=10ppm', 'Iron, Fe: …')에 적힌 원소를 이름으로 옮긴다 (H36379 양식 D·E)."""
+    name = row.name.rstrip(":： ")
+    m = _APPEARANCE_LINE_RE.match(name)
+    if m:  # 표 아래 'Appearance : 흰색의 … PASSES TEST' 가 행으로 잡혀 설명이 이름 칸에 들어간 경우 (대정화금)
+        value = " ".join(t for t in (m["value"], row.spec, row.value) if t)
+        return replace(row, name=m["name"], value=value, spec=None)
+    if GENERIC_NAME_RE.match(name):
+        lead = _LEAD_VALUE_RE.match(row.value or "")
+        spec = _SPEC_ANALYTE_RE.match(row.spec or "")
+        if lead:
+            rest = lead["rest"].strip()
+            return replace(row, name=f"{name} {rest if rest.startswith('(') else f'({rest})'}", value=lead["value"].strip())
+        if spec:
+            return replace(row, name=f"{name} ({spec['analyte']})", spec=spec["spec"].strip())
+    tail = _TRAILING_PARENS_RE.match(row.value or "")
+    if name != row.name and tail and _COLON_VALUE_RE.match(row.value):
+        # 'Insolubles:' 처럼 콜론 붙은 이름 칸의 결과 '<0.01% (in Water)' → 괄호는 이름으로 (양식 D, _colon_rows 와 같게)
+        return replace(row, name=f"{name} {tail['parens']}", value=tail["value"])
+    return replace(row, name=name) if name != row.name else row
+
+
+def _appearance_below_table(page: Page, rows: list[RawRow]) -> list[RawRow]:
+    """표 밖에 한 줄로 적은 외관 ('Appearance : 흰색의 고운 결정성 분말 PASSES TEST', 대정화금). 표에 외관이 있으면 보지 않는다."""
+    if any(_APPEARANCE_LINE_RE.match(f"{r.name.rstrip(':： ')}: x") for r in rows):
+        return []
+    used = {id(r.row_box) for r in rows}
+    for ln in page.lines:
+        m = _APPEARANCE_LINE_RE.match(re.sub(r"\s+", " ", ln.text.strip()))
+        if m and id(ln.box) not in used:
+            return [RawRow(page=page.number, name=m["name"], value=m["value"], spec=None, unit=None,
+                           value_box=ln.box, row_box=ln.box, confidence=CONF_LIST)]
+    return []
 
 
 def _grid_symbol(text: str) -> str | None:
@@ -532,5 +577,8 @@ def parse_tables(pages: list[Page]) -> list[RawRow]:
         if not rows:
             rows = _list_rows(page) or _colon_rows(page)
             carry = None if not rows else carry
-        out.extend(rows)
+        else:
+            rows = [_with_analyte(r) for r in rows]
+            rows += _appearance_below_table(page, rows)
+        out.extend(_with_analyte(r) for r in rows)
     return out

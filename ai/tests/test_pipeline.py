@@ -13,7 +13,8 @@ from coa_ai.models import Box, RawRow
 from coa_ai.pipeline import MSG_BROKEN, MSG_BROKEN_IMAGE, MSG_NO_TEXT, MSG_NOT_COA, OCR_CONFIDENCE_CAP
 from tests.fake_llm import FakeLLM
 
-INPUT_FIELDS = {"supplier", "lot_no", "test_date", "origin", "applied_standard", "items"}
+INPUT_FIELDS = {"supplier", "lot_no", "test_date", "origin", "applied_standard", "items",
+                "product_name", "manufacture_date", "issue_date", "expiry_date", "retest_date"}
 ITEM_FIELDS = {"raw_name", "normalized_name", "mapping_source", "raw_value", "raw_spec", "unit", "confidence", "bbox",
                "value_kind", "value_reason", "check_reasons"}  # 뒤의 세 칸은 팀 제안 (서버는 아직 무시)
 
@@ -279,3 +280,17 @@ def test_page_with_text_layer_but_scanned_body_is_ocred(fixture_pdf, monkeypatch
     pages = pipeline._read(fixture_pdf("COA_A_0007.pdf"))
     assert calls == [1]
     assert pages[0].lines  # OCR 이 빈손이면 글자 층 결과를 유지한다
+
+
+def test_text_list_rows_mapped_by_dictionary_reach_review_threshold(make_pdf):
+    # 글자 PDF 의 머리글 없는 목록(Alfa 13418): 실물 라벨 대조에서 값이 모두 맞았다 (42/42). 사전으로 이름이
+    # 확정된 행은 0.85, 이름을 확정하지 못한 행은 그대로 확인 필요 (PR #43 후속)
+    path = make_pdf(["Certificate of Analysis",
+                     [(90, "Lot No.:"), (200, "U24E051")],
+                     [(225, "Li2CO3"), (330, "99.5 %")],
+                     [(225, "Na2O"), (330, "0.04 %")],
+                     [(225, "Fe2O3"), (330, "< 0.0001 %")],
+                     [(225, "Loss at 500C"), (330, "0.4 %")]])
+    conf = {i.raw_name: i.confidence for i in extract(path, material_code="LI2CO3").items}
+    assert conf["Li2CO3"] == conf["Na2O"] == conf["Fe2O3"] == 0.85
+    assert conf["Loss at 500C"] < 0.8

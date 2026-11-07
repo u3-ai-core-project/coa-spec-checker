@@ -6,7 +6,7 @@
 
 - 문서 38건: 가상 CoA 3장(A·B·D, 수산화리튬) + 실물 CoA 35건(탄산리튬·수산화리튬, Fisher 양식 A~D, Alfa, Puratronic, 대정화금(한글), Piochem)
   - 실물 42건 중 CoA가 아닌 7건(규격서·공시·앱노트·Nanotrun 웹페이지)은 뺐다.
-- 열화 4단계(임시값, 소성훈 님 열화 조건 표를 받으면 바꾼다): `samples.py` 의 `LEVELS`
+- 열화 4단계(모델을 고를 때 쓴 값. 최신 조건은 생성기 v2 와 같은 `tools/degrade.py` 의 `DEFAULT_LEVELS`): `samples.py` 의 `LEVELS`
   - 원본: 200 dpi
   - 저해상도: 100 dpi
   - 기울기: 200 dpi, 2° 회전

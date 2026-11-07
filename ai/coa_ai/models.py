@@ -139,6 +139,7 @@ class Extraction:
     applied_standard: str | None = None
     # 아래 넷은 PR #5 요청 (제품 불일치·날짜 충돌 탐지용). 서버 ExtractionInput 의 같은 이름 칸으로 들어간다
     product_name: str | None = None
+    manufacture_date: str | None = None  # 10.25 결정: 발행일이 제조일보다 앞서면 서버가 DATE_CONFLICT
     issue_date: str | None = None
     expiry_date: str | None = None
     retest_date: str | None = None

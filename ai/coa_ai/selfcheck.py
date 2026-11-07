@@ -9,6 +9,7 @@
   swap  결과 칸에 범위, 규격 칸에 숫자 → 두 칸이 바뀌었을 수 있음
   huge  결과가 규격 상한의 50배 이상 → 소수점·단위 오류일 수 있음
   order 같은 쪽의 입도가 D10 ≤ D50 ≤ D90 이 아님 → 소수점을 놓쳤을 수 있음 (생성기 v2 저해상도 1.7 → 17)
+  hydrate LiOH 함량이 90% 이상 → LiOH·H2O(일수화물) 기준 값일 수 있음 (Piochem 'Assay 98%' = LiOH 55.9%)
 
 모델 테스트(스캔본 152장)에서 틀린 값 15건을 모두 잡고 맞는 값은 하나도 잡지 않았다. 깨끗한 텍스트 PDF
 39건에서는 0건이 걸린다. junk 외의 검사는 실제 데이터에서 걸린 적이 없고, 표 복원 오류를 대비한 것이다.
@@ -24,6 +25,8 @@ from coa_ai.models import Item
 SELF_CHECK_CAP = 0.75  # 서버 LOW_CONFIDENCE_THRESHOLD(0.8) 미만
 HUGE_RATIO = 50  # 소수점이 빠지면(0.36 → 36) 상한의 수십~수백 배가 된다. 실제 불합격은 상한의 몇 배 수준
 PARTICLE_SIZES = ("입도 D10", "입도 D50", "입도 D90")
+# LiOH 함량은 LiOH 기준 약 56~58%, LiOH·H2O 기준 약 96~100% 다. 사이 값은 나오지 않으므로 90% 로 가른다
+LIOH_NAME, HYDRATE_MIN = "LiOH 함량", 90.0
 
 # 스캔 잡음 글자. 기본 OCR 인식 모델은 한글이 없어 '이하'를 '0|'·'0l' 로 읽는다 (coa_ai.ocr 도 이 정규식을 쓴다)
 OCR_JUNK = re.compile(r"[|σ¦]|(?<![A-Za-z0-9])\d[\d.,]*[lIOo](?![A-Za-z])")
@@ -67,6 +70,8 @@ def _item_reasons(it: Item) -> list[str]:
         token = re.search(r"\S*$", outside[:m.start()]).group(0) + re.match(r"\S*", outside[m.start():]).group(0)
         out.append(f"값에 스캔 잡음으로 보이는 글자가 있음('{token}')")
     pv = parse_condition(value)
+    if it.normalized_name == LIOH_NAME and pv and pv.num is not None and pv.num >= HYDRATE_MIN:
+        out.append(f"LiOH 함량이 {pv.num:g}%. LiOH·H2O(일수화물) 기준 값일 수 있음 (LiOH 기준으로는 × 0.571)")
     ps = parse_condition(spec) if spec else None
     if pv is None or ps is None:
         return out

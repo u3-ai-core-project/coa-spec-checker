@@ -57,6 +57,8 @@ _SUBSCRIPT_DIGITS = str.maketrans("₀₁₂₃₄₅₆₇₈₉", "0123456789"
 _CJK = r"一-鿿㐀-䶿가-힣"
 _PARTICLE_RE = re.compile(r"(?<![a-z0-9])d\s?(10|50|90|99)(?![0-9])")
 _CONTENT = re.compile(r"\b(?:content|assay|purity)(?:\s+of)?\b|함량|含量|%", re.IGNORECASE)  # 'Li₂CO₃ 함량' 의 함량
+# 원소 정보가 없는 일반 이름 ('Impurity content (Iron)'). 이때만 괄호 안 원소 이름·합산 표기를 별칭으로 본다
+GENERIC_NAME_RE = re.compile(r"^\s*(?:impurit(?:y|ies)(?:\s+content)?|trace\s+(?:analysis|metals?))\s*$", re.IGNORECASE)
 _OXIDE_WORD = re.compile(r"oxide|氧化|산화", re.IGNORECASE)
 _ROW_NO = re.compile(r"^\s*\d{1,2}[.)]?\s+(?=\S)")  # 스캔본에서 번호 칸이 항목명에 붙음
 _OCR_JUNK = re.compile(r"[{}_^]")
@@ -280,6 +282,13 @@ class Normalizer:
         # 괄호 안 기호: 'Iron (Fe)', 'Chloride (Cl⁻)', '황 산 염(SO₄)'
         for inner in re.findall(r"[(（]([^)）]+)[)）]", raw):
             code = self._formula(inner)
+            if code:
+                return code
+
+        # 일반 이름 + 괄호 안 원소 이름·합산: 'Impurity content (Iron)', 'Impurity content (K+Na)' (H36379 양식 D·E)
+        inners = re.findall(r"[(（]([^)）]+)[)）]", raw)
+        if len(inners) == 1 and GENERIC_NAME_RE.match(_without_parens(raw)):
+            code = self._alias(inners[0])
             if code:
                 return code
 

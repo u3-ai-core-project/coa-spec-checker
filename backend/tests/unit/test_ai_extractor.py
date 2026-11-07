@@ -44,6 +44,12 @@ def test_document_dates_and_product_name_reach_the_server(extractor):
     assert (d.retest_date, d.product_name) == (date(2027, 3, 4), "Lithium Hydroxide Monohydrate")
 
 
+def test_manufacture_date_reaches_the_server(extractor):
+    # 10.25 결정: 발행일이 제조일보다 앞서면 서버가 DATE_CONFLICT 를 낸다
+    b = extractor.extract(FIXTURES / "COA_B_0005.pdf", material_code="LIOH")
+    assert b.manufacture_date == date(2026, 2, 21)
+
+
 def test_db_mappings_are_passed(monkeypatch):
     monkeypatch.setattr(AIExtractor, "load_mappings", staticmethod(lambda material_code: {"Sodium (Na)": "나트륨"}))
     result = AIExtractor().extract(FIXTURES / "COA_A_0007.pdf", material_code="LIOH")
