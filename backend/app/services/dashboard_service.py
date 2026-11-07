@@ -10,7 +10,7 @@ from app.core.config import settings
 from app.core.enums import DocumentStatus, FinalDecision, Judgement, LotRecommendation, Role
 from app.core.errors import AppException, ErrorCode
 from app.models import Document, User
-from app.schemas.dashboard import DashboardSummary, DeviationByItem
+from app.schemas.dashboard import DashboardSummary, DeviationByItem, LotTrendPoint, LotTrends
 
 # 로트 권고와 최종 처분이 "일치"하는 조합 (명세 4.18).
 # 보류 권고는 대응하는 처분이 없어 권고 일치율 계산에서 뺀다 (2026-10-11 팀 결정).
@@ -93,6 +93,54 @@ def get_summary(
         reviewed_item_ratio=_reviewed_item_ratio(approved),
         reason_code_counts=_reason_code_counts(approved),
         deviation_by_item=_deviation_by_item(approved),
+    )
+
+
+def get_lot_trends(
+    db: Session, item_name: str, uploaded_by: int | None, date_from: date | None, date_to: date | None,
+    material_code: str | None = None,
+) -> LotTrends:
+    """한 항목의 로트별 값 추이 (명세 4.19, 확장). 처분 완료 문서만, 처분 일시(approved_at) 순.
+
+    - 필터(scope, user_id, from, to, material_code)는 4.18 요약과 같다. 기간은 처분 일시 기준
+    - 항목은 표준 항목명(normalized_name)이 item_name 과 같은 것. 그 항목이 없는 문서는 점을 만들지 않는다
+    - value 는 사내 규격 단위로 환산한 값(converted_value)이 숫자일 때만 넣고, 아니면 null
+    - unit, spec_lsl, spec_usl 은 가장 최근 처분 문서의 그 항목 값. 문서마다 규격 세트가 다를 수 있어서
+      화면의 기준선은 가장 최근 규격으로 그린다
+    """
+    conditions = [Document.status == DocumentStatus.APPROVED, Document.approved_at.is_not(None),
+                  *_in_period(Document.approved_at, date_from, date_to)]
+    if uploaded_by is not None:
+        conditions.append(Document.uploaded_by == uploaded_by)
+    if material_code:
+        conditions.append(Document.material_code == material_code)
+    docs = db.scalars(
+        select(Document).options(selectinload(Document.extraction)).where(*conditions)
+        .order_by(Document.approved_at, Document.id)
+    )
+
+    points: list[LotTrendPoint] = []
+    latest: dict | None = None
+    for doc in docs:
+        item = next((i for i in _items(doc) if i.get("normalized_name") == item_name), None)
+        if item is None:
+            continue
+        value = item.get("converted_value")
+        points.append(LotTrendPoint(
+            lot_no=doc.lot_no,
+            supplier=doc.supplier,
+            value=float(value) if isinstance(value, (int, float)) and not isinstance(value, bool) else None,
+            value_qualifier=item.get("value_qualifier"),
+            judgement=item.get("judgement"),
+            approved_at=doc.approved_at,
+        ))
+        latest = item
+    return LotTrends(
+        item_name=item_name,
+        unit=(latest.get("spec_unit") or latest.get("unit")) if latest else None,
+        spec_lsl=latest.get("spec_lsl") if latest else None,
+        spec_usl=latest.get("spec_usl") if latest else None,
+        points=points,
     )
 
 

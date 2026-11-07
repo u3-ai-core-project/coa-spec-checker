@@ -1,4 +1,6 @@
 """[담당: 홍채령] 대시보드 요약, 로트 추이 (4.18, 4.19)"""
+from datetime import datetime
+
 from pydantic import BaseModel
 
 
@@ -22,3 +24,21 @@ class DashboardSummary(BaseModel):
     reviewed_item_ratio: float               # v1.4안. 사람이 수정·확인한 항목 / 전체 항목 (누락·참고 포함)
     reason_code_counts: dict[str, int]       # v1.4안. 처분 시점에 남아 있는 사유코드별 항목 수 (많은 순)
     deviation_by_item: list[DeviationByItem]
+
+
+class LotTrendPoint(BaseModel):
+    lot_no: str | None
+    supplier: str | None
+    value: float | None                      # 사내 규격 단위로 환산한 값. 숫자로 못 읽은 값(검출 안 됨, 규격 복사 등)은 null
+    value_qualifier: str | None              # less_than·less_equal 이면 실측값이 아니라 상한값 (프론트가 다른 모양으로 표시)
+    judgement: str
+    approved_at: datetime
+
+
+class LotTrends(BaseModel):
+    """GET /dashboard/lot-trends (명세 4.19). points 는 처분 일시 순."""
+    item_name: str
+    unit: str | None                         # 가장 최근 처분 문서의 사내 규격 단위. 점이 없으면 null
+    spec_lsl: float | None
+    spec_usl: float | None
+    points: list[LotTrendPoint]
