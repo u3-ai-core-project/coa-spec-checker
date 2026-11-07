@@ -19,7 +19,7 @@ from coa_ai.normalize import AI_CAP, Mapping, Normalizer
 from coa_ai.ocr import ImageOpenError, read_image, read_pdf_page
 from coa_ai.pdf_text import PdfOpenError, image_body_pages, read_pages
 from coa_ai.selfcheck import check_items
-from coa_ai.table import parse_tables
+from coa_ai.table import CONF_FIXED, CONF_LIST, parse_tables
 
 IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp", ".gif", ".webp"}
 
@@ -110,7 +110,12 @@ def _drop_duplicate_suggestions(rows: list[RawRow], mappings: list[Mapping]) -> 
 
 def _to_item(row: RawRow, mapping: Mapping, page: Page, llm: LLMClient | None = None) -> Item:
     meaning = classify_value(row.value, row.spec, llm, raw_name=row.name)
-    confidence = min(row.confidence, mapping.cap, OCR_CONFIDENCE_CAP if page.ocr else 1.0)
+    base = row.confidence
+    if base == CONF_LIST and mapping.source == "dictionary":
+        # 머리글 없는 목록·격자도 이름을 사전으로 확정했으면 칸 보정 행과 같게 본다 (실물 라벨 대조 42/42 정확).
+        # OCR 로 읽은 쪽은 아래 OCR 상한(0.75)이 그대로 걸린다
+        base = CONF_FIXED
+    confidence = min(base, mapping.cap, OCR_CONFIDENCE_CAP if page.ocr else 1.0)
     return Item(
         raw_name=row.name,
         normalized_name=mapping.name,
