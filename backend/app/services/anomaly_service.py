@@ -9,6 +9,7 @@ import re
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
+from app.core.config import settings
 from app.core.enums import ReasonCode, ValueQualifier
 from app.models import Document
 from app.schemas.anomaly import AnomalyOut
@@ -49,6 +50,8 @@ def _identical_values(db: Session, doc: Document) -> list[AnomalyOut]:
 
     협력사·로트번호는 documents 테이블 값을 쓴다 (업로드 입력 또는 추출 결과). 어느 하나라도 없으면 비교하지 않는다.
     같은 로트번호의 다른 문서(같은 CoA 재업로드)는 비교 대상에서 뺀다.
+    상대 로트 하나와 같은 항목이 IDENTICAL_VALUES_MIN_MATCHES(기본 3)개 이상일 때만 그 로트를 경고에 넣는다
+    (10.25 회의 결정 4). 항목 1~2개만 우연히 같은 로트는 무시한다.
     """
     if not doc.supplier or not doc.lot_no:
         return []
@@ -67,9 +70,11 @@ def _identical_values(db: Session, doc: Document) -> list[AnomalyOut]:
         if _norm(other.supplier) != _norm(doc.supplier) or _norm(other.lot_no) == _norm(doc.lot_no):
             continue
         theirs = _reported_values(other)
-        for name, (value, _) in mine.items():
-            if name in theirs and theirs[name][0] == value:
-                matches.setdefault(name, []).append(other)
+        same = [name for name, (value, _) in mine.items() if name in theirs and theirs[name][0] == value]
+        if len(same) < settings.IDENTICAL_VALUES_MIN_MATCHES:
+            continue
+        for name in same:
+            matches.setdefault(name, []).append(other)
 
     anomalies = []
     for name, (_, raw) in mine.items():

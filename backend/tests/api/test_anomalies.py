@@ -1,4 +1,8 @@
-"""[담당: 홍채령] 이상 패턴 API (명세 4.17, 확장) — 지금은 identical_values 만"""
+"""[담당: 홍채령] 이상 패턴 API (명세 4.17, 확장): identical_values, at_spec_limit
+
+identical_values 는 상대 로트 하나와 3개 이상 같을 때만 경고한다 (10.25 회의 결정 4).
+비교 방식 자체를 보는 테스트는 one_match 픽스처로 기준을 1개로 낮춰서 확인한다.
+"""
 import json
 
 import pytest
@@ -29,20 +33,54 @@ def make_doc(db, user, lot, items, supplier="Chengxin", material="LI2CO3"):
     return doc
 
 
+@pytest.fixture
+def one_match(monkeypatch):
+    """값 비교 방식만 보려고 경고 기준을 1개로 낮춘다."""
+    monkeypatch.setattr(settings, "IDENTICAL_VALUES_MIN_MATCHES", 1)
+
+
+SAME3 = [item("Ca", "90 ppm"), item("Mg", "40 ppm"), item("Fe", "3 ppm")]
+
+
 def test_identical_values_with_other_lot(auth_client, db, user):
-    a = make_doc(db, user, "A0266047", [item("Ca", "90 ppm"), item("Na", "12 ppm")])
-    b = make_doc(db, user, "A0285657", [item("Ca", "90 ppm"), item("Na", "15 ppm")])
+    a = make_doc(db, user, "A0266047", [*SAME3, item("Na", "12 ppm")])
+    b = make_doc(db, user, "A0285657", [*SAME3, item("Na", "15 ppm")])
     r = auth_client.get(url(b.id))
     assert r.status_code == 200
-    assert r.json()["data"] == [{
+    assert r.json()["data"][0] == {
         "type": "identical_values",
         "item_name": "Ca",
         "message": "다른 로트(A0266047)와 값이 같습니다. Ca 90 ppm",
         "related_document_ids": [a.id],
-    }]
+    }
+    assert [x["item_name"] for x in r.json()["data"]] == ["Ca", "Mg", "Fe"]   # 다른 Na 는 빠짐
 
 
-def test_compares_reported_text_not_converted_value(auth_client, db, user):
+def test_fewer_than_three_matches_not_warned(auth_client, db, user):
+    """결정 4: 항목 1~2개만 같은 건 정수 ppm 값이 우연히 같은 경우가 많아 경고하지 않는다."""
+    make_doc(db, user, "L1", [item("Ca", "90 ppm"), item("Mg", "40 ppm"), item("Fe", "3 ppm")])
+    b = make_doc(db, user, "L2", [item("Ca", "90 ppm"), item("Mg", "40 ppm"), item("Fe", "4 ppm")])
+    assert auth_client.get(url(b.id)).json()["data"] == []
+
+
+def test_counts_matches_per_other_lot(auth_client, db, user):
+    """3개 이상은 상대 로트 하나 기준. 로트 A와 2개, 로트 B와 1개가 같아도 합쳐서 세지 않는다."""
+    make_doc(db, user, "A", [item("Ca", "90 ppm"), item("Mg", "40 ppm"), item("Fe", "9 ppm")])
+    make_doc(db, user, "B", [item("Ca", "1 ppm"), item("Mg", "1 ppm"), item("Fe", "3 ppm")])
+    c = make_doc(db, user, "C", SAME3)
+    assert auth_client.get(url(c.id)).json()["data"] == []
+
+
+def test_only_lots_with_three_matches_are_related(auth_client, db, user):
+    a = make_doc(db, user, "A", SAME3)                                       # 3개 같음 → 경고
+    make_doc(db, user, "B", [item("Ca", "90 ppm"), item("Mg", "1 ppm"), item("Fe", "1 ppm")])  # 1개 → 빠짐
+    c = make_doc(db, user, "C", SAME3)
+    data = auth_client.get(url(c.id)).json()["data"]
+    assert len(data) == 3
+    assert all(x["related_document_ids"] == [a.id] and x["message"].startswith("다른 로트(A)") for x in data)
+
+
+def test_compares_reported_text_not_converted_value(one_match, auth_client, db, user):
     """'소수점까지 같음': 원문 표기가 같아야 한다. 공백·대소문자만 무시."""
     make_doc(db, user, "L1", [item("Fe", "3.0 PPM"), item("Cl", "10 ppm")])
     b = make_doc(db, user, "L2", [item("Fe", "3.0ppm"), item("Cl", "10.0 ppm")])
@@ -55,13 +93,13 @@ def test_compares_reported_text_not_converted_value(auth_client, db, user):
     ("none detected", "not_detected", None),            # 검출 안 됨
     ("=<1000 ppm", "less_equal", "SPEC_COPIED"),         # 규격 문구 복사
 ])
-def test_non_measured_values_are_ignored(auth_client, db, user, raw, qualifier, reason):
+def test_non_measured_values_are_ignored(one_match, auth_client, db, user, raw, qualifier, reason):
     make_doc(db, user, "L1", [item("K", raw, qualifier, reason)])
     b = make_doc(db, user, "L2", [item("K", raw, qualifier, reason)])
     assert auth_client.get(url(b.id)).json()["data"] == []
 
 
-def test_other_supplier_same_lot_or_missing_info_ignored(auth_client, db, user):
+def test_other_supplier_same_lot_or_missing_info_ignored(one_match, auth_client, db, user):
     make_doc(db, user, "L1", [item("Ca", "90 ppm")], supplier="대흥리튬")       # 다른 협력사
     make_doc(db, user, "L2", [item("Ca", "90 ppm")])                          # 같은 로트 (재업로드)
     make_doc(db, user, "L3", [item("Ca", "90 ppm")], material="LIOH")         # 다른 원자재
@@ -71,7 +109,7 @@ def test_other_supplier_same_lot_or_missing_info_ignored(auth_client, db, user):
     assert auth_client.get(url(no_lot.id)).json()["data"] == []
 
 
-def test_multiple_previous_lots(auth_client, db, user):
+def test_multiple_previous_lots(one_match, auth_client, db, user):
     a = make_doc(db, user, "L1", [item("Ca", "90 ppm")])
     b = make_doc(db, user, "L2", [item("Ca", "90 ppm")])
     c = make_doc(db, user, "L3", [item("Ca", "90 ppm")])
@@ -97,7 +135,7 @@ def test_not_found_and_requires_login(auth_client, client, db):
     assert client.get(url("nope")).status_code == 401
 
 
-def test_end_to_end_with_upload(auth_client, db, tmp_path, monkeypatch):
+def test_end_to_end_with_upload(one_match, auth_client, db, tmp_path, monkeypatch):
     """업로드 → 서버 판정(value_qualifier 채움) → 이상 패턴. 로트만 다른 같은 결과 CoA 3건 (데모 20)."""
     spec_set = SpecSet(code="LI2CO3-T", material_code="LI2CO3", material_name="탄산리튬", grade="D1", is_default=True)
     spec_set.items = [SpecItem(item_name="Ca", unit="ppm", usl=20, spec_type=SpecType.QUANTITATIVE)]
@@ -145,7 +183,7 @@ def test_not_at_spec_limit(auth_client, db, user, raw, spec, qualifier, reason):
     assert auth_client.get(url(doc.id)).json()["data"] == []
 
 
-def test_both_types_together(auth_client, db, user):
+def test_both_types_together(one_match, auth_client, db, user):
     make_doc(db, user, "L1", [item("Ca", "20 ppm", raw_spec="≤ 20 ppm")])
     b = make_doc(db, user, "L2", [item("Ca", "20 ppm", raw_spec="≤ 20 ppm")])
     assert [a["type"] for a in auth_client.get(url(b.id)).json()["data"]] == ["identical_values", "at_spec_limit"]

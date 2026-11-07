@@ -61,6 +61,10 @@ class Settings(BaseSettings):
     NA_K_SUM_NAME: str = "Na+K"
     NA_K_SUM_ELEMENTS: list[str] = ["Na", "K"]
 
+    # 이상 패턴 identical_values: 같은 협력사의 다른 로트 하나와 실측값이 이 개수 이상 같을 때만 경고 (10.25 회의 결정 4).
+    # 정수 ppm 값이 우연히 1~2개 같은 경우를 거르고, 결과표가 통째로 반복된 경우(멘토님 데모 20)만 잡는다.
+    IDENTICAL_VALUES_MIN_MATCHES: int = 3
+
     # 공급사 문의 초안 생성기 (v1.4안 4.22). "template" 이면 inquiry_draft.TemplateDrafter,
     # "ai" 면 app.pipeline.ai_drafter.AIDrafter (LLM_BASE_URL 필요, 실패하면 템플릿으로 대체).
     INQUIRY_DRAFTER: str = "template"
