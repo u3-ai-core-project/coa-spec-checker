@@ -200,8 +200,10 @@ export class HttpApi implements Api {
     );
   }
 
-  patchSpec(specId: number, body: PatchSpecBody): Promise<PatchSpecResult> {
-    return request<PatchSpecResult>(`/specs/${specId}`, { method: 'PATCH', body: JSON.stringify(body) });
+  async patchSpec(specId: number, body: PatchSpecBody): Promise<PatchSpecResult> {
+    const result = await request<PatchSpecResult>(`/specs/${specId}`, { method: 'PATCH', body: JSON.stringify(body) });
+    // rejudge를 보내지 않은 요청(또는 이 필드가 없는 서버)의 응답에는 rejudged_documents가 비어 있습니다.
+    return { ...result, rejudged_documents: result.rejudged_documents ?? [] };
   }
 
   listSpecChangeLogs(specId: number): Promise<SpecChangeLog[]> {

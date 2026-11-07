@@ -32,6 +32,7 @@ import type {
   PatchItemResult,
   PatchSpecBody,
   PatchSpecResult,
+  RejudgedDocument,
   ReviewedItem,
   ReviewLog,
   SpecChangeLog,
@@ -53,6 +54,8 @@ export function setMockLatency(ms: number): void {
 }
 
 const READY_STATUSES: DocumentStatus[] = ['extracted', 'in_review', 'on_hold', 'approved'];
+/** 규격을 고치고 재판정할 때 다시 판정하는 문서 상태 */
+const REJUDGE_STATUSES: DocumentStatus[] = ['extracted', 'in_review', 'on_hold'];
 
 function delay<T>(value: T): Promise<T> {
   if (latencyMs === 0) return Promise.resolve(value);
@@ -576,6 +579,8 @@ export class MockApi implements Api {
     target.unit = body.unit;
     target.updated_by = user.name;
     target.updated_at = now('spec');
+    // rejudge=true면 이 규격 세트로 판정한 처분 전 문서를 새 규격으로 다시 판정합니다(서버 spec_service.rejudge_open_documents).
+    const rejudged = body.rejudge ? this.rejudgeOpenDocuments(target.spec_set_code) : [];
     if (changed.length > 0) {
       this.local.addSpecChangeLog(target.id, {
         before_value: beforeValue,
@@ -585,7 +590,40 @@ export class MockApi implements Api {
         created_at: target.updated_at,
       });
     }
-    return delay({ ...target });
+    return delay({ ...target, rejudged_documents: rejudged });
+  }
+
+  /**
+   * 규격 세트를 쓰는 처분 전 문서(추출됨, 검수 중, 보류)를 다시 판정합니다. 처분 완료, 처리 중, 실패 문서는 건드리지 않습니다.
+   * 서버가 만든 누락 항목을 새 규격으로 다시 만드는 일은 목업에서 하지 않습니다.
+   */
+  private rejudgeOpenDocuments(specSetCode: string): RejudgedDocument[] {
+    const out: RejudgedDocument[] = [];
+    for (const doc of this.state.docs) {
+      const { extraction } = doc;
+      if (!extraction || !REJUDGE_STATUSES.includes(doc.detail.status)) continue;
+      if (this.specsOf(doc)[0]?.spec_set_code !== specSetCode) continue;
+      const specs = this.specsOf(doc);
+      const before = doc.detail.lot_recommendation;
+      const changed: string[] = [];
+      extraction.items = extraction.items.map((item) => {
+        const spec = specs.find((entry) => entry.item_name === item.normalized_name);
+        if (!spec) return item; // 규격이 바뀐 것과 상관없는 항목(규격에 없는 항목)은 그대로 둡니다.
+        const next = rejudgeItem(item, spec);
+        if (next.judgement !== item.judgement) changed.push(item.normalized_name);
+        return next;
+      });
+      extraction.summary = summarize(extraction.items);
+      extraction.lot_recommendation = recommendLot(extraction.summary, extraction.document_issues.length);
+      doc.detail.lot_recommendation = extraction.lot_recommendation;
+      out.push({
+        document_id: doc.detail.document_id,
+        lot_recommendation_before: before,
+        lot_recommendation_after: extraction.lot_recommendation,
+        changed_items: changed,
+      });
+    }
+    return out;
   }
 
   async listSpecChangeLogs(specId: number): Promise<SpecChangeLog[]> {

@@ -70,6 +70,7 @@ export interface Api {
   listSpecs(query?: SpecListQuery): Promise<SpecItem[]>;
   /** [v1.4] 규격 세트(등급, 버전) 목록. 원자재별로 기본 세트가 먼저 옵니다. */
   listSpecSets(materialCode?: string): Promise<SpecSet[]>;
+  /** 규격 항목 수정(ADMIN). body.rejudge가 true이면 처분 전 문서를 새 규격으로 다시 판정하고 그 결과를 rejudged_documents로 돌려줍니다. */
   patchSpec(specId: number, body: PatchSpecBody): Promise<PatchSpecResult>;
 
   /** 규격 항목 하나의 변경 이력(GET /specs/{id}/change-logs). 서버는 오래된 순으로 줍니다. */

@@ -11,14 +11,21 @@ import {
 } from './lib/specEdit';
 import { api } from '../review/shared/api';
 import { errorMessage } from '../review/shared/api/errors';
-import type { SpecItem } from '../review/shared/api/types';
+import type { RejudgedDocument, SpecItem } from '../review/shared/api/types';
 import { Chem } from '../review/shared/components/Chem';
 import { ErrorNotice } from '../review/shared/components/EmptyState';
 import { Icon } from '../review/shared/components/Icon';
 import { PageIntro } from '../review/shell/PageIntro';
 import { useCurrentUser } from '../review/shared/currentUser';
+import { REVIEW_PATH } from '../review/shared/domain/constants';
 import { formatDateTime } from '../review/shared/domain/format';
+import { RECOMMENDATION_META } from '../review/shared/domain/recommendation';
 import { useAsync } from '../review/shared/hooks/useAsync';
+
+/** 서버가 돌려준 로트 권고 값의 표시. 값이 없으면 "-"입니다. */
+function recommendationText(value: RejudgedDocument['lot_recommendation_before']): string {
+  return value ? RECOMMENDATION_META[value].label : '-';
+}
 
 function inputClass(changed: boolean, invalid: boolean, align: string, readOnly = false): string {
   const base = `spec-input h-9 rounded-md px-2.5 text-[13px] tabular-nums ${align}`;
@@ -33,7 +40,9 @@ function inputClass(changed: boolean, invalid: boolean, align: string, readOnly 
  * 시안 5-1 규격 수정(관리자). 실제 API(PATCH /specs/{id})는 하한, 상한, 단위만 수정할 수 있고,
  * 변경한 규격은 이후 업로드되는 문서부터 적용됩니다(이미 추출된 문서의 판정은 그대로입니다).
  * 백엔드 확정 답변: PATCH /specs/{id}에 변경 사유(reason)가 필수이고, 변경 이력은 GET /specs/{id}/change-logs로 봅니다.
- * 항목 추가·삭제, 규격 근거(source) 수정, 재판정 체크박스는 서버에 없어 화면에서 숨겼습니다.
+ * "저장 후 재판정"을 켜면 마지막 PATCH에만 rejudge=true를 보내 이 규격 세트로 판정한 처분 전 문서를 서버가 다시 판정하고,
+ * 응답의 rejudged_documents를 그대로 "서버 재판정 결과"로 보여 줍니다. 끄면 기존 저장과 같습니다.
+ * 항목 추가·삭제, 규격 근거(source) 수정은 서버에 없어 화면에서 숨겼습니다.
  */
 export function SpecEditPage() {
   const user = useCurrentUser();
@@ -72,6 +81,10 @@ export function SpecEditPage() {
   const [reason, setReason] = useState('');
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  /** "저장 후 재판정" 체크박스 */
+  const [rejudge, setRejudge] = useState(false);
+  /** 재판정을 켜고 저장한 뒤 서버가 돌려준 결과. null이면 아직 재판정하지 않았습니다. */
+  const [rejudgeResult, setRejudgeResult] = useState<RejudgedDocument[] | null>(null);
 
   const header = (
     <PageIntro
@@ -127,12 +140,30 @@ export function SpecEditPage() {
     if (!code) return;
     setSaving(true);
     setSaveError(null);
+    setRejudgeResult(null);
     try {
-      for (const change of changes) {
+      let rejudged: RejudgedDocument[] = [];
+      for (const [index, change] of changes.entries()) {
         // 서버가 하한/상한 범위를 다시 검증합니다(400 INVALID_SPEC_RANGE). 변경 사유는 항목마다 같은 값을 보냅니다.
-        await api.patchSpec(change.spec.id, { ...change.body, reason: reason.trim() });
+        // 재판정은 규격 세트 전체를 한 번에 다시 판정하므로, 항목을 모두 저장한 뒤인 마지막 요청에만 rejudge=true를 보냅니다.
+        const last = index === changes.length - 1;
+        const saved = await api.patchSpec(change.spec.id, {
+          ...change.body,
+          reason: reason.trim(),
+          ...(rejudge && last ? { rejudge: true } : {}),
+        });
+        if (rejudge && last) rejudged = saved.rejudged_documents;
       }
-      navigate('/specs');
+      if (!rejudge) {
+        navigate('/specs');
+        return;
+      }
+      // 재판정 결과를 보여 주려고 이 화면에 머뭅니다. 저장한 값을 다시 불러오고 입력은 비웁니다.
+      setRejudgeResult(rejudged);
+      setEdits({});
+      setReason('');
+      specsQuery.reload();
+      changeLogs.reload();
     } catch (failure) {
       setSaveError(errorMessage(failure));
       specsQuery.reload();
@@ -160,6 +191,7 @@ export function SpecEditPage() {
             </span>
             <span>
               <b className="font-semibold">이후 업로드 건부터 적용됩니다.</b> 이미 업로드된 문서의 판정 결과는 기존 규격 그대로 유지됩니다.
+              {' '}처분 전 문서까지 새 규격으로 다시 판정하려면 아래 &quot;저장 후 재판정&quot;을 켜 주십시오.
             </span>
           </div>
           <div className="spec-table-wrap mt-3 min-h-0 flex-1 overflow-y-auto">
@@ -257,10 +289,55 @@ export function SpecEditPage() {
                 onChange={(event) => setReason(event.target.value)}
               />
             </div>
+            <label className="spec-rejudge mx-5 mb-4 flex cursor-pointer items-start gap-2 text-[13px]">
+              <input
+                type="checkbox"
+                className="spec-rejudge-checkbox mt-0.5 h-4 w-4"
+                checked={rejudge}
+                onChange={(event) => setRejudge(event.target.checked)}
+              />
+              <span>
+                <b className="font-semibold">저장 후 재판정</b>
+                <span className="block text-[12px] text-[#5B616A]">
+                  이 규격 세트로 판정한 처분 전 문서(추출됨, 검수 중, 보류)를 새 규격으로 서버가 다시 판정합니다. 처분 완료 문서는 바뀌지 않습니다.
+                </span>
+              </span>
+            </label>
+            {rejudgeResult && (
+              <section className="spec-rejudge-result mx-5 mb-4 flex flex-col gap-2 rounded-lg border border-[#D6DEF7] bg-[#F3F6FE] px-3.5 py-3 text-[13px]" aria-label="서버 재판정 결과">
+                <h4 className="font-semibold text-[#2B4FCB]">
+                  서버 재판정 결과 · 문서 <span className="tabular-nums">{rejudgeResult.length}건</span>
+                </h4>
+                {rejudgeResult.length === 0 ? (
+                  <p className="text-[12px] text-[#5B616A]">재판정한 문서가 없습니다.</p>
+                ) : (
+                  <ul className="flex flex-col gap-1.5">
+                    {rejudgeResult.map((doc) => (
+                      <li key={doc.document_id} className="rejudged-doc flex flex-col gap-0.5 rounded-md bg-white px-2.5 py-1.5">
+                        <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                          <Link to={`${REVIEW_PATH}/${doc.document_id}`} className="rejudged-doc-id font-semibold tabular-nums text-[#2B4FCB]">
+                            {doc.document_id}
+                          </Link>
+                          <span className="rejudged-recommendation text-[12px] tabular-nums text-[#5B616A]">
+                            로트 권고 {recommendationText(doc.lot_recommendation_before)} → {recommendationText(doc.lot_recommendation_after)}
+                          </span>
+                        </span>
+                        <span className="rejudged-changed text-[12px] text-[#5B616A]">
+                          {doc.changed_items.length > 0 ? `판정이 바뀐 항목: ${doc.changed_items.join(', ')}` : '판정이 바뀐 항목 없음'}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </section>
+            )}
           </div>
           <div className="spec-form-actions flex items-center justify-between border-t border-[#E3E5E8] px-5 py-3.5">
             <span className={`spec-change-summary text-[12px] ${saveError ? 'text-[#C0342E]' : 'text-[#5B616A]'}`}>
-              {saveError ?? `변경 ${changes.length}건 · 이후 업로드 건부터 적용됩니다.`}
+              {saveError ??
+                (rejudge
+                  ? `변경 ${changes.length}건 · 저장 후 처분 전 문서를 다시 판정합니다.`
+                  : `변경 ${changes.length}건 · 이후 업로드 건부터 적용됩니다.`)}
             </span>
             <div className="flex gap-2">
               <button
