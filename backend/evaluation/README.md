@@ -18,6 +18,34 @@ python -m evaluation.run --gt <정답 라벨 폴더> --pred <시스템 출력 �
 
 파일 이름(확장자 제외)이나 `document_id` 로 정답과 출력을 짝짓습니다. 문서 1건 = JSON 1개.
 
+### 데모 20 로트 시연용 PDF 만들기
+
+수용 테스트와 같은 시나리오 값(`tests/fixtures/demo20_scenarios.json`)을 로트마다 서로 다른 가상 협력사의 CoA PDF로 만듭니다. 화면의 PDF와 추출 값을 일치시켜 시연할 때 씁니다.
+
+**1. 패키지 설치**
+```bash
+cd backend
+pip install -r requirements.txt
+pip install -e ../ai
+```
+
+**2. PDF 만들기**
+```bash
+python -m evaluation.demo20_pdfs
+```
+- 기본 저장 위치는 `evaluation/reports/demo20_pdfs/` 입니다 (git 에 올라가지 않음). `--out` 으로 바꿀 수 있습니다.
+- 1~19번은 `demo01.pdf` ~ `demo19.pdf`, 20번은 같은 협력사의 로트 3개(`demo20_DEMO-L20-1.pdf` ~ `-3.pdf`)입니다.
+- 17번은 글자 층이 없는 흐린 스캔본이라 OCR 로 읽고, 확인 필요·보류가 나옵니다.
+
+**3. 실제 추출로 업로드**
+
+`backend/.env` 에 `EXTRACTOR=ai` 를 넣고 백엔드를 다시 시작한 뒤, 업로드 화면에서 PDF 를 올립니다.
+- 12번은 입고 로트를 `DEMO-L99` 로 등록해야 로트 불일치가 나옵니다.
+- 18번은 규격 세트를 `LI2CO3-2013` 으로 지정해야 합니다.
+- 20번은 로트 3개를 모두 올려야 같은 값 반복 경고가 나옵니다.
+
+PDF 는 단순한 표 형식 하나이고 실제 협력사 양식이 아닙니다. 항목명은 팀 항목 사전에 있는 영문 표기를 쓰며, 자성이물은 `Magnetic substance` 입니다.
+
 ## 정답 라벨 형식 (제안, 참고용 초안)
 
 소성훈 님 정답 라벨 구조(머리글 필드, 시험 항목 행, 문서 판정)에 판정 5종·사유코드·로트 권고를 더한 형식입니다.

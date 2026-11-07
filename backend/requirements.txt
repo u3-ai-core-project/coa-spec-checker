@@ -12,3 +12,6 @@ bcrypt<4.1  # passlib 1.7.4 는 bcrypt 4.1 이상과 호환되지 않음
 openpyxl>=3.1
 pytest>=8.0
 httpx>=0.27
+reportlab>=4.0      # 데모 20 시연용 PDF 만들기 (evaluation/demo20_pdfs.py)
+pillow>=10.0
+pypdfium2>=4.30
