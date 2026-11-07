@@ -147,6 +147,7 @@ function toReviewedItem(item: ExtractionItem): ReviewedItem {
     converted_value: item.converted_value,
     value_qualifier: item.value_qualifier,
     detection_limit: item.detection_limit,
+    spec_unit: item.spec_unit ?? null,
     judgement: item.judgement,
     judgement_reason: item.judgement_reason,
     deviation: item.deviation,

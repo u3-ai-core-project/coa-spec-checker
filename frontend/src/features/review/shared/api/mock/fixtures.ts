@@ -210,6 +210,7 @@ function makeItem(def: ItemDef, specs: SpecItem[], resolved = false, edited = fa
     raw_value: def.rawValue,
     raw_spec: def.rawSpec,
     unit: specItem?.unit ?? null,
+    spec_unit: specItem?.unit ?? null,
     value_qualifier: def.qualifier,
     converted_value: def.qualifier === 'not_detected' ? null : def.value,
     detection_limit: null,
@@ -247,6 +248,7 @@ function makeMissing(id: string, name: string, specs: SpecItem[], rawName: strin
     raw_value: null,
     raw_spec: null,
     unit: specItem?.unit ?? null,
+    spec_unit: specItem?.unit ?? null,
     value_qualifier: null,
     converted_value: null,
     detection_limit: null,
@@ -322,6 +324,7 @@ function itemsB(specs: SpecItem[]): ExtractionItem[] {
     raw_value: '< 10 ppm',
     raw_spec: '<= 10 ppm',
     unit: 'ppm',
+    spec_unit: null, // 사내 규격에 없는 항목이라 규격 단위가 없습니다.
     value_qualifier: 'less_than',
     converted_value: 10,
     detection_limit: null,

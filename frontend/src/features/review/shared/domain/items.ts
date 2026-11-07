@@ -87,9 +87,18 @@ export function splitItems(
   };
 }
 
+/**
+ * 항목의 값과 규격에 붙일 단위. 사내 규격 단위(spec_unit)를 먼저 쓰고, 없으면 CoA에서 읽은 단위(unit)를 씁니다.
+ * 서버는 추출 단위(unit)를 비워 줄 수 있고, 값은 사내 규격 단위로 환산되어 있어 spec_unit이 맞는 단위입니다. 둘 다 없으면 null입니다.
+ */
+export function displayUnit(item: Pick<ExtractionItem, 'unit'> & { spec_unit?: string | null }): string | null {
+  return item.spec_unit ?? item.unit ?? null;
+}
+
 /** 규격 표시. 예: ≥ 99.5 %, ≤ 50 ppm, 10–20 ppm */
-export function formatSpec(item: Pick<ExtractionItem, 'spec_lsl' | 'spec_usl' | 'unit'>): string {
-  const unit = item.unit ? ` ${item.unit}` : '';
+export function formatSpec(item: Pick<ExtractionItem, 'spec_lsl' | 'spec_usl' | 'unit'> & { spec_unit?: string | null }): string {
+  const shownUnit = displayUnit(item);
+  const unit = shownUnit ? ` ${shownUnit}` : '';
   const { spec_lsl: lsl, spec_usl: usl } = item;
   if (lsl !== null && usl !== null) return `${formatNumber(lsl)}–${formatNumber(usl)}${unit}`;
   if (lsl !== null) return `≥ ${formatNumber(lsl)}${unit}`;
@@ -101,9 +110,12 @@ const QUALIFIER_PREFIX: Record<string, string> = { less_than: '< ', less_equal: 
 
 /** 사내 규격 단위로 환산한 값의 표시. 예: 100 ppm, < 100 ppm, N.D., 검출 안 됨 (검출한계 2 ppm) */
 export function formatConverted(
-  item: Pick<ExtractionItem, 'converted_value' | 'value_qualifier' | 'unit' | 'raw_value' | 'detection_limit'>,
+  item: Pick<ExtractionItem, 'converted_value' | 'value_qualifier' | 'unit' | 'raw_value' | 'detection_limit'> & {
+    spec_unit?: string | null;
+  },
 ): string {
-  const { converted_value: value, value_qualifier: qualifier, unit, raw_value: raw, detection_limit: limit } = item;
+  const { converted_value: value, value_qualifier: qualifier, raw_value: raw, detection_limit: limit } = item;
+  const unit = displayUnit(item);
   // 검출 안 됨: 검출한계를 받았으면 함께 보여 주고, 검출한계가 없으면 CoA 원문 그대로 보여 줍니다(시안 2-11, 2-12).
   if (qualifier === 'not_detected') {
     return limit !== null ? `검출 안 됨 (검출한계 ${formatNumber(limit)}${unit ? ` ${unit}` : ''})` : (raw ?? 'N.D.');
@@ -124,9 +136,10 @@ export function rawDifferent(item: ExtractionItem): string | null {
   return normalizeText(item.raw_value) === normalizeText(formatConverted(item)) ? null : item.raw_value;
 }
 
-/** 수정 전 값(AI 추출값) 표시용. 단위가 없으면 값만 돌려줍니다. */
-export function withUnit(value: string | null, unit: string | null): string {
+/** 수정 전 값(AI 추출값) 표시용. 항목의 단위(displayUnit)를 붙이고, 단위가 없으면 값만 돌려줍니다. */
+export function withUnit(value: string | null, item: (Pick<ExtractionItem, 'unit'> & { spec_unit?: string | null }) | undefined): string {
   if (value === null) return '';
+  const unit = item ? displayUnit(item) : null;
   // 실제 서버의 이력 값에는 단위가 이미 들어 있어("2.56 ppm") 한 번 더 붙이지 않습니다.
   if (!unit || value.toLowerCase().endsWith(unit.toLowerCase()) || value.includes('검출한계')) return value;
   return `${value} ${unit}`;

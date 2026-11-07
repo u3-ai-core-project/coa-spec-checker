@@ -72,18 +72,17 @@ export function buildHistory(input: {
   input.reviewLogs.forEach((log, index) => {
     const item = byId.get(log.item_id);
     const name = item?.normalized_name ?? log.item_id;
-    const unit = item?.unit ?? null;
     let kind: HistoryKind;
     let detail: string;
     if (log.action === 'edit') {
       kind = '값 수정';
       // 공급사 회신값, 자체 시험값처럼 원문 오독 정정이 아닌 입력은 값 출처를 함께 보여 줍니다(시안 2-12b). 오독 정정은 시안 2-5와 같게 생략합니다.
-      const parts = [`${name} ${log.before_value} → ${withUnit(log.after_value, unit)}`];
+      const parts = [`${name} ${log.before_value} → ${withUnit(log.after_value, item)}`];
       if (log.value_source && log.value_source !== 'correction') parts.push(`값 출처: ${VALUE_SOURCE_LABEL[log.value_source]}`);
       detail = withReason(parts, log.reason);
     } else if (log.action === 'confirm') {
       kind = '값 확인';
-      detail = `${name} ${withUnit(log.after_value, unit)} 확인됨`;
+      detail = `${name} ${withUnit(log.after_value, item)} 확인됨`;
     } else {
       kind = '매핑 수정';
       detail = withReason([`${log.before_value} → ${log.after_value}`], log.reason);

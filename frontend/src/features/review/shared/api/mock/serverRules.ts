@@ -217,6 +217,7 @@ export function evaluateItem(item: ExtractionItem, spec: SpecItem | undefined, o
   return {
     ...item,
     unit,
+    spec_unit: spec?.unit ?? null,
     value_qualifier: parsed ? parsed.qualifier : null,
     converted_value: parsed ? parsed.value : null,
     detection_limit: parsed ? parsed.detectionLimit : null,

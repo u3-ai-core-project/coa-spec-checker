@@ -114,12 +114,15 @@ export interface ExtractionItem {
   mapping_source: MappingSource;
   raw_value: string | null;
   raw_spec: string | null;
+  /** CoA에서 읽은 단위. 서버가 비워 줄 수 있어(null) 화면은 spec_unit을 먼저 씁니다(displayUnit). */
   unit: string | null;
   value_qualifier: ValueQualifier | null;
   converted_value: number | string | null;
   detection_limit: number | null;
   spec_lsl: number | null;
   spec_usl: number | null;
+  /** 사내 규격 단위. converted_value, detection_limit, spec_lsl, spec_usl의 단위입니다. 규격이 없는 항목은 null입니다(서버가 아직 안 주면 없음). */
+  spec_unit?: string | null;
   judgement: Judgement;
   judgement_reason: string | null;
   deviation: number | null;
@@ -263,6 +266,8 @@ export interface ReviewedItem {
   converted_value: number | string | null;
   value_qualifier: ValueQualifier | null;
   detection_limit?: number | null;
+  /** 사내 규격 단위. 항목명을 고치면 규격이 바뀌어 단위도 바뀔 수 있습니다. */
+  spec_unit?: string | null;
   judgement: Judgement;
   judgement_reason: string | null;
   deviation: number | null;
