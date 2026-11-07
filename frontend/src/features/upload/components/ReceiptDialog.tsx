@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { SUPPLIERS } from '../lib/upload'
 import type { ReceiptInfo } from '../hooks/useUploadQueue'
-import { ChevronDownIcon } from '../../../components/icons'
 
 interface Props {
     fileName: string
@@ -9,10 +8,17 @@ interface Props {
     onSubmit: (info: ReceiptInfo) => void
 }
 
+// 입력값 정리: 앞뒤 공백 제거 후, 대소문자 무시하고 기존 협력사와 같으면 기존 표기를 사용
+function normalizeSupplier(input: string): string {
+    const trimmed = input.trim()
+    const match = SUPPLIERS.find((s) => s.toLowerCase() === trimmed.toLowerCase())
+    return match ?? trimmed
+}
+
 export default function ReceiptDialog({ fileName, onCancel, onSubmit }: Props) {
     const [lot, setLot] = useState('')
     const [supplier, setSupplier] = useState('')
-    const valid = lot.trim() !== '' && supplier !== ''
+    const valid = lot.trim() !== '' && supplier.trim() !== ''
 
     return (
         <div
@@ -24,7 +30,7 @@ export default function ReceiptDialog({ fileName, onCancel, onSubmit }: Props) {
             <form
                 onSubmit={(e) => {
                     e.preventDefault()
-                    if (valid) onSubmit({ receivedLotNo: lot.trim(), supplier })
+                    if (valid) onSubmit({ receivedLotNo: lot.trim(), supplier: normalizeSupplier(supplier) })
                 }}
                 className="w-full max-w-[400px] rounded-2xl bg-white p-6"
             >
@@ -50,22 +56,20 @@ export default function ReceiptDialog({ fileName, onCancel, onSubmit }: Props) {
                 <label htmlFor="supplier" className="mt-4 block text-sm text-ink">
                     협력사 <span className="text-[#c0392b]">*</span>
                 </label>
-                <div className="relative mt-2">
-                    <select
-                        id="supplier"
-                        value={supplier}
-                        onChange={(e) => setSupplier(e.target.value)}
-                        className="w-full appearance-none rounded-lg border border-line bg-white px-3 py-2.5 pr-10 text-sm outline-none focus:border-brand"
-                    >
-                        <option value="">선택하세요</option>
-                        {SUPPLIERS.map((s) => (
-                            <option key={s} value={s}>
-                                {s}
-                            </option>
-                        ))}
-                    </select>
-                    <ChevronDownIcon className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2" />
-                </div>
+                <input
+                    id="supplier"
+                    list="supplier-options"
+                    value={supplier}
+                    onChange={(e) => setSupplier(e.target.value)}
+                    placeholder="목록에서 고르거나 직접 입력"
+                    autoComplete="off"
+                    className="mt-2 w-full rounded-lg border border-line px-3 py-2.5 text-sm outline-none focus:border-brand"
+                />
+                <datalist id="supplier-options">
+                    {SUPPLIERS.map((s) => (
+                        <option key={s} value={s} />
+                    ))}
+                </datalist>
 
                 <div className="mt-5 flex gap-2">
                     <button
