@@ -63,7 +63,6 @@ export function SpecEditPage() {
 
   const mappings = useAsync(() => (code ? api.listMappings(code) : Promise.resolve([])), [code]);
   // 변경 이력은 항목(규격 id) 단위 API라 세트의 항목마다 받아서 항목 이름을 붙이고 최근 순으로 합칩니다(서버는 오래된 순).
-  // TODO(백엔드 협의): 세트 단위로 한 번에 받는 API가 있으면 바꿉니다.
   const specsForLogs = specsQuery.data ?? [];
   const itemIds = specsForLogs.map((spec) => spec.id);
   const changeLogs = useAsync(

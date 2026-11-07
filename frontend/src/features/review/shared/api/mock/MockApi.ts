@@ -316,7 +316,6 @@ export class MockApi implements Api {
       if (item.mapping_source === 'spec') throw new ApiError(400, 'VALIDATION_ERROR', '누락 항목은 항목명을 바꿀 수 없습니다');
       // 백엔드는 이미 같은 이름의 항목이 있으면 400으로 거절하지만, 목업 규격(7개)은 문서 항목이 전부 차지하고 있어
       // 화면의 매핑 수정 흐름(2-9)을 확인할 수 없어서 이 검사는 목업에서 뺐습니다.
-      // TODO(백엔드 협의): 목업 규격에 Pb, 중금속 총량이 생기면 이 검사를 되살립니다.
       newLogs.push({
         item_id: itemId,
         action: 'rename',

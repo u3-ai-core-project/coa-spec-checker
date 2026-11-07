@@ -4,7 +4,6 @@ import type { DocumentIssueCode, ReasonCode, ResolutionType, ValueSource } from 
  * [v1.4] 예외 사유코드, 해결 조건 종류, 문서 수준 문제, 값 출처의 한글 이름.
  * 사유코드와 문서 수준 문제 이름은 백엔드 inquiry_draft.py의 REASON_LABELS, ISSUE_LABELS와 같은 문구입니다(follow-ups 응답의 label과 같음).
  * 해결 조건 종류와 값 출처의 이름은 시안과 명세에 없어 값 이름을 풀어쓴 임시 표기입니다.
- * TODO(디자인 협의): 시안이 나오면 문구를 맞춥니다.
  */
 export const REASON_CODE_LABEL: Record<ReasonCode, string> = {
   OUT_OF_SPEC: '규격 초과',

@@ -30,7 +30,6 @@ export function dispositionForRecommendation(rec: LotRecommendation): Dispositio
 /**
  * 보류 후속 조치 이름. [v1.4안] request_single_value, request_reissue, request_correct_coa의 한글 이름은 시안에 없어
  * 명세의 값 이름을 풀어쓴 임시 표기입니다.
- * TODO(디자인 협의): 시안이 나오면 이름을 맞춥니다.
  */
 export const FOLLOW_UP_LABEL: Record<HoldFollowUp, string> = {
   request_actual_value: '실측값 요청',

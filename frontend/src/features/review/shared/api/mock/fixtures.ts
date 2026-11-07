@@ -63,7 +63,7 @@ export const LI2CO3_SET_CODE = 'LI2CO3-D1-2023';
 
 const LIOH_MATERIAL_CODE = 'LIOH';
 const LIOH_MATERIAL_NAME = '수산화리튬 LiOH';
-/** LIOH 세트 코드는 백엔드 이름 규칙(원자재-등급-연도)에 맞춘 임의 값입니다. 백엔드 시드에는 LIOH 세트가 아직 없습니다. */
+/** 목업의 LIOH 세트 코드는 임의 값입니다. 백엔드 시드의 LIOH 세트 코드는 LIOH-BG-V1이라 서로 다릅니다. */
 const LIOH_SET_CODE = 'LIOH-D1-2020';
 
 function spec(
@@ -96,9 +96,8 @@ function spec(
 }
 
 /**
- * [v1.4] 수산화리튬(LIOH, 보조 원자재) 규격 자리표시. 초기값은 GB/T 26008-2020 D1 기반 소성훈 님 작성본인데 아직 받지 못해,
- * 항목 이름과 단위만 두고 하한/상한은 비웠습니다. 한계값이 정해지지 않은 항목은 화면에 "-"로 보입니다.
- * TODO(규격표 수령 후): 소성훈 님 작성본의 항목과 값으로 교체합니다.
+ * [v1.4] 수산화리튬(LIOH, 보조 원자재) 규격 자리표시. 항목 이름과 단위만 두고 하한/상한은 비웠습니다.
+ * 한계값이 정해지지 않은 항목은 화면에 "-"로 보입니다.
  */
 function liohSpec(id: number, itemName: string, unit: string): SpecItem {
   return {
@@ -314,8 +313,7 @@ function itemsB(specs: SpecItem[]): ExtractionItem[] {
     { id: 'so4', name: '황산염', rawName: 'Sulfate', rawValue: '< 0.02 %', rawSpec: '<= 0.05 %', qualifier: 'less_than', value: 200, confidence: 0.92 },
   ];
   const items = defs.map((def) => makeItem(def, specs));
-  // AI가 항목명을 'Pb'로 추정했지만 사내 규격에는 없는 이름입니다. 신뢰도가 낮아 서버가 확인 필요로 내려 준 것으로 가정합니다.
-  // TODO(백엔드 협의): 사내 규격에 없는 normalized_name(AI 추정)의 판정을 확인합니다.
+  // AI가 항목명을 'Pb'로 추정했지만 사내 규격에는 없는 이름입니다. 신뢰도가 낮아 확인 필요로 내려 준 시연용 항목입니다.
   items.push({
     item_id: 'hm',
     raw_name: 'Heavy metals (as Pb)',
