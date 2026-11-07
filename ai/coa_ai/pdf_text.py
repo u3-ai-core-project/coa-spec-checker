@@ -20,6 +20,7 @@ _SUB = str.maketrans("0123456789+-−", "₀₁₂₃₄₅₆₇₈₉₊₋₋
 _SUP = str.maketrans("0123456789+-−", "⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻⁻")
 _SCRIPT_CHARS = set("0123456789+-−")
 
+IMAGE_BODY_RATIO = 0.3  # 한 쪽에서 이미지 하나가 쪽 넓이의 이 비율 이상이면 본문이 스캔 이미지인 쪽으로 본다
 BASE_TOL = 0.25    # 같은 줄로 볼 기준선 차이 (글자 크기 배수)
 SMALL_RATIO = 0.8  # 줄 대표 크기의 이 비율 이하이면 첨자 후보
 SCRIPT_SHIFT = 0.06  # 첨자로 볼 최소 기준선 차이 (글자 크기 배수)
@@ -62,6 +63,30 @@ def read_pages(path: str | Path) -> list[Page]:
             Page(number=i, width=page.rect.width, height=page.rect.height, lines=build_lines(_read_chars(page), i))
             for i, page in enumerate(doc, start=1)
         ]
+
+
+def image_body_pages(path: str | Path) -> set[int]:
+    """글자 층은 있지만 본문 표가 큰 이미지(스캔)인 쪽 번호(1부터).
+
+    Alfa·Thermo 의 일부 CoA 는 머리말·꼬리말만 글자이고 시험 항목 표는 이미지다. 글자가 있다고 OCR 을 건너뛰면
+    표를 못 읽고 'CoA 가 아님'으로 실패한다. 실물 61쪽에서 이 비율은 본문 이미지 쪽 0.39~0.45, 글자 PDF 쪽 0.23 이하였다.
+    """
+    try:
+        doc = pymupdf.open(path)
+    except Exception:
+        return set()
+    found = set()
+    with doc:
+        for i, page in enumerate(doc, start=1):
+            area = page.rect.width * page.rect.height
+            if not area:
+                continue
+            for info in page.get_image_info():
+                box = pymupdf.Rect(info["bbox"]) & page.rect
+                if box.width * box.height / area >= IMAGE_BODY_RATIO:
+                    found.add(i)
+                    break
+    return found
 
 
 def _read_chars(page: pymupdf.Page) -> list[_Char]:

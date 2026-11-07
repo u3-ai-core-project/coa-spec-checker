@@ -426,6 +426,48 @@ def _list_rows(page: Page) -> list[RawRow]:
     return out
 
 
+_COLON_LINE_RE = re.compile(r"^(?P<label>[^:：]{2,40})[:：]\s*(?P<rest>\S.*)$")
+_COLON_VALUE_RE = re.compile(
+    r"^(?:(?:[<>≤≥＜＞]=?|=<|=>)\s*)?[-+]?\d+(?:[.,]\d+)?\s*(?:%|ppm|ppb|mg/kg)?(?:\s*\([^()]*\))?$", re.IGNORECASE)
+_COLON_NOT_ITEM_RE = re.compile(r"\b(?:lot|batch|product|catalog|cat|order|cas|no|number)\b|iso\s*\d", re.IGNORECASE)
+_COLON_TEXT_LABEL_RE = re.compile(r"^(?:appearance|外观|외관|성상)$", re.IGNORECASE)
+_COLON_IMPURITY_RE = re.compile(r"^impurity(?:\s+content)?$", re.IGNORECASE)
+COLON_MIN_LINES = 3  # '항목: 값' 줄이 이만큼 있는 쪽만 목록으로 본다
+
+
+def _colon_rows(page: Page) -> list[RawRow]:
+    """'항목: 값' 으로 한 줄씩 적은 목록 (Alfa·Thermo 의 짧은 CoA).
+
+    'Assay: 57.0%', 'Chloride content: 34.2ppm', 'Insolubles: <0.1% (in Water)' 는 앞이 항목명, 뒤가 결과다.
+    'Impurity content: 0.0001% Iron' 은 항목명이 값 뒤에 온다 ('(Fe)'·'(K+Na)' 의 괄호는 뗀다).
+    값이 숫자로 시작하지 않는 줄(Product No.·Lot No.·Product)은 외관만 빼고 항목으로 보지 않는다.
+    """
+    rows: list[RawRow] = []
+    for ln in page.lines:
+        m = _COLON_LINE_RE.match(ln.text.strip())
+        if not m:
+            continue
+        label, rest = re.sub(r"\s+", " ", m["label"]).strip(), m["rest"].strip()
+        if _COLON_TEXT_LABEL_RE.match(label):
+            name, value = label, rest
+        elif _COLON_NOT_ITEM_RE.search(label):
+            continue
+        elif _COLON_IMPURITY_RE.match(label):
+            vm = re.match(r"^(?P<value>(?:(?:[<>≤≥＜＞]=?|=<|=>)\s*)?[-+]?\d+(?:[.,]\d+)?\s*(?:%|ppm|ppb|mg/kg)?)\s*(?P<name>.+)$", rest)
+            if not vm:
+                continue
+            name, value = vm["name"].strip().strip("()（）").strip(), vm["value"].strip()
+            if not name:
+                continue
+        elif _COLON_VALUE_RE.match(rest):
+            name, value = label, rest
+        else:
+            continue
+        rows.append(RawRow(page=page.number, name=name, value=value, spec=None, unit=None,
+                           value_box=ln.box, row_box=ln.box, confidence=CONF_LIST))
+    return rows if len(rows) >= COLON_MIN_LINES else []
+
+
 def _grid_symbol(text: str) -> str | None:
     """격자 칸의 원소 기호. OCR 이 소문자 l 을 대문자 I 로 읽은 것('TI', 'AI')은 고친다."""
     if _SYMBOL_RE.match(text) and text in ELEMENTS:
@@ -488,7 +530,7 @@ def parse_tables(pages: list[Page]) -> list[RawRow]:
             idx, _ = _region(lines, 0)
             rows = [r for r in (_to_raw(row, page.number) for row in _rows(lines, idx, *carry)) if r]
         if not rows:
-            rows = _list_rows(page)
+            rows = _list_rows(page) or _colon_rows(page)
             carry = None if not rows else carry
         out.extend(rows)
     return out

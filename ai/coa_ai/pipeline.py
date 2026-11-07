@@ -17,7 +17,7 @@ from coa_ai.meaning import classify as classify_value
 from coa_ai.models import Box, Extraction, Item, Page, RawRow
 from coa_ai.normalize import AI_CAP, Mapping, Normalizer
 from coa_ai.ocr import ImageOpenError, read_image, read_pdf_page
-from coa_ai.pdf_text import PdfOpenError, read_pages
+from coa_ai.pdf_text import PdfOpenError, image_body_pages, read_pages
 from coa_ai.selfcheck import check_items
 from coa_ai.table import parse_tables
 
@@ -77,7 +77,7 @@ def extract(
 
 
 def _read(path: Path) -> list[Page]:
-    """파일 → 쪽 목록. 이미지는 OCR, PDF 는 글자 층을 읽고 글자 없는 쪽만 OCR 한다."""
+    """파일 → 쪽 목록. 이미지는 OCR, PDF 는 글자 층을 읽고 글자 없는 쪽과 본문이 스캔 이미지인 쪽을 OCR 한다."""
     if path.suffix.lower() in IMAGE_SUFFIXES:
         try:
             return [read_image(path)]
@@ -87,7 +87,14 @@ def _read(path: Path) -> list[Page]:
         pages = read_pages(path)
     except PdfOpenError as e:
         raise ExtractionFailed(MSG_BROKEN) from e
-    return [p if p.lines else read_pdf_page(path, p.number) for p in pages]
+    scanned = image_body_pages(path)
+    return [p if p.lines and p.number not in scanned else _ocr_page(path, p) for p in pages]
+
+
+def _ocr_page(path: Path, text_page: Page) -> Page:
+    """OCR 로 다시 읽는다. 글자 층이 있던 쪽은 OCR 이 빈손이면 글자 층 결과를 그대로 쓴다."""
+    page = read_pdf_page(path, text_page.number)
+    return page if page.lines or not text_page.lines else text_page
 
 
 def _drop_duplicate_suggestions(rows: list[RawRow], mappings: list[Mapping]) -> list[Mapping]:
