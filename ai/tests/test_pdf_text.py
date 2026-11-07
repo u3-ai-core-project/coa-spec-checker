@@ -2,7 +2,7 @@
 import pymupdf
 import pytest
 
-from coa_ai.pdf_text import PdfOpenError, phrases, read_pages
+from coa_ai.pdf_text import PdfOpenError, image_body_pages, phrases, read_pages
 
 
 def _texts(path):
@@ -49,3 +49,29 @@ def test_broken_file_raises(tmp_path):
     path.write_bytes(b"%PDF-1.7\nnot really a pdf")
     with pytest.raises(PdfOpenError):
         read_pages(path)
+
+
+def _pdf_with_image(tmp_path, ratio):
+    """글자 한 줄 + 쪽 너비 전체, 높이 ratio 비율의 이미지가 있는 1쪽 PDF."""
+    doc = pymupdf.open()
+    page = doc.new_page(width=600, height=800)
+    page.insert_text((50, 40), "Certificate of analysis", fontsize=12)
+    pix = pymupdf.Pixmap(pymupdf.csGRAY, pymupdf.IRect(0, 0, 60, 80), 1)
+    pix.clear_with(200)
+    page.insert_image(pymupdf.Rect(0, 100, 600, 100 + 800 * ratio), pixmap=pix, keep_proportion=False)
+    path = tmp_path / "img.pdf"
+    doc.save(path)
+    return path
+
+
+def test_image_body_pages_flags_large_image(tmp_path):
+    assert image_body_pages(_pdf_with_image(tmp_path, 0.5)) == {1}
+
+
+def test_image_body_pages_ignores_small_image(tmp_path):
+    # 로고 정도의 이미지(쪽의 10%)는 본문이 스캔인 쪽으로 보지 않는다
+    assert image_body_pages(_pdf_with_image(tmp_path, 0.1)) == set()
+
+
+def test_text_pdf_has_no_image_body(fixture_pdf):
+    assert image_body_pages(fixture_pdf("COA_A_0007.pdf")) == set()

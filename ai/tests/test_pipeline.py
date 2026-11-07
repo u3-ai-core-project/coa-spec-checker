@@ -266,3 +266,16 @@ def test_self_check_flags_suspicious_item(fixture_pdf):
     pb, na = extract(fixture_pdf("COA_A_0007.pdf"), material_code="LI2CO3", table_parser=parser).items
     assert pb.confidence == 0.75 and pb.check_reasons == ["값에 스캔 잡음으로 보이는 글자가 있음('0|')"]
     assert na.confidence == 0.95 and na.check_reasons == []
+
+
+def test_page_with_text_layer_but_scanned_body_is_ocred(fixture_pdf, monkeypatch):
+    """글자 층이 있어도 본문이 스캔 이미지인 쪽은 OCR 결과를 쓴다."""
+    from coa_ai import pipeline
+    from coa_ai.models import Page
+
+    calls = []
+    monkeypatch.setattr(pipeline, "image_body_pages", lambda path: {1})
+    monkeypatch.setattr(pipeline, "read_pdf_page", lambda path, n: calls.append(n) or Page(number=n, width=1, height=1, lines=[]))
+    pages = pipeline._read(fixture_pdf("COA_A_0007.pdf"))
+    assert calls == [1]
+    assert pages[0].lines  # OCR 이 빈손이면 글자 층 결과를 유지한다

@@ -307,3 +307,40 @@ def test_grid_skips_pair_without_value(make_pdf):
 def test_single_symbol_value_line_is_not_a_grid(make_pdf):
     path = make_pdf(["Certificate of Analysis", [(126, "Ca"), (160, "< 20 ppm")], "Inductively Coupled Plasma"])
     assert parse_tables(read_pages(path)) == []
+
+
+def _page_from_lines(tmp_path, lines):
+    import pymupdf
+    from coa_ai.pdf_text import read_pages
+
+    doc = pymupdf.open()
+    page = doc.new_page()
+    for i, text in enumerate(lines):
+        page.insert_text((50, 60 + 18 * i), text, fontsize=10)
+    path = tmp_path / "colon.pdf"
+    doc.save(path)
+    return read_pages(path)
+
+
+def test_colon_list_rows(tmp_path):
+    """Alfa·Thermo 짧은 CoA: '항목: 값' 목록, 'Impurity content: 값 원소' 는 항목명이 값 뒤에 온다."""
+    from coa_ai.table import parse_tables
+
+    pages = _page_from_lines(tmp_path, [
+        "Product No.: H36379", "Lot No.: 10220277", "Appearance: White crystalline powder",
+        "Products are processed under ISO 9001:2015 quality management systems and samples",
+        "Assay: 57.5%", "Impurity content: 0.5ppm (Fe)", "Impurity content: 11.5ppm(K+Na)",
+        "Chloride content: 34.2ppm", "Carbonate content: 2560ppm (as CO2)", "Insolubles: <0.1% (in Water)",
+    ])
+    rows = {r.name: r.value for r in parse_tables(pages)}
+    assert rows == {
+        "Appearance": "White crystalline powder", "Assay": "57.5%", "Fe": "0.5ppm", "K+Na": "11.5ppm",
+        "Chloride content": "34.2ppm", "Carbonate content": "2560ppm (as CO2)", "Insolubles": "<0.1% (in Water)",
+    }
+
+
+def test_colon_list_needs_three_lines(tmp_path):
+    from coa_ai.table import parse_tables
+
+    pages = _page_from_lines(tmp_path, ["Product No.: H36379", "Lot No.: A0432451", "Assay: 57.5%"])
+    assert parse_tables(pages) == []
