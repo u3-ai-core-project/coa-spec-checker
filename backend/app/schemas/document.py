@@ -13,6 +13,11 @@ class DocumentUploadResponse(BaseModel):
     status: DocumentStatus
 
 
+class DocumentDeleted(BaseModel):
+    """DELETE /documents/{id}."""
+    document_id: str
+
+
 class DocumentListItem(BaseModel):
     document_id: str
     file_name: str
