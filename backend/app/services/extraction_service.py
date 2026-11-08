@@ -31,7 +31,11 @@ def save_extraction(db: Session, document: Document, extraction: ExtractionInput
     receipt = batch_service.receipt_of(db, document)
     issues = check_document(extraction, received_lot_no=document.received_lot_no,
                             spec_version=spec_set.version if spec_set else None,
-                            received_date=receipt.received_date if receipt else None) + batch_issues
+                            received_date=receipt.received_date if receipt else None,
+                            material_code=document.material_code)
+    if any(i.code == "PRODUCT_MISMATCH" for i in batch_issues):   # 입고 원자재 불일치가 이미 있으면 같은 코드를 두 번 내지 않는다
+        issues = [i for i in issues if i.code != "PRODUCT_MISMATCH"]
+    issues += batch_issues
     result = judge_document(extraction, document_id=document.id, specs=specs, issues=issues)
 
     # 업로드 때 입력한 협력사명이 있으면 그것을 우선한다

@@ -77,9 +77,10 @@ class ResolutionType(StrEnum):
 class DocumentIssueCode(StrEnum):
     """문서 정합성 오류 (명세 v1.4안 2.1 document_issues). 1개 이상이면 보류 권고.
 
-    탐지 규칙: app/services/judgement/document_checks.py (LOT_MISMATCH, DATE_CONFLICT, SPEC_VERSION_MISMATCH),
+    탐지 규칙: app/services/judgement/document_checks.py (LOT_MISMATCH, DATE_CONFLICT, SPEC_VERSION_MISMATCH,
+    PRODUCT_MISMATCH = CoA 제품명이 접수 원자재와 다른 원자재를 가리킴),
     app/services/batch_service.link_by_lot (일괄 접수: LOT_MISMATCH, PRODUCT_MISMATCH = 입고 원자재 다름).
-    CoA 제품명(product_name) 비교와 SUPPLIER_CONFLICT 는 아직 탐지하지 않는다.
+    SUPPLIER_CONFLICT 는 아직 탐지하지 않는다.
     """
     LOT_MISMATCH = "LOT_MISMATCH"
     PRODUCT_MISMATCH = "PRODUCT_MISMATCH"

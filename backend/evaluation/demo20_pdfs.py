@@ -10,6 +10,8 @@
 - 20번: 같은 협력사의 로트 3개 (demo20_DEMO-L20-1.pdf ~ -3.pdf). 모두 올리면 같은 값 반복 경고가 나온다
 - 17번: 글자 층이 없는 흐린 스캔 PDF (OCR로 읽으므로 확인 필요, 보류)
 - 12번은 업로드할 때 입고 로트를 DEMO-L99 로, 18번은 규격 세트를 LI2CO3-2013 으로 지정해야 한다 (수용 테스트와 같음)
+- 21·22번은 팀이 추가한 사례다. 21번은 규격 세트를 LI2CO3-SUPPLIER-V1 으로 올리면 적합, 지정하지 않으면(기본 D1) 부적합이다.
+  22번은 수산화리튬 CoA 라서 업로드할 때 원자재를 LIOH 로 고르고 규격 세트는 지정하지 않는다 (기본 LIOH-BG-V1 적용)
 
 PDF는 단순한 표 형식 하나이고 실제 협력사 양식이 아니다. 항목명은 팀 항목 사전에 있는 영문 표기를 쓴다 (자성이물은 'Magnetic substance').
 필요한 패키지: reportlab, pillow, pypdfium2 (requirements.txt)
@@ -32,15 +34,18 @@ SUPPLIERS = [
     "Quorra Materials Co.", "Brenmoor Lithium Ltd", "Valtera Chemical S.A.", "Oskar Lithium Oy",
     "Pinegate Minerals LLC", "Zephra Lithium Co.", "Maribel Lithium S.A.", "Dunmore Chemicals Ltd",
     "Ikaros Lithium Corp.", "Lumen Battery Materials", "Sorrel Lithium Pty Ltd", "Yarrow Chemicals AG",
+    "Bexley Lithium Ltd", "Corrin Hydroxide Co.",
 ]
 LABEL = {
     "순도": "Li2CO3 Assay", "Na": "Sodium (Na)", "K": "Potassium (K)", "Fe": "Iron (Fe)", "Ca": "Calcium (Ca)",
     "Mg": "Magnesium (Mg)", "Pb": "Lead (Pb)", "염화물": "Chloride (Cl)", "황산염": "Sulfate (SO4)",
     "자성이물": "Magnetic substance", "Na+K": "Na+K",
+    "외관": "Appearance", "수분": "Moisture", "입도 D50": "D50", "LiOH 함량": "LiOH Content", "탄산": "Carbonate",
 }
+PRODUCT = {"LI2CO3": "Lithium Carbonate Battery Grade", "LIOH": "Lithium Hydroxide Monohydrate Battery Grade"}
 
 
-def render(coa: dict) -> bytes:
+def render(coa: dict, product: str = PRODUCT["LI2CO3"]) -> bytes:
     buf = io.BytesIO()
     c = canvas.Canvas(buf, pagesize=A4)
     _, height = A4
@@ -50,7 +55,7 @@ def render(coa: dict) -> bytes:
     y = height - 90
     for key, value in [("Supplier", coa["supplier"]), ("Lot No.", coa["lot_no"]), ("Test Date", coa["test_date"]),
                        ("Issue Date", coa["issue_date"]), ("Standard", coa["applied_standard"]),
-                       ("Product", "Lithium Carbonate Battery Grade")]:
+                       ("Product", product)]:
         c.drawString(50, y, f"{key}: {value}")
         y -= 15
     y -= 15
@@ -95,9 +100,9 @@ def make_all(out: Path) -> list[Path]:
                 path.write_bytes(render(coa))
                 written.append(path)
             continue
-        coa = build_coa(case.get("patch"), lot_no=f"DEMO-L{number:02d}")
+        coa = build_coa(case.get("patch"), lot_no=f"DEMO-L{number:02d}", base=case.get("base", "base"))
         coa["supplier"] = SUPPLIERS[number - 1]
-        pdf = render(coa)
+        pdf = render(coa, PRODUCT[case.get("material_code", "LI2CO3")])
         path = out / f"demo{case['id']}.pdf"
         path.write_bytes(blurry_scan(pdf) if number == BLURRY_CASE else pdf)
         written.append(path)
