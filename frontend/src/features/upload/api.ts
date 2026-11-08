@@ -1,5 +1,5 @@
 import { apiFetch } from '../../api/client'
-import type { DocumentDetail, UploadResult } from './types'
+import type { DocumentDetail, DocumentStatus, UploadResult } from './types'
 
 export interface UploadParams {
     file: File
@@ -21,4 +21,12 @@ export function uploadDocument({ file, materialCode, supplier, receivedLotNo }: 
 // 처리 상태 확인용 
 export function fetchDocument(documentId: string) {
     return apiFetch<DocumentDetail>(`/documents/${encodeURIComponent(documentId)}`)
+}
+
+// 실패한 문서 다시 처리. 성공하면 서버 상태가 queued로 돌아감
+export function retryDocument(documentId: string) {
+    return apiFetch<{ document_id: string; file_name: string; status: DocumentStatus }>(
+        `/documents/${encodeURIComponent(documentId)}/retry`,
+        { method: 'POST' },
+    )
 }

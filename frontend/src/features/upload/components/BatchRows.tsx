@@ -1,4 +1,4 @@
-import { Fragment, type ReactNode } from 'react'
+import { Fragment, useState, type ReactNode } from 'react'
 import { StatusBadge } from '../../review/shared/components/badges'
 import type { BatchAcceptedDocument, BatchQueueItem } from '../batchTypes'
 import type { SentBatch } from '../hooks/useBatchUpload'
@@ -30,10 +30,38 @@ function ErrorText({ text }: { text: string }) {
     )
 }
 
+// 실패한 문서 줄: 오류 메시지와 재처리 버튼. 요청 중에는 눌리지 않게 하고, 실패하면 서버 메시지를 보여줌
+function FailedStatus({ text, onRetry }: { text: string; onRetry: () => Promise<string | null> }) {
+    const [busy, setBusy] = useState(false)
+    const [err, setErr] = useState<string | null>(null)
+
+    async function handleClick() {
+        setBusy(true)
+        setErr(null)
+        setErr(await onRetry())
+        setBusy(false)
+    }
+
+    return (
+        <span className="flex items-center gap-3 text-xs text-[#c0392b]">
+            <Mark color="bg-[#ff7875]">!</Mark>
+            <span className="min-w-0 flex-1">{err ?? text}</span>
+            <button
+                type="button"
+                disabled={busy}
+                onClick={handleClick}
+                className="shrink-0 whitespace-nowrap rounded-md border border-brand bg-white px-2.5 py-1 text-xs font-bold text-brand disabled:opacity-50"
+            >
+                {busy ? '요청 중…' : '재처리'}
+            </button>
+        </span>
+    )
+}
+
 // 서버가 준 상태 + 문서 정합성 오류로 상태 칸을 정한다 (시안 1-3: 처리 중 / 검수 대상 / 보류 사유 / 격리)
-function DocStatus({ doc, item }: { doc: BatchAcceptedDocument; item: BatchQueueItem | null }) {
+function DocStatus({ doc, item, onRetry }: { doc: BatchAcceptedDocument; item: BatchQueueItem | null; onRetry: () => Promise<string | null> }) {
     const status = item?.status ?? doc.status
-    if (status === 'failed') return <ErrorText text={item?.error_message ?? '문서 처리 오류'} />
+    if (status === 'failed') return <FailedStatus text={item?.error_message ?? '문서 처리 오류'} onRetry={onRetry} />
     if (status === 'queued' || status === 'processing') {
         return (
             <span className="flex items-center gap-2 text-xs text-ink-sub">
@@ -61,7 +89,7 @@ function DocStatus({ doc, item }: { doc: BatchAcceptedDocument; item: BatchQueue
     return <StatusBadge status={status} />
 }
 
-export default function BatchRows({ batches, owner }: { batches: SentBatch[]; owner: string }) {
+export default function BatchRows({ batches, owner, onRetry }: { batches: SentBatch[]; owner: string; onRetry: (batchId: string, documentId: string) => Promise<string | null> }) {
     return (
         <>
             {batches.map((b) => {
@@ -81,7 +109,7 @@ export default function BatchRows({ batches, owner }: { batches: SentBatch[]; ow
                             const item = items.get(d.document_id) ?? null
                             return (
                                 <Row key={d.document_id} name={d.file_name} meta={`${extOf(d.file_name)} · CoA`} owner={owner} danger={(item?.status ?? d.status) === 'failed'}>
-                                    <DocStatus doc={d} item={item} />
+                                    <DocStatus doc={d} item={item} onRetry={() => onRetry(b.batchId, d.document_id)} />
                                 </Row>
                             )
                         })}

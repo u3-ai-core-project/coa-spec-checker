@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ApiError } from '../../../api/client'
-import { fetchDocument, uploadDocument } from '../api'
+import { fetchDocument, uploadDocument, retryDocument } from '../api'
 import { isSettled } from '../lib/documentStatus'
 import { ALLOWED_EXTENSIONS, MAX_FILE_BYTES, MAX_FILES } from '../lib/upload'
 import type { DocumentStatus, FinalDecision } from '../types'
@@ -127,6 +127,23 @@ export function useUploadQueue() {
         setItems((prev) => prev.filter((i) => i.localId !== localId))
     }, [])
 
+    // 실패한 문서 다시 처리. 서버가 queued로 돌리면, 아래 상태 확인 반복이 다시 따라감
+    const retry = useCallback(
+        async (localId: string) => {
+            const item = itemsRef.current.find((i) => i.localId === localId)
+            if (!item?.documentId) return
+            try {
+                const res = await retryDocument(item.documentId)
+                patch(localId, { status: res.status, message: null })
+            } catch (e) {
+                patch(localId, {
+                    message: e instanceof ApiError ? e.message : '다시 처리하지 못했습니다. 잠시 후 다시 시도해 주세요.',
+                })
+            }
+        },
+        [patch],
+    )
+
     // 처리 중인 문서의 상태를 주기적으로 확인
     useEffect(() => {
         const timer = setInterval(async () => {
@@ -147,5 +164,5 @@ export function useUploadQueue() {
         return () => clearInterval(timer)
     }, [patch])
 
-    return { items, addFiles, saveInfoAndStart, startAll, remove }
+    return { items, addFiles, saveInfoAndStart, startAll, remove, retry }
 }

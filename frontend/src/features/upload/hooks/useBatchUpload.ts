@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ApiError } from '../../../api/client'
 import { createBatch, fetchBatch } from '../batchApi'
+import { retryDocument } from '../api'
 import type { BatchAcceptedDocument, BatchDetail, BatchRejectedFile } from '../batchTypes'
 
 export interface SentBatch {
@@ -47,6 +48,18 @@ export function useBatchUpload() {
         }
     }, [])
 
+    // 실패한 문서 다시 처리. 성공하면 null, 실패하면 화면에 보일 문구를 돌려줌
+    const retry = useCallback(async (batchId: string, documentId: string) => {
+        try {
+            await retryDocument(documentId)
+            const detail = await fetchBatch(batchId)
+            setBatches((prev) => prev.map((b) => (b.batchId === batchId ? { ...b, detail } : b)))
+            return null
+        } catch (e) {
+            return e instanceof ApiError ? e.message : '다시 처리하지 못했습니다. 잠시 후 다시 시도해 주세요.'
+        }
+    }, [])
+
     // 처리 중인 문서가 남은 배치만 다시 불러온다
     useEffect(() => {
         const timer = setInterval(async () => {
@@ -67,5 +80,5 @@ export function useBatchUpload() {
         return () => clearInterval(timer)
     }, [])
 
-    return { batches, sending, submit }
+    return { batches, sending, submit, retry }
 }
