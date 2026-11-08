@@ -447,6 +447,11 @@ export interface MappingRecord {
   created_at: string;
 }
 
+/** DELETE /documents/{id} 응답 */
+export interface DocumentDeleted {
+  document_id: string;
+}
+
 /** DELETE /mappings/{id} 응답 */
 export interface MappingDeleted {
   id: number;

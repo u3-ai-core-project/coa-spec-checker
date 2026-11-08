@@ -14,6 +14,7 @@ import type {
   CancelApprovalResult,
   ConfirmItemResult,
   ConversionsResponse,
+  DocumentDeleted,
   DocumentDetail,
   DocumentListItem,
   DocumentListQuery,
@@ -250,6 +251,23 @@ export class MockApi implements Api {
       approved_at: detail.approved_at,
       error_message: detail.error_message,
     };
+  }
+
+  /** 서버(DELETE /documents/{id})와 같은 순서로 검사합니다: 없음 404, 권한 403, 처분 완료 409, 추출 중 409. */
+  async deleteDocument(documentId: string): Promise<DocumentDeleted> {
+    const user = this.requireUser();
+    const doc = this.findDoc(documentId);
+    if (user.role !== 'ADMIN' && doc.uploaderId !== user.id) {
+      throw new ApiError(403, 'FORBIDDEN', '본인이 올린 문서만 삭제할 수 있습니다');
+    }
+    if (doc.detail.status === 'approved') {
+      throw new ApiError(409, 'ALREADY_APPROVED', '처분 완료 문서는 삭제할 수 없습니다. 처분 취소 후 삭제하세요');
+    }
+    if (doc.detail.status === 'processing') {
+      throw new ApiError(409, 'NOT_READY', '추출 중인 문서는 삭제할 수 없습니다');
+    }
+    this.state.docs = this.state.docs.filter((entry) => entry !== doc);
+    return delay({ document_id: documentId });
   }
 
   private findDoc(documentId: string): MockDoc {
