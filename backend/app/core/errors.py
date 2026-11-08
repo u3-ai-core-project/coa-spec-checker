@@ -37,6 +37,7 @@ class ErrorCode(Enum):
     ALREADY_APPROVED = (409, "이미 처분된 문서입니다")
     NOT_APPROVED = (409, "처분되지 않은 문서입니다")
     NOT_READY = (409, "추출이 끝나지 않은 문서입니다")
+    NOT_FAILED = (409, "추출에 실패한 문서만 다시 처리할 수 있습니다")  # 명세 외 추가 (POST /documents/{id}/retry)
     PENDING_LOW_CONFIDENCE_ITEMS = (422, "신뢰도 낮음 항목을 먼저 확인해야 합니다")
     INVALID_DECISION = (422, "부적합 항목이 있는 로트는 승인할 수 없습니다")
     EXTRACTION_FAILED = (500, "AI 추출 처리에 실패했습니다")
