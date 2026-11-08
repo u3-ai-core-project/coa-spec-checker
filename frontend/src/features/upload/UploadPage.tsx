@@ -21,7 +21,7 @@ function fileMeta(file: File) {
     return `${ext} · ${size}`
 }
 
-function StatusCell({ item, onOpenDialog, onRetry }: { item: QueueItem; onOpenDialog: () => void; onRetry: () => void }) {
+function StatusCell({ item, onOpenDialog, onRetry, onReprocess }: { item: QueueItem; onOpenDialog: () => void; onRetry: () => void; onReprocess: () => void }) {
     if (item.phase === 'staged' && item.info === null) {
         return (
             <div className="flex items-center gap-2 text-xs text-[#9a6700]">
@@ -61,9 +61,18 @@ function StatusCell({ item, onOpenDialog, onRetry }: { item: QueueItem; onOpenDi
     }
     if (item.phase === 'error' || item.status === 'failed') {
         return (
-            <span className="flex items-center gap-2 text-xs text-[#c0392b]">
+            <span className="flex items-center gap-3 text-xs text-[#c0392b]">
                 <Mark color="bg-[#ff7875]">!</Mark>
-                {item.message ?? STATUS_LABEL.failed}
+                <span className="min-w-0 flex-1">{item.message ?? STATUS_LABEL.failed}</span>
+                {item.phase !== 'error' && item.documentId && (
+                    <button
+                        type="button"
+                        onClick={onReprocess}
+                        className="shrink-0 whitespace-nowrap rounded-md border border-brand bg-white px-2.5 py-1 text-xs font-bold text-brand"
+                    >
+                        재처리
+                    </button>
+                )}
             </span>
         )
     }
@@ -235,7 +244,7 @@ export default function UploadPage() {
                                     <p className="text-[11px] text-[#9aa0a8]">{fileMeta(item.file)}</p>
                                 </div>
                                 <span className="text-[13px] text-ink-sub">{user?.name}</span>
-                                <StatusCell item={item} onOpenDialog={() => setDialogId(item.localId)} onRetry={() => { if (item.info) void queue.saveInfoAndStart(item.localId, item.info, materialCode) }} />
+                                <StatusCell item={item} onReprocess={() => void queue.retry(item.localId)} onOpenDialog={() => setDialogId(item.localId)} onRetry={() => { if (item.info) void queue.saveInfoAndStart(item.localId, item.info, materialCode) }} />
                                 <div className="flex justify-end">
                                     <button
                                         type="button"
@@ -248,7 +257,7 @@ export default function UploadPage() {
                                 </div>
                             </div>
                         ))}
-                        <BatchRows batches={batch.batches} owner={user?.name ?? ''} />
+                        <BatchRows batches={batch.batches} owner={user?.name ?? ''} onRetry={batch.retry} />
                     </>
                 )}
             </div>
