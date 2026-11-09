@@ -6,7 +6,7 @@ export const CSV_EXTENSION = 'csv'
 // 지금은 탄산리튬만 진행
 export const MATERIALS = [
     { code: 'LI2CO3', name: '탄산리튬', formula: 'Li₂CO₃', enabled: true },
-    { code: 'LIOH', name: '수산화리튬', formula: 'LiOH', enabled: false },
+    { code: 'LIOH', name: '수산화리튬', formula: 'LiOH', enabled: true },
 ]
 
 // 임시 목록. 협력사 목록을 주는 API가 아직 없음
