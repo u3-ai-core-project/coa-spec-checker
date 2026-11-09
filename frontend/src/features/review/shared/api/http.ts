@@ -105,6 +105,20 @@ function jsonBody(value: unknown): RequestInit {
 }
 
 /**
+ * 문서 재판정 API (규격 세트를 바꿔 다시 판정). 백엔드 담당이 방식을 정하는 중이라 아래 가정은 임시입니다.
+ *   가정: POST /documents/{id}/rejudge, body { spec_set_code }, 응답은 문서 상세(DocumentDetail)와 같은 모양
+ *   (처분 완료 문서는 409, 없는 규격 세트는 400 UNKNOWN_SPEC_SET)
+ * 주소, 요청 본문, 응답 해석은 이 함수 한 곳에서만 정합니다. API가 확정되면 이 함수만 고치면 되고,
+ * 화면은 Api.rejudgeDocument(documentId, specSetCode) → DocumentDetail만 압니다.
+ * 항목 판정과 로트 권고는 이 응답이 아니라 이어서 부르는 GET /documents/{id}/extraction으로 받습니다.
+ */
+async function requestRejudge(documentId: string, specSetCode: string): Promise<DocumentDetail> {
+  const path = `/documents/${encodeURIComponent(documentId)}/rejudge`;
+  const body = { spec_set_code: specSetCode };
+  return request<DocumentDetail>(path, jsonBody(body));
+}
+
+/**
  * 실제 백엔드 API 구현입니다.
  * 값 수정 사유, 규격 변경 이력, 매핑 사전, 환산표는 백엔드 PR #12에서 확정된 형식입니다.
  */
@@ -128,6 +142,10 @@ export class HttpApi implements Api {
 
   deleteDocument(documentId: string): Promise<DocumentDeleted> {
     return request<DocumentDeleted>(`/documents/${encodeURIComponent(documentId)}`, { method: 'DELETE' });
+  }
+
+  rejudgeDocument(documentId: string, specSetCode: string): Promise<DocumentDetail> {
+    return requestRejudge(documentId, specSetCode);
   }
 
   async getDocumentFile(documentId: string): Promise<Blob> {

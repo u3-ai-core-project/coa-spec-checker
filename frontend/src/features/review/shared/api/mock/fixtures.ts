@@ -145,7 +145,10 @@ export function createSpecSets(): MockState['specSets'] {
   ];
 }
 
-/** 개발용 시나리오 'sets'. 탄산리튬에 세트가 둘 이상일 때의 화면을 보려고 D1 항목을 복사한 D3 세트를 더합니다(한계값은 D1과 같은 목업 값). */
+/**
+ * 개발용 시나리오 'sets'. 탄산리튬에 세트가 둘 이상일 때의 화면을 보려고 D1 항목을 복사한 D3 세트를 더합니다.
+ * 한계값은 D1과 같고, 염화물(Cl) 상한만 8 ppm으로 낮춰 검수 화면에서 적용 규격을 바꿔 다시 판정하면 결과가 달라지게 했습니다.
+ */
 export function createExtraLi2co3Set(specs: SpecItem[]): { set: MockState['specSets'][number]; items: SpecItem[] } {
   const code = 'LI2CO3-D3-2023';
   const base = specs.filter((entry) => entry.spec_set_code === LI2CO3_SET_CODE);
@@ -158,10 +161,17 @@ export function createExtraLi2co3Set(specs: SpecItem[]): { set: MockState['specS
       grade: 'D3',
       version: VERSION,
       source: 'YS/T 582-2023 D3 (목업 시험용 복사본)',
-      description: '목업 시험용. D1 항목을 복사했고 한계값은 D1과 같습니다.',
+      description: '목업 시험용. D1 항목을 복사했고 염화물(Cl) 상한만 8 ppm으로 낮췄습니다.',
       is_default: false,
     },
-    items: base.map((entry, index) => ({ ...entry, id: firstId + index, spec_set_code: code, grade: 'D3', source: 'YS/T 582-2023 D3 (목업 시험용 복사본)' })),
+    items: base.map((entry, index) => ({
+      ...entry,
+      id: firstId + index,
+      spec_set_code: code,
+      grade: 'D3',
+      source: 'YS/T 582-2023 D3 (목업 시험용 복사본)',
+      usl: entry.item_name === 'Cl' ? 8 : entry.usl,
+    })),
   };
 }
 

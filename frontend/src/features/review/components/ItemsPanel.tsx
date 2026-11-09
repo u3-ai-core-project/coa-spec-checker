@@ -27,6 +27,8 @@ interface ItemsPanelProps {
   onToggleFollowUp?(judgement: ExtractionItem['judgement']): void;
   /** 처분이 끝난 문서의 처분 결과 요약 */
   approvalSummary?: ReactNode;
+  /** 문서 정보의 "적용 규격" 줄에 들어가는 규격 세트 선택 */
+  specSetControl?: ReactNode;
   /** 하단 액션 바 */
   actionBar: ReactNode;
 }
@@ -89,7 +91,17 @@ function InfoLine({ label, children, extra }: { label: string; children: ReactNo
   );
 }
 
-function DocInfo({ data, collapsed, onToggle }: { data: ReviewData; collapsed: boolean; onToggle(): void }) {
+function DocInfo({
+  data,
+  collapsed,
+  onToggle,
+  specSetControl,
+}: {
+  data: ReviewData;
+  collapsed: boolean;
+  onToggle(): void;
+  specSetControl?: ReactNode;
+}) {
   const { doc } = data;
   const grade = `협력사 ${doc.applied_standard ?? '-'} · 사내 ${doc.spec_grade ?? '-'}`;
   // 협력사 적용 규격과 사내 등급이 다르면 안내합니다(명세 4.6).
@@ -149,6 +161,12 @@ function DocInfo({ data, collapsed, onToggle }: { data: ReviewData; collapsed: b
         >
           {grade}
         </InfoLine>
+        {specSetControl && (
+          <div className="doc-info-item doc-info-spec-set grid min-h-7 grid-cols-[104px_1fr] items-center gap-x-3 text-[13px]">
+            <span className="text-[12px] text-[#8A9099]">적용 규격</span>
+            <div className="min-w-0">{specSetControl}</div>
+          </div>
+        )}
       </div>
     </>
   );
@@ -166,6 +184,7 @@ export function ItemsPanel({
   onToggleFollowUp,
   getRowExtras,
   approvalSummary,
+  specSetControl,
   actionBar,
 }: ItemsPanelProps) {
   const { doc, extraction, reviewLogs, specs, anomalies } = data;
@@ -233,7 +252,7 @@ export function ItemsPanel({
             </div>
           );
         })}
-        <DocInfo data={data} collapsed={docInfoCollapsed} onToggle={onToggleDocInfo} />
+        <DocInfo data={data} collapsed={docInfoCollapsed} onToggle={onToggleDocInfo} specSetControl={specSetControl} />
         <div className="section-title px-5 pb-0.5 pt-1.5 text-[12px] font-semibold text-[#8A9099]">시험 항목 · {`${tests.length}개`}</div>
         <ul className="item-list item-list-test flex flex-col divide-y divide-[#E3E5E8] border-t border-[#E3E5E8]">
           {tests.map((item) => (

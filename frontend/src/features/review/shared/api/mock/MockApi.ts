@@ -512,6 +512,34 @@ export class MockApi implements Api {
     return delay({ document_id: documentId, status: 'on_hold' });
   }
 
+  /**
+   * 적용 규격을 바꿔 다시 판정하는 흉내입니다(POST /documents/{id}/rejudge, 백엔드와 협의 중인 계약).
+   * 처분 완료 문서는 409 ALREADY_APPROVED, 없는 세트는 400 UNKNOWN_SPEC_SET입니다(다른 원자재의 세트도 같은 400으로 가정했습니다).
+   * 새 세트의 규격으로 기존 항목을 다시 판정하고 집계와 로트 권고를 새로 계산합니다. 새 세트에만 있는 필수 항목의 누락 행은
+   * 만들지 않고, 값이 없고 새 세트에도 없는 누락 행은 지웁니다. 서버가 하는 일을 모두 옮긴 것은 아닙니다.
+   */
+  async rejudgeDocument(documentId: string, specSetCode: string): Promise<DocumentDetail> {
+    this.requireUser();
+    const doc = this.findDoc(documentId);
+    if (doc.detail.status === 'approved') throw new ApiError(409, 'ALREADY_APPROVED', '이미 처분된 문서는 다시 판정할 수 없습니다.');
+    const { extraction } = doc;
+    if (!extraction || !REJUDGE_STATUSES.includes(doc.detail.status)) throw new ApiError(409, 'NOT_READY', '추출이 끝나지 않은 문서입니다.');
+    const set = this.state.specSets.find((entry) => entry.code === specSetCode && entry.material_code === doc.detail.material_code);
+    if (!set) throw new ApiError(400, 'UNKNOWN_SPEC_SET', `등록되지 않은 규격 세트입니다: ${specSetCode}`);
+    doc.detail.spec_set_code = set.code;
+    doc.detail.spec_version = set.version;
+    doc.detail.spec_grade = set.grade;
+    const specs = this.specsOf(doc);
+    const specOf = (item: ExtractionItem) => specs.find((entry) => entry.item_name === item.normalized_name);
+    extraction.items = extraction.items
+      .filter((item) => item.raw_value !== null || specOf(item) !== undefined)
+      .map((item) => rejudgeItem(item, specOf(item)));
+    extraction.summary = summarize(extraction.items);
+    extraction.lot_recommendation = recommendLot(extraction.summary, extraction.document_issues.length);
+    doc.detail.lot_recommendation = extraction.lot_recommendation;
+    return delay({ ...doc.detail });
+  }
+
   async cancelApproval(documentId: string, body: CancelApprovalBody): Promise<CancelApprovalResult> {
     const user = this.requireUser();
     if (user.role !== 'ADMIN') throw new ApiError(403, 'FORBIDDEN', '권한 없음');

@@ -11,6 +11,7 @@ import { ItemEditor, type ItemEditSubmit } from './components/ItemEditor';
 import { ItemsPanel } from './components/ItemsPanel';
 import { MappingDialog } from './components/MappingDialog';
 import { PdfPanel } from './components/PdfPanel';
+import { SpecSetSelect } from './components/SpecSetSelect';
 import type { PdfHighlight } from './components/PdfViewer';
 import { ReplyResultStrip, ResolvedNote } from './components/ReplyResultStrip';
 import { type QueuePosition, ReviewHeader } from './components/ReviewHeader';
@@ -286,6 +287,16 @@ function ReviewScreen({ documentId }: { documentId: string }) {
     }
   }
 
+  /** 적용 규격을 바꿔 서버가 다시 판정한 뒤: 열려 있던 편집, 상세, 안내를 닫고 새 결과를 불러옵니다. */
+  function handleRejudged() {
+    setEditingId(null);
+    setEditError(null);
+    setActionError(null);
+    setReplyResult(null);
+    setDetail(null);
+    void reload();
+  }
+
   async function verify(item: ExtractionItem) {
     setBusy(true);
     setActionError(null);
@@ -350,6 +361,7 @@ function ReviewScreen({ documentId }: { documentId: string }) {
               <ReplyResultStrip result={replyResult} onClose={() => setReplyResult(null)} />
             ) : undefined
           }
+          specSetControl={<SpecSetSelect doc={data.doc} locked={busy} onDone={handleRejudged} onStale={() => void reload()} />}
           getRowExtras={(item) => ({
             onEdit: canEdit && !busy ? () => openEditor(item) : undefined,
             onVerify: canEdit && !busy ? () => void verify(item) : undefined,
