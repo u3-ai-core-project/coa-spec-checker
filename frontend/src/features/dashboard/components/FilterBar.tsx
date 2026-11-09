@@ -18,6 +18,8 @@ function Box({ label, children }: { label: string; children: ReactNode }) {
 }
 
 interface Props {
+    material: string
+    onMaterialChange: (code: string) => void
     isAdmin: boolean
     users: UserOption[]
     userId: number | undefined
@@ -29,12 +31,16 @@ interface Props {
 }
 
 export default function FilterBar(props: Props) {
-    const { isAdmin, users, userId, onUserChange, period, onPeriodChange, custom, onCustomChange } = props
+    const { isAdmin, users, userId, onUserChange, period, onPeriodChange, custom, onCustomChange, material, onMaterialChange } = props
     return (
         <div className="flex flex-wrap items-center gap-2.5">
-            {/* 원자재 필터는 서버(material_code)가 아직 없어서 요청에 보내지 않음. 탄산리튬만 진행 */}
             <Box label="원자재:">
-                <select className={SELECT} defaultValue="LI2CO3" aria-label="원자재">
+                <select
+                    className={SELECT}
+                    value={material}
+                    onChange={(e) => onMaterialChange(e.target.value)}
+                    aria-label="원자재"
+                >
                     {MATERIALS.map((m) => (
                         <option key={m.code} value={m.code} disabled={!m.enabled}>
                             {`${m.name} (${m.formula})`}

@@ -17,6 +17,7 @@ export default function DashboardPage() {
     const [userId, setUserId] = useState<number | undefined>(undefined)
     const [period, setPeriod] = useState<PeriodKey>('all')
     const [custom, setCustom] = useState({ from: '', to: '' })
+    const [material, setMaterial] = useState(MATERIALS[0].code)
 
 
     useEffect(() => {
@@ -29,7 +30,7 @@ export default function DashboardPage() {
     const range = resolveRange(period, custom)
     const { data, error, reload } = useDashboardSummary({
         userId: isAdmin ? userId : undefined, // 사용자 계정은 user_id를 보내지 않음 (403)
-        materialCode: MATERIALS[0].code,
+        materialCode: material,
         ...range,
     })
 
@@ -44,6 +45,8 @@ export default function DashboardPage() {
                 onPeriodChange={setPeriod}
                 custom={custom}
                 onCustomChange={setCustom}
+                material={material}
+                onMaterialChange={setMaterial}
             />
 
             {error && (
