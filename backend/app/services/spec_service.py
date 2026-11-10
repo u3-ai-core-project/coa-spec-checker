@@ -160,7 +160,7 @@ def rejudge_open_documents(db: Session, spec_set_id: int) -> list[RejudgedDocume
         if doc.extraction is None:
             continue
         before = doc.lot_recommendation
-        result, changed = review_service.rejudge_document(doc, specs)
+        result, changed = review_service.rejudge_document(doc, specs, spec_set)
         out.append(RejudgedDocument(document_id=doc.id, lot_recommendation_before=_val(before),
                                     lot_recommendation_after=_val(result.lot_recommendation), changed_items=changed))
     return out

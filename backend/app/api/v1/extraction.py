@@ -1,4 +1,5 @@
 """[담당: 장수민] GET·PATCH /documents/{id}/extraction..., POST .../confirm, GET .../review-logs (명세 4.8~4.11)
+규격 세트를 바꿔 다시 판정: POST /documents/{id}/rejudge (멘토님 피드백, 검수 화면 규격 드롭다운)
 
 규칙과 상태 처리는 review_service 에 있다. 이 파일은 요청·응답 변환만 한다.
 """
@@ -11,7 +12,9 @@ from app.db.session import get_db
 from app.models import User
 from app.schemas.common import ApiResponse
 from app.schemas.extraction import ExtractionResult
-from app.schemas.review import ConfirmResponse, ItemUpdateRequest, ItemUpdateResponse, ReviewLogOut
+from app.schemas.review import (
+    ConfirmResponse, ItemUpdateRequest, ItemUpdateResponse, RejudgeRequest, RejudgeResponse, ReviewLogOut,
+)
 from app.services import review_service
 
 router = APIRouter(prefix="/documents", tags=["extraction"])
@@ -58,3 +61,17 @@ def confirm_item(
 @router.get("/{document_id}/review-logs", response_model=ApiResponse[list[ReviewLogOut]])
 def list_review_logs(document_id: str, db: Session = Depends(get_db), _: User = Depends(get_current_user)):
     return ok(review_service.list_review_logs(db, document_id))
+
+
+@router.post("/{document_id}/rejudge", response_model=ApiResponse[RejudgeResponse])
+def rejudge_document(
+    document_id: str,
+    body: RejudgeRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """같은 문서를 다른 규격 세트로 다시 판정한다 (AI 추출은 다시 하지 않음).
+
+    apply=false(기본): 미리보기. 문서는 바뀌지 않는다. apply=true: 규격 세트를 바꿔 저장하고 사유가 필요하다.
+    """
+    return ok(review_service.rejudge_by_spec_set(db, document_id, body, user))

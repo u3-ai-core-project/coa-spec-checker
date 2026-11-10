@@ -36,6 +36,7 @@ from app.core.enums import (
 )
 from app.core.errors import AppException, ErrorCode
 from app.models import ApprovalLog, Document, ReviewLog
+from app.models.review_log import DOCUMENT_LOG_ITEM_ID
 from app.schemas.extraction import ExtractionItem, ExtractionResult
 from app.services import extraction_service, spec_service
 from app.services.inquiry_draft import REASON_LABELS, build_follow_ups, build_inquiry_draft
@@ -55,7 +56,8 @@ DECISION_KO = {FinalDecision.ACCEPT: "승인", FinalDecision.CONDITIONAL_ACCEPT:
 STATUS_KO = {DocumentStatus.QUEUED: "대기", DocumentStatus.PROCESSING: "처리 중", DocumentStatus.EXTRACTED: "검수 전",
              DocumentStatus.IN_REVIEW: "검수 중", DocumentStatus.ON_HOLD: "보류", DocumentStatus.APPROVED: "처분 완료",
              DocumentStatus.FAILED: "오류"}
-REVIEW_ACTION_KO = {ReviewAction.EDIT: "값 수정", ReviewAction.CONFIRM: "값 확인", ReviewAction.RENAME: "항목명 수정"}
+REVIEW_ACTION_KO = {ReviewAction.EDIT: "값 수정", ReviewAction.CONFIRM: "값 확인", ReviewAction.RENAME: "항목명 수정",
+                    ReviewAction.RESPEC: "규격 세트 변경"}
 VALUE_SOURCE_KO = {ValueSource.CORRECTION: "원문 수정", ValueSource.SUPPLIER_REPLY: "공급사 회신",
                    ValueSource.INTERNAL_TEST: "자체 시험"}
 APPROVAL_ACTION_KO = {ApprovalAction.APPROVE: "처분", ApprovalAction.HOLD: "보류", ApprovalAction.CANCEL: "처분 취소"}
@@ -212,7 +214,8 @@ def _write_lot_sheet(db: Session, ws: Worksheet, doc: Document, result: Extracti
     logs = db.scalars(select(ReviewLog).options(joinedload(ReviewLog.reviewer))
                       .where(ReviewLog.document_id == doc.id).order_by(ReviewLog.reviewed_at, ReviewLog.id)).all()
     for log in logs:
-        _row(ws, row, [_fmt_dt(log.reviewed_at), names.get(log.item_id, log.item_id),
+        item_label = "(문서 전체)" if log.item_id == DOCUMENT_LOG_ITEM_ID else names.get(log.item_id, log.item_id)
+        _row(ws, row, [_fmt_dt(log.reviewed_at), item_label,
                        REVIEW_ACTION_KO.get(log.action), log.before_value, log.after_value,
                        VALUE_SOURCE_KO.get(log.value_source) if log.value_source else None, log.reason,
                        log.reviewer.name],

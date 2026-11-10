@@ -6,6 +6,8 @@
   - LI2CO3-D3-2023     등급 교차 판정 (D1 과 같은 항목을 필수로, D3 한도)
   - LI2CO3-2013        버전 비교용 구판
   - LI2CO3-GENV2-EVAL  가상 CoA 생성기 v2 평가 전용
+  - LI2CO3-D1-RELAXED  D1 복사 후 한도 완화 (검수 화면 규격 비교 시연용, 멘토 피드백)
+  - LI2CO3-D1-STRICT   D1 복사 후 한도 강화 (같은 용도)
 """
 import json
 from pathlib import Path
@@ -19,7 +21,7 @@ from app.services import spec_service
 from seeds.seed_specs import seed_specs
 
 PDF = b"%PDF-1.7\n" + b"0" * 50
-NEW_SETS = ["LI2CO3-DEMO-R", "LI2CO3-D3-2023", "LI2CO3-2013", "LI2CO3-GENV2-EVAL"]
+NEW_SETS = ["LI2CO3-DEMO-R", "LI2CO3-D3-2023", "LI2CO3-2013", "LI2CO3-GENV2-EVAL", "LI2CO3-D1-RELAXED", "LI2CO3-D1-STRICT"]
 VOCAB = Path(__file__).resolve().parents[3] / "ai" / "coa_ai" / "vocab.json"
 
 
@@ -86,6 +88,43 @@ def test_grade_sets_require_same_items_as_d1(db, seeded):
     d1 = required("LI2CO3-D1-2023")
     assert required("LI2CO3-D3-2023") == d1 and required("LI2CO3-2013") == d1
     assert required("LI2CO3-DEMO-R") == d1 - {"Mg", "자성이물"}   # 별도 성적서 항목
+    assert required("LI2CO3-D1-RELAXED") == d1 and required("LI2CO3-D1-STRICT") == d1
+
+
+# ---- D1 완화·엄격 (검수 화면 규격 비교용) ----------------------------------------
+# 순도는 하한, 나머지는 상한. 순서: 순도, Na, K, Fe, Ca, Mg, Pb, 염화물, 황산염, 자성이물
+D1_NAMES = ["순도", "Na", "K", "Fe", "Ca", "Mg", "Pb", "염화물", "황산염", "자성이물"]
+RELAXED_LIMITS = [99.5, 100, 20, 10, 40, 20, 3, 30, 600, 100]
+STRICT_LIMITS = [99.7, 30, 8, 3, 15, 8, 2, 15, 300, 30]
+
+
+def limits_of(db, code):
+    items = {i.item_name: i for i in db.scalars(select(SpecItem).join(SpecItem.spec_set).where(SpecSet.code == code))}
+    return items
+
+
+@pytest.mark.parametrize("code,grade,expected", [
+    ("LI2CO3-D1-RELAXED", "D1-완화", RELAXED_LIMITS),
+    ("LI2CO3-D1-STRICT", "D1-엄격", STRICT_LIMITS),
+])
+def test_d1_variant_sets_limits(db, seeded, code, grade, expected):
+    spec_set = db.scalar(select(SpecSet).where(SpecSet.code == code))
+    assert (spec_set.grade, spec_set.is_default, spec_set.material_code) == (grade, False, "LI2CO3")
+    items = limits_of(db, code)
+    assert len(items) == 12                                       # 필수 10 + 중금속 총량 + 외관
+    for name, limit in zip(D1_NAMES, expected):
+        item = items[name]
+        assert (item.lsl, item.usl) == ((limit, None) if name == "순도" else (None, limit)), name
+    assert items["자성이물"].unit == "ppb" and items["순도"].unit == "%"
+    heavy, appearance = items["중금속 총량"], items["외관"]       # D1 처럼 선택 항목
+    assert (heavy.lsl, heavy.usl, heavy.is_required) == (None, None, False)
+    assert (appearance.spec_type, appearance.is_required) == ("정성", False)
+
+
+def test_d1_variants_keep_d1_units_and_names(db, seeded):
+    d1 = {n: i.unit for n, i in limits_of(db, "LI2CO3-D1-2023").items()}
+    for code in ("LI2CO3-D1-RELAXED", "LI2CO3-D1-STRICT"):
+        assert {n: i.unit for n, i in limits_of(db, code).items()} == d1
 
 
 def test_seed_is_idempotent(db, seeded):
@@ -119,6 +158,16 @@ def test_fisher_like_coa_auto_approved_on_demo_r(upload):
     assert d1["lot_recommendation"] == "hold"
     assert demo["lot_recommendation"] == "approve" and demo["summary"]["missing"] == 0
     assert by_name(demo)["Pb"]["judgement"] == "pass"     # 중금속 총량 2 ≤ Pb 상한 3 (교차 규칙)
+
+
+def test_na80_on_relaxed_and_strict(upload):
+    """Na 80 ppm: 완화(≤ 100)는 적합, 엄격(≤ 30)은 부적합. D1(≤ 50)과 같은 문서로 비교된다."""
+    relaxed = upload("full", "LI2CO3-D1-RELAXED")
+    strict = upload("full", "LI2CO3-D1-STRICT")
+    assert (by_name(relaxed)["Na"]["judgement"], relaxed["lot_recommendation"]) == ("pass", "approve")
+    assert (by_name(strict)["Na"]["judgement"], strict["lot_recommendation"]) == ("fail", "reject")
+    # 엄격 기준에서도 Na 말고는 경계 안: K 5(≤ 8), Ca 10(≤ 15), 염화물 10(≤ 15), 황산염 300(≤ 300, 경계값), 순도 99.7(≥ 99.7)
+    assert {n for n, i in by_name(strict).items() if i["judgement"] == "fail"} == {"Na"}
 
 
 def test_genv2_eval_set_limits(upload):

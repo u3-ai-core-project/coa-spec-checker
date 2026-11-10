@@ -1,4 +1,4 @@
-"""[담당: 장수민] 항목 수정·확인 요청·응답, review-logs (명세 4.9~4.11, v1.4안).
+"""[담당: 장수민] 항목 수정·확인 요청·응답, review-logs (명세 4.9~4.11, v1.4안), 규격 세트 변경 재판정.
 
 PATCH 요청은 세 가지 일을 한다 (둘 이상을 한 번에 보내도 된다).
   1. 값 수정     : converted_value (+ value_qualifier)
@@ -26,7 +26,7 @@ from pydantic import BaseModel, Field, model_validator
 from app.core.enums import (
     Judgement, LotRecommendation, ReasonCode, ReviewAction, ValueQualifier as Q, ValueSource,
 )
-from app.schemas.extraction import Resolution, Summary
+from app.schemas.extraction import ExtractionResult, Resolution, Summary
 from app.services.judgement.value_parser import ParsedValue
 
 _NUMERIC = {Q.EXACT, Q.LESS_THAN, Q.LESS_EQUAL}
@@ -131,3 +131,53 @@ class ConfirmResponse(BaseModel):
     lot_recommendation: LotRecommendation
     summary: Summary
     review_log: ReviewLogOut
+
+
+# ---------------------------------------------------------------------------
+# 규격 세트를 바꿔 다시 판정 (POST /documents/{id}/rejudge, 멘토님 피드백: 검수 화면 규격 드롭다운)
+# ---------------------------------------------------------------------------
+class RejudgeRequest(BaseModel):
+    """같은 문서를 다른 규격 세트로 다시 판정한다. AI 추출은 다시 하지 않고 저장된 추출 결과를 새 규격으로 판정한다.
+
+    apply=false (기본) : 미리보기. 문서·이력은 바뀌지 않는다. 드롭다운을 바꿔 보며 결과를 비교할 때 쓴다.
+    apply=true         : 문서의 규격 세트를 바꾸고 결과를 저장한다. reason(변경 사유)이 필수이고 review_logs 에 respec 이력이 남는다.
+                         처분 전 문서(추출됨·검수 중·보류)만 가능하다. 문서가 보류·추출됨이면 검수 중으로 바뀐다 (값 수정과 같은 규칙).
+    """
+    spec_set_code: str = Field(min_length=1, description="바꿀 규격 세트 코드 (GET /specs/sets 의 code)")
+    apply: bool = Field(False, description="true 이면 저장, false 이면 미리보기")
+    reason: str | None = Field(None, description="규격 세트 변경 사유. apply=true 일 때 필수")
+
+    @property
+    def code(self) -> str:
+        return self.spec_set_code.strip()
+
+    @property
+    def clean_reason(self) -> str | None:
+        return (self.reason or "").strip() or None
+
+
+class SpecSetRef(BaseModel):
+    code: str
+    grade: str | None
+    version: str | None
+
+
+class RejudgeItemChange(BaseModel):
+    """규격 세트를 바꾸자 판정이 달라진 항목. 항목명으로 맞춰 본다 (누락 항목은 규격 세트마다 새로 만들어지므로).
+    before/after 가 null 이면 그 규격 세트에는 그 항목이 없다 (예: 새 세트에서는 필수가 아니라 누락 항목이 사라짐)."""
+    item_name: str
+    before: Judgement | None
+    after: Judgement | None
+
+
+class RejudgeResponse(BaseModel):
+    document_id: str
+    applied: bool = Field(description="문서에 실제로 저장했는지. 미리보기이거나 이미 그 세트이면 false")
+    spec_set: SpecSetRef = Field(description="요청한 규격 세트")
+    previous_spec_set: SpecSetRef | None = Field(description="지금까지 문서에 쓰던 규격 세트 (apply=true 로 저장했으면 바뀌기 전 값)")
+    lot_recommendation_before: LotRecommendation | None
+    lot_recommendation_after: LotRecommendation
+    summary_before: Summary
+    summary_after: Summary
+    changed_items: list[RejudgeItemChange]
+    result: ExtractionResult = Field(description="요청한 규격 세트로 판정한 전체 결과 (GET /extraction 과 같은 형식)")

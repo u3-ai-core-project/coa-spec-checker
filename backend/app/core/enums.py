@@ -133,6 +133,7 @@ class ReviewAction(StrEnum):
     EDIT = "edit"
     CONFIRM = "confirm"
     RENAME = "rename"
+    RESPEC = "respec"  # 문서의 규격 세트를 바꿔 다시 판정 (POST /documents/{id}/rejudge, apply=true). 항목이 아니라 문서 단위 이력
 
 
 class ValueSource(StrEnum):
