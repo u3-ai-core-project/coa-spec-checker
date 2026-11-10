@@ -26,7 +26,8 @@ export type DocumentStatus =
   | 'approved'
   | 'failed';
 
-export type ReviewAction = 'edit' | 'confirm' | 'rename';
+/** respec은 문서의 규격 세트를 바꾼 문서 단위 이력입니다(item_id가 "document", before/after가 규격 세트 코드). */
+export type ReviewAction = 'edit' | 'confirm' | 'rename' | 'respec';
 export type ApprovalAction = 'approve' | 'hold' | 'cancel';
 export type HoldFollowUp =
   | 'request_actual_value'
@@ -257,6 +258,51 @@ export interface ReviewLog {
   reviewed_at: string;
   /** 수정 사유(백엔드 확정 답변). 값 수정은 필수이고 항목명만 수정한 이력은 없을 수 있습니다. */
   reason?: string | null;
+}
+
+/** 규격 세트 변경 이력(action이 respec)의 item_id. 항목이 아니라 문서 전체에 대한 이력입니다. */
+export const DOCUMENT_LOG_ITEM_ID = 'document';
+
+/**
+ * POST /documents/{id}/rejudge 요청(백엔드 PR #59).
+ * apply가 false(기본)이면 미리보기로 문서를 바꾸지 않고 처분 완료 문서도 볼 수 있습니다.
+ * true이면 문서의 규격 세트를 바꿔 저장하고(처분 전 문서만) reason(변경 사유)이 필수입니다.
+ */
+export interface RejudgeRequest {
+  spec_set_code: string;
+  apply?: boolean;
+  reason?: string;
+}
+
+export interface SpecSetRef {
+  code: string;
+  grade: string | null;
+  version: string | null;
+}
+
+/** 규격 세트를 바꾸자 판정이 달라진 항목. before나 after가 null이면 그 세트에는 그 항목이 없습니다. */
+export interface RejudgeItemChange {
+  item_name: string;
+  before: Judgement | null;
+  after: Judgement | null;
+}
+
+/** POST /documents/{id}/rejudge 응답. 문서 상세가 아니라 이전 → 이후 비교와 새 판정 결과입니다. */
+export interface RejudgeResult {
+  document_id: string;
+  /** 문서에 실제로 저장했는지. 미리보기이거나 이미 그 세트이면 false */
+  applied: boolean;
+  /** 요청한 규격 세트 */
+  spec_set: SpecSetRef;
+  /** 지금까지 문서에 쓰던 규격 세트(apply=true로 저장했으면 바뀌기 전 값) */
+  previous_spec_set: SpecSetRef | null;
+  lot_recommendation_before: LotRecommendation | null;
+  lot_recommendation_after: LotRecommendation;
+  summary_before: JudgementSummary;
+  summary_after: JudgementSummary;
+  changed_items: RejudgeItemChange[];
+  /** 요청한 규격 세트로 판정한 전체 결과(GET /extraction과 같은 형식) */
+  result: ExtractionResult;
 }
 
 /** 수정, 확인 뒤의 항목(백엔드 ReviewedItem). [v1.4] 검출한계, 사유코드, 해결 조건, 검수 상태가 더해졌습니다. */

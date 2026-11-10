@@ -28,6 +28,8 @@ import type {
   MappingRecord,
   PatchItemBody,
   PatchItemResult,
+  RejudgeRequest,
+  RejudgeResult,
   PatchSpecBody,
   PatchSpecResult,
   ReviewLog,
@@ -105,17 +107,20 @@ function jsonBody(value: unknown): RequestInit {
 }
 
 /**
- * 문서 재판정 API (규격 세트를 바꿔 다시 판정). 백엔드 담당이 방식을 정하는 중이라 아래 가정은 임시입니다.
- *   가정: POST /documents/{id}/rejudge, body { spec_set_code }, 응답은 문서 상세(DocumentDetail)와 같은 모양
- *   (처분 완료 문서는 409, 없는 규격 세트는 400 UNKNOWN_SPEC_SET)
- * 주소, 요청 본문, 응답 해석은 이 함수 한 곳에서만 정합니다. API가 확정되면 이 함수만 고치면 되고,
- * 화면은 Api.rejudgeDocument(documentId, specSetCode) → DocumentDetail만 압니다.
- * 항목 판정과 로트 권고는 이 응답이 아니라 이어서 부르는 GET /documents/{id}/extraction으로 받습니다.
+ * 문서 재판정 API (규격 세트를 바꿔 다시 판정, 백엔드 PR #59).
+ *   POST /documents/{id}/rejudge, body { spec_set_code, apply(기본 false), reason }
+ *   응답은 문서 상세가 아니라 RejudgeResult(이전 → 이후 비교와 새 판정 결과).
+ * 주소, 요청 본문, 응답 해석은 이 함수 한 곳에서만 정합니다. 계약이 바뀌면 이 함수만 고칩니다.
+ * 항목과 문서 상세는 적용한 뒤 화면이 GET으로 다시 받습니다.
  */
-async function requestRejudge(documentId: string, specSetCode: string): Promise<DocumentDetail> {
+async function requestRejudge(documentId: string, req: RejudgeRequest): Promise<RejudgeResult> {
   const path = `/documents/${encodeURIComponent(documentId)}/rejudge`;
-  const body = { spec_set_code: specSetCode };
-  return request<DocumentDetail>(path, jsonBody(body));
+  const body = {
+    spec_set_code: req.spec_set_code,
+    apply: req.apply ?? false,
+    ...(req.reason === undefined ? {} : { reason: req.reason }),
+  };
+  return request<RejudgeResult>(path, jsonBody(body));
 }
 
 /**
@@ -144,8 +149,8 @@ export class HttpApi implements Api {
     return request<DocumentDeleted>(`/documents/${encodeURIComponent(documentId)}`, { method: 'DELETE' });
   }
 
-  rejudgeDocument(documentId: string, specSetCode: string): Promise<DocumentDetail> {
-    return requestRejudge(documentId, specSetCode);
+  rejudgeDocument(documentId: string, request: RejudgeRequest): Promise<RejudgeResult> {
+    return requestRejudge(documentId, request);
   }
 
   async getDocumentFile(documentId: string): Promise<Blob> {

@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { api } from '../shared/api';
 import type { DocumentDetail, SpecSet } from '../shared/api/types';
-import { isEditableStatus } from '../shared/domain/status';
 import { useAsync } from '../shared/hooks/useAsync';
 import { RejudgeDialog } from './RejudgeDialog';
 
@@ -22,8 +21,8 @@ function setsOfMaterial(sets: SpecSet[], materialCode: string): SpecSet[] {
 
 /**
  * 문서 정보의 "적용 규격" 드롭다운. 현재 적용 중인 세트(문서 상세의 spec_set_code)가 선택돼 있고,
- * 다른 세트를 고르면 확인 다이얼로그를 거쳐 서버가 문서를 다시 판정합니다(화면에서 판정을 다시 계산하지 않습니다).
- * 처분이 끝난 문서는 바꿀 수 없어 비활성화하고 이유를 툴팁으로 보여 줍니다.
+ * 다른 세트를 고르면 다이얼로그가 서버 미리보기(이전 → 이후)를 보여 주고, 처분 전 문서는 사유를 적어 적용합니다
+ * (화면에서 판정을 다시 계산하지 않습니다). 처분 완료 문서도 드롭다운은 열려 있고 미리보기만 됩니다(적용은 다이얼로그에서 비활성).
  */
 export function SpecSetSelect({ doc, locked = false, onDone, onStale }: SpecSetSelectProps) {
   const setsQuery = useAsync(() => api.listSpecSets(doc.material_code), [doc.material_code]);
@@ -33,11 +32,7 @@ export function SpecSetSelect({ doc, locked = false, onDone, onStale }: SpecSetS
   const sets = setsOfMaterial(setsQuery.data ?? [], doc.material_code);
   const current = sets.find((set) => set.code === doc.spec_set_code) ?? null;
 
-  const disabledReason = !isEditableStatus(doc.status)
-    ? '처분이 끝난 문서는 적용 규격을 바꿔 다시 판정할 수 없습니다.'
-    : setsQuery.error && !setsQuery.data
-      ? '규격 세트 목록을 불러오지 못했습니다.'
-      : null;
+  const disabledReason = setsQuery.error && !setsQuery.data ? '규격 세트 목록을 불러오지 못했습니다.' : null;
   const disabled = disabledReason !== null || locked || setsQuery.data === null;
 
   function change(code: string) {
