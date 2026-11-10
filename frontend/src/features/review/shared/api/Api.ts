@@ -22,6 +22,8 @@ import type {
   MappingRecord,
   PatchItemBody,
   PatchItemResult,
+  RejudgeRequest,
+  RejudgeResult,
   PatchSpecBody,
   PatchSpecResult,
   ReviewLog,
@@ -48,6 +50,13 @@ export interface Api {
    * 처분 완료 문서는 409 ALREADY_APPROVED, 추출 중 문서는 409 NOT_READY, 권한이 없으면 403 FORBIDDEN입니다.
    */
   deleteDocument(documentId: string): Promise<DocumentDeleted>;
+  /**
+   * 적용 규격(규격 세트)을 바꿔 서버가 문서를 다시 판정합니다(POST /documents/{id}/rejudge, 백엔드 PR #59).
+   * apply가 false(기본)이면 미리보기로 문서를 바꾸지 않고 처분 완료 문서도 됩니다. true이면 저장하고 reason(변경 사유)이 필수이며
+   * 처분 전 문서만 됩니다. 응답은 이전 → 이후 비교(규격 세트, 로트 권고, 집계, 판정이 바뀐 항목)와 새 판정 결과입니다.
+   * 오류: 없는 세트 400 UNKNOWN_SPEC_SET, 사유 없음 400 REASON_REQUIRED, 문서 없음 404, 추출 전·실패 409 NOT_READY, 적용 시 처분 완료 409.
+   */
+  rejudgeDocument(documentId: string, request: RejudgeRequest): Promise<RejudgeResult>;
   /** 원본 파일. 토큰이 필요하므로 fetch로 받아 Blob으로 돌려주고, 화면이 Blob URL로 바꿉니다. */
   getDocumentFile(documentId: string): Promise<Blob>;
   getExtraction(documentId: string): Promise<ExtractionResult>;

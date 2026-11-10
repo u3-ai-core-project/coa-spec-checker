@@ -34,13 +34,18 @@ import type {
   PatchSpecBody,
   PatchSpecResult,
   RejudgedDocument,
+  RejudgeItemChange,
+  RejudgeRequest,
+  RejudgeResult,
   ReviewedItem,
   ReviewLog,
   SpecChangeLog,
   SpecItem,
   SpecListQuery,
   SpecSet,
+  SpecSetRef,
 } from '../types';
+import { DOCUMENT_LOG_ITEM_ID } from '../types';
 import { type MockDoc, type MockState, type MockUser, createMockState } from './fixtures';
 import { getFollowUps, MOCK_AI_TIMEOUT_DOCS } from './followUps';
 import { buildPdfBlob } from './mockPdf';
@@ -72,7 +77,7 @@ function wait(ms: number): Promise<void> {
 
 // 목업 시계: 시안과 같은 시각(수정 14:32, 확인 14:35, 처분 15:02 …)이 나오도록 이력 종류마다 시작 시각을 고정하고,
 // 같은 종류가 또 생기면 1분씩 늦춥니다.
-type ClockKind = 'edit' | 'confirm' | 'rename' | 'approve' | 'hold' | 'cancel' | 'spec';
+type ClockKind = 'edit' | 'confirm' | 'rename' | 'approve' | 'hold' | 'cancel' | 'spec' | 'respec';
 
 const CLOCK_ANCHORS: Record<ClockKind, string> = {
   edit: '2026-10-05T14:32:00+09:00',
@@ -82,6 +87,7 @@ const CLOCK_ANCHORS: Record<ClockKind, string> = {
   hold: '2026-10-05T10:40:00+09:00',
   cancel: '2026-10-05T16:10:00+09:00',
   spec: '2026-10-05T11:20:00+09:00',
+  respec: '2026-10-05T11:50:00+09:00',
 };
 let clockCounts: Partial<Record<ClockKind, number>> = {};
 
@@ -510,6 +516,93 @@ export class MockApi implements Api {
       created_at: now('hold'),
     });
     return delay({ document_id: documentId, status: 'on_hold' });
+  }
+
+  /**
+   * 적용 규격을 바꿔 다시 판정하는 흉내입니다(POST /documents/{id}/rejudge, 백엔드 PR #59). 미리보기(apply=false)와 적용(apply=true) 두 모드입니다.
+   *   미리보기: 문서를 바꾸지 않고 처분 완료 문서도 됩니다. 적용: 처분 전 문서만, reason 필수, 문서의 규격 세트를 바꾸고 respec 이력을 남깁니다.
+   *   검사 순서는 서버와 같습니다: 문서 없음 404 → 상태 409(적용은 처분 완료 ALREADY_APPROVED, 추출 전·실패 NOT_READY)
+   *   → 없는 세트 400 UNKNOWN_SPEC_SET(다른 원자재의 세트도 같은 400으로 가정) → 사유 없음 400 REASON_REQUIRED(적용).
+   * 새 세트의 규격으로 기존 항목을 다시 판정하고 집계와 로트 권고를 새로 계산합니다. 새 세트에만 있는 필수 항목의 누락 행은
+   * 만들지 않고, 값이 없고 새 세트에도 없는 누락 행은 지웁니다. 서버가 하는 일을 모두 옮긴 것은 아닙니다.
+   */
+  async rejudgeDocument(documentId: string, request: RejudgeRequest): Promise<RejudgeResult> {
+    const user = this.requireUser();
+    const doc = this.findDoc(documentId);
+    const apply = request.apply === true;
+    if (apply && doc.detail.status === 'approved') throw new ApiError(409, 'ALREADY_APPROVED', '이미 처분된 문서는 규격 세트를 바꿀 수 없습니다.');
+    const before = doc.extraction;
+    if (!before || !READY_STATUSES.includes(doc.detail.status)) throw new ApiError(409, 'NOT_READY', '추출이 끝나지 않은 문서입니다.');
+    const target = this.state.specSets.find((entry) => entry.code === request.spec_set_code.trim() && entry.material_code === doc.detail.material_code);
+    if (!target) throw new ApiError(400, 'UNKNOWN_SPEC_SET', `등록되지 않은 규격 세트입니다: ${request.spec_set_code}`);
+    const reason = (request.reason ?? '').trim();
+    if (apply && reason === '') throw new ApiError(400, 'REASON_REQUIRED', '규격 세트를 바꿀 때는 변경 사유를 입력해야 합니다.');
+
+    const ref = (set: { code: string; grade: string | null; version: string | null }): SpecSetRef => ({ code: set.code, grade: set.grade, version: set.version });
+    const current = this.state.specSets.find((entry) => entry.code === doc.detail.spec_set_code) ?? null;
+    if (current?.code === target.code) {
+      // 이미 이 세트로 판정한 문서: 저장된 결과를 그대로 보여 주고 아무것도 바꾸지 않습니다.
+      return delay({
+        document_id: documentId,
+        applied: false,
+        spec_set: ref(target),
+        previous_spec_set: ref(current),
+        lot_recommendation_before: before.lot_recommendation,
+        lot_recommendation_after: before.lot_recommendation,
+        summary_before: { ...before.summary },
+        summary_after: { ...before.summary },
+        changed_items: [],
+        result: structuredClone(before),
+      });
+    }
+
+    const specs = this.state.specs.filter((entry) => entry.spec_set_code === target.code);
+    const specOf = (item: ExtractionItem) => specs.find((entry) => entry.item_name === item.normalized_name);
+    const after = structuredClone(before);
+    after.items = before.items
+      .filter((item) => item.raw_value !== null || specOf(item) !== undefined)
+      .map((item) => rejudgeItem(item, specOf(item)));
+    after.summary = summarize(after.items);
+    after.lot_recommendation = recommendLot(after.summary, after.document_issues.length);
+
+    const oldByName = new Map(before.items.map((item) => [item.normalized_name, item.judgement]));
+    const newByName = new Map(after.items.map((item) => [item.normalized_name, item.judgement]));
+    const changes: RejudgeItemChange[] = [];
+    for (const name of new Set([...oldByName.keys(), ...newByName.keys()])) {
+      const was = oldByName.get(name) ?? null;
+      const becomes = newByName.get(name) ?? null;
+      if (was !== becomes) changes.push({ item_name: name, before: was, after: becomes });
+    }
+
+    if (apply) {
+      doc.detail.spec_set_code = target.code;
+      doc.detail.spec_version = target.version;
+      doc.detail.spec_grade = target.grade;
+      doc.detail.lot_recommendation = after.lot_recommendation;
+      doc.extraction = after;
+      doc.reviewLogs.push({
+        item_id: DOCUMENT_LOG_ITEM_ID,
+        action: 'respec',
+        before_value: current?.code ?? null,
+        after_value: target.code,
+        reviewer_name: user.name,
+        reviewed_at: now('respec'),
+        reason,
+      });
+      this.touchStatus(doc as MockDoc & { extraction: ExtractionResult });
+    }
+    return delay({
+      document_id: documentId,
+      applied: apply,
+      spec_set: ref(target),
+      previous_spec_set: current ? ref(current) : null,
+      lot_recommendation_before: before.lot_recommendation,
+      lot_recommendation_after: after.lot_recommendation,
+      summary_before: { ...before.summary },
+      summary_after: { ...after.summary },
+      changed_items: changes,
+      result: structuredClone(after),
+    });
   }
 
   async cancelApproval(documentId: string, body: CancelApprovalBody): Promise<CancelApprovalResult> {

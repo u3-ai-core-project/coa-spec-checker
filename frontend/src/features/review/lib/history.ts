@@ -4,7 +4,7 @@ import { formatShortDateTime } from '../shared/domain/format';
 import { withUnit } from '../shared/domain/items';
 import { DISPOSITION_META, followUpLabel } from '../shared/domain/recommendation';
 
-export type HistoryKind = '검수 완료' | '보류' | '승인 취소' | '값 수정' | '값 확인' | '매핑 수정';
+export type HistoryKind = '검수 완료' | '보류' | '승인 취소' | '값 수정' | '값 확인' | '매핑 수정' | '규격 변경';
 
 const KIND_COLOR: Record<HistoryKind, string> = {
   '검수 완료': '#2B4FCB',
@@ -13,6 +13,7 @@ const KIND_COLOR: Record<HistoryKind, string> = {
   '값 수정': '#2B4FCB',
   '값 확인': '#2B4FCB',
   '매핑 수정': '#2B4FCB',
+  '규격 변경': '#2B4FCB',
 };
 
 export interface HistoryEntry {
@@ -83,6 +84,10 @@ export function buildHistory(input: {
     } else if (log.action === 'confirm') {
       kind = '값 확인';
       detail = `${name} ${withUnit(log.after_value, item)} 확인됨`;
+    } else if (log.action === 'respec') {
+      // 문서 단위 이력: before/after가 규격 세트 코드입니다.
+      kind = '규격 변경';
+      detail = withReason([`${log.before_value ?? '-'} → ${log.after_value ?? '-'}`], log.reason);
     } else {
       kind = '매핑 수정';
       detail = withReason([`${log.before_value} → ${log.after_value}`], log.reason);

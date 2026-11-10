@@ -28,6 +28,8 @@ import type {
   MappingRecord,
   PatchItemBody,
   PatchItemResult,
+  RejudgeRequest,
+  RejudgeResult,
   PatchSpecBody,
   PatchSpecResult,
   ReviewLog,
@@ -105,6 +107,23 @@ function jsonBody(value: unknown): RequestInit {
 }
 
 /**
+ * 문서 재판정 API (규격 세트를 바꿔 다시 판정, 백엔드 PR #59).
+ *   POST /documents/{id}/rejudge, body { spec_set_code, apply(기본 false), reason }
+ *   응답은 문서 상세가 아니라 RejudgeResult(이전 → 이후 비교와 새 판정 결과).
+ * 주소, 요청 본문, 응답 해석은 이 함수 한 곳에서만 정합니다. 계약이 바뀌면 이 함수만 고칩니다.
+ * 항목과 문서 상세는 적용한 뒤 화면이 GET으로 다시 받습니다.
+ */
+async function requestRejudge(documentId: string, req: RejudgeRequest): Promise<RejudgeResult> {
+  const path = `/documents/${encodeURIComponent(documentId)}/rejudge`;
+  const body = {
+    spec_set_code: req.spec_set_code,
+    apply: req.apply ?? false,
+    ...(req.reason === undefined ? {} : { reason: req.reason }),
+  };
+  return request<RejudgeResult>(path, jsonBody(body));
+}
+
+/**
  * 실제 백엔드 API 구현입니다.
  * 값 수정 사유, 규격 변경 이력, 매핑 사전, 환산표는 백엔드 PR #12에서 확정된 형식입니다.
  */
@@ -128,6 +147,10 @@ export class HttpApi implements Api {
 
   deleteDocument(documentId: string): Promise<DocumentDeleted> {
     return request<DocumentDeleted>(`/documents/${encodeURIComponent(documentId)}`, { method: 'DELETE' });
+  }
+
+  rejudgeDocument(documentId: string, request: RejudgeRequest): Promise<RejudgeResult> {
+    return requestRejudge(documentId, request);
   }
 
   async getDocumentFile(documentId: string): Promise<Blob> {

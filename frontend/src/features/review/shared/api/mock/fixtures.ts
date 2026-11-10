@@ -145,7 +145,10 @@ export function createSpecSets(): MockState['specSets'] {
   ];
 }
 
-/** 개발용 시나리오 'sets'. 탄산리튬에 세트가 둘 이상일 때의 화면을 보려고 D1 항목을 복사한 D3 세트를 더합니다(한계값은 D1과 같은 목업 값). */
+/**
+ * 개발용 시나리오 'sets'. 탄산리튬에 세트가 둘 이상일 때의 화면을 보려고 D1 항목을 복사한 D3 세트를 더합니다.
+ * 한계값은 D1과 같고, 염화물(Cl) 상한만 8 ppm으로 낮춰 검수 화면에서 적용 규격을 바꿔 다시 판정하면 결과가 달라지게 했습니다.
+ */
 export function createExtraLi2co3Set(specs: SpecItem[]): { set: MockState['specSets'][number]; items: SpecItem[] } {
   const code = 'LI2CO3-D3-2023';
   const base = specs.filter((entry) => entry.spec_set_code === LI2CO3_SET_CODE);
@@ -158,10 +161,51 @@ export function createExtraLi2co3Set(specs: SpecItem[]): { set: MockState['specS
       grade: 'D3',
       version: VERSION,
       source: 'YS/T 582-2023 D3 (목업 시험용 복사본)',
-      description: '목업 시험용. D1 항목을 복사했고 한계값은 D1과 같습니다.',
+      description: '목업 시험용. D1 항목을 복사했고 염화물(Cl) 상한만 8 ppm으로 낮췄습니다.',
       is_default: false,
     },
-    items: base.map((entry, index) => ({ ...entry, id: firstId + index, spec_set_code: code, grade: 'D3', source: 'YS/T 582-2023 D3 (목업 시험용 복사본)' })),
+    items: base.map((entry, index) => ({
+      ...entry,
+      id: firstId + index,
+      spec_set_code: code,
+      grade: 'D3',
+      source: 'YS/T 582-2023 D3 (목업 시험용 복사본)',
+      usl: entry.item_name === 'Cl' ? 8 : entry.usl,
+    })),
+  };
+}
+
+/**
+ * 개발용 시나리오 'sets'. 서버 시드(LI2CO3-D1-STRICT, LI2CO3-D1-RELAXED)처럼 D1을 복사해 한도를 바꾼 비교용 세트입니다.
+ * 한도는 목업 값이고 실제 서버 값과 같지 않습니다. 강화는 순도 하한과 염화물 상한을, 완화는 칼슘과 나트륨 상한을 바꿔
+ * 검수 화면에서 기본·강화·완화를 바꿔 보면 판정이 달라지게 했습니다.
+ */
+export function createCompareLi2co3Set(specs: SpecItem[], variant: 'STRICT' | 'RELAXED'): { set: MockState['specSets'][number]; items: SpecItem[] } {
+  const code = `LI2CO3-D1-${variant}`;
+  const strict = variant === 'STRICT';
+  const grade = strict ? 'D1-엄격' : 'D1-완화';
+  const label = strict ? '한도 강화' : '한도 완화';
+  const base = specs.filter((entry) => entry.spec_set_code === LI2CO3_SET_CODE);
+  const firstId = Math.max(...specs.map((entry) => entry.id)) + 1;
+  const limitOf = (entry: SpecItem): Pick<SpecItem, 'lsl' | 'usl'> => {
+    if (strict && entry.item_name === '순도') return { lsl: 99.7, usl: entry.usl };
+    if (strict && entry.item_name === 'Cl') return { lsl: entry.lsl, usl: 8 };
+    if (!strict && entry.item_name === 'Ca') return { lsl: entry.lsl, usl: 150 };
+    if (!strict && entry.item_name === 'Na') return { lsl: entry.lsl, usl: 100 };
+    return { lsl: entry.lsl, usl: entry.usl };
+  };
+  return {
+    set: {
+      code,
+      material_code: DEFAULT_MATERIAL_CODE,
+      material_name: '탄산리튬',
+      grade,
+      version: VERSION,
+      source: `D1 세트 복사 후 ${label} (목업 시험용)`,
+      description: `목업 시험용 비교 기준. D1 항목을 복사하고 일부 ${label}했습니다. 규격 원문이 아닙니다.`,
+      is_default: false,
+    },
+    items: base.map((entry, index) => ({ ...entry, ...limitOf(entry), id: firstId + index, spec_set_code: code, grade, source: `D1 세트 복사 후 ${label} (목업 시험용)` })),
   };
 }
 
@@ -659,9 +703,13 @@ export function createMockState(options: MockOptions = {}): MockState {
   }
   const specSets = createSpecSets();
   if (options.scenario === 'sets') {
-    const extra = createExtraLi2co3Set(specs);
-    specSets.push(extra.set);
-    specs.push(...extra.items);
+    // 세트를 하나씩 더하며 규격 항목 번호를 이어 갑니다.
+    const makers = [createExtraLi2co3Set, (all: SpecItem[]) => createCompareLi2co3Set(all, 'STRICT'), (all: SpecItem[]) => createCompareLi2co3Set(all, 'RELAXED')];
+    for (const make of makers) {
+      const extra = make(specs);
+      specSets.push(extra.set);
+      specs.push(...extra.items);
+    }
   }
   return { users: MOCK_USERS.map((user) => ({ ...user })), specSets, specs, docs: options.empty ? [] : docs };
 }
