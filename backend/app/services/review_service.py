@@ -15,6 +15,12 @@
   회신값(실측값, 검출한계, 자체 시험값)을 PATCH 로 넣으면 2단계에서 그 값으로 판정한다.
   해결 조건(resolution)을 만족하면 그대로 적합이 되고 reason_code·resolution 이 사라진다.
 
+규격 세트를 바꿔 다시 판정 (POST /documents/{id}/rejudge, 멘토님 피드백: 검수 화면 규격 드롭다운)
+  AI 추출은 다시 하지 않고 저장된 추출 결과를 다른 규격 세트로 판정한다.
+  apply=false : 미리보기. 문서·이력을 바꾸지 않는다. 처분 완료 문서도 볼 수 있다 (다른 기준으로 시험해 보는 용도)
+  apply=true  : 문서의 규격 세트를 바꾸고 저장한다. 처분 전 문서만, 사유 필수, review_logs 에 respec 이력.
+  검사 순서: 문서 없음 404 → 상태 409 → 규격 세트 400 UNKNOWN_SPEC_SET → 사유 누락 400 (apply=true)
+
 잠금을 거는 이유: 두 사람이 같은 문서의 다른 항목을 동시에 고치면 JSON 전체를 덮어써 한쪽 수정이 사라질 수 있다.
 """
 from datetime import datetime, timezone
@@ -23,14 +29,18 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.enums import (
-    DocumentStatus, MappingSource, NOT_READY_STATUSES, ReviewAction, ValueQualifier as Q, ValueSource,
-    status_to_review_status,
+    DocumentIssueCode, DocumentStatus, MappingSource, NOT_READY_STATUSES, ReviewAction, ValueQualifier as Q,
+    ValueSource, status_to_review_status,
 )
 from app.core.errors import AppException, ErrorCode
-from app.models import Document, ReviewLog, User
-from app.schemas.extraction import ExtractionItem, ExtractionResult
-from app.schemas.review import ItemUpdateRequest, ReviewedItem, ReviewLogOut
+from app.models import Document, ReviewLog, SpecSet, User
+from app.models.review_log import DOCUMENT_LOG_ITEM_ID
+from app.schemas.extraction import DocumentIssue, ExtractionItem, ExtractionResult
+from app.schemas.review import (
+    ItemUpdateRequest, RejudgeItemChange, RejudgeRequest, RejudgeResponse, ReviewedItem, ReviewLogOut, SpecSetRef,
+)
 from app.services import extraction_service, mapping_service, spec_service
+from app.services.judgement.document_checks import check_spec_version
 from app.services.judgement.engine import refresh_summary
 from app.services.judgement.item_judge import current_override, evaluate_item, rejudge_item
 from app.services.judgement.missing_items import build_missing_items
@@ -144,6 +154,78 @@ def confirm_item(
 
 
 # ---------------------------------------------------------------------------
+# 규격 세트를 바꿔 다시 판정 (POST /documents/{id}/rejudge)
+# ---------------------------------------------------------------------------
+def rejudge_by_spec_set(db: Session, document_id: str, req: RejudgeRequest, user: User) -> RejudgeResponse:
+    """문서를 다른 규격 세트로 다시 판정한다. apply=false 는 미리보기, apply=true 는 저장 (commit 까지 한다)."""
+    doc = _lock_reviewable(db, document_id) if req.apply else _get_ready_document(db, document_id)
+    if not req.code:
+        raise AppException(ErrorCode.VALIDATION_ERROR, "spec_set_code 를 입력해야 합니다")
+    target = spec_service.resolve_spec_set(db, doc.material_code, req.code)
+    reason = req.clean_reason
+    if req.apply and reason is None:
+        raise AppException(ErrorCode.REASON_REQUIRED, "규격 세트를 바꿀 때는 변경 사유를 입력해야 합니다")
+
+    current = doc.spec_set or spec_service.get_default_set(db, doc.material_code)
+    stored = extraction_service.get_result(doc)
+    if current is not None and current.id == target.id:
+        # 이미 이 세트로 판정한 문서. 저장된 결과를 그대로 보여 주고 아무것도 바꾸지 않는다
+        return _rejudge_response(doc.id, applied=False, target=target, previous=current, before=stored, after=stored,
+                                 changes=[])
+
+    after, _ = rejudge_result(stored.model_copy(deep=True), spec_service.get_rules(db, target.id), target)
+    changes = _item_changes(stored, after)
+    if req.apply:
+        doc.spec_set_id = target.id
+        doc.spec_set = target
+        log = _log(doc, _document_marker(), ReviewAction.RESPEC, current.code if current else None, target.code,
+                   user, reason=reason)
+        _save(db, doc, after, [log])
+    return _rejudge_response(doc.id, applied=req.apply, target=target, previous=current, before=stored, after=after,
+                             changes=changes)
+
+
+def _get_ready_document(db: Session, document_id: str) -> Document:
+    """미리보기용. 잠그지 않고, 처분 완료 문서도 허용한다. 추출 전·실패 문서는 409 NOT_READY."""
+    doc = _get_document(db, document_id)
+    if doc.status in NOT_READY_STATUSES or doc.extraction is None:
+        raise AppException(ErrorCode.NOT_READY)
+    return doc
+
+
+def _document_marker() -> ExtractionItem:
+    """문서 단위 이력(_log)에 넘길 가짜 항목. item_id 만 쓰인다."""
+    return ExtractionItem.model_construct(item_id=DOCUMENT_LOG_ITEM_ID)
+
+
+def _item_changes(before: ExtractionResult, after: ExtractionResult) -> list[RejudgeItemChange]:
+    """규격 세트를 바꾸자 판정이 달라진 항목. 항목명으로 맞춘다 (누락 항목의 item_id 는 세트마다 새로 붙으므로)."""
+    old = {name_key(i.normalized_name): i for i in before.items}
+    new = {name_key(i.normalized_name): i for i in after.items}
+    out: list[RejudgeItemChange] = []
+    for key in [*old, *(k for k in new if k not in old)]:
+        b, a = old.get(key), new.get(key)
+        if (b.judgement if b else None) != (a.judgement if a else None):
+            out.append(RejudgeItemChange(item_name=(a or b).normalized_name,
+                                         before=b.judgement if b else None, after=a.judgement if a else None))
+    return out
+
+
+def _spec_ref(spec_set: SpecSet | None) -> SpecSetRef | None:
+    return SpecSetRef(code=spec_set.code, grade=spec_set.grade, version=spec_set.version) if spec_set else None
+
+
+def _rejudge_response(document_id: str, *, applied: bool, target: SpecSet, previous: SpecSet | None,
+                      before: ExtractionResult, after: ExtractionResult,
+                      changes: list[RejudgeItemChange]) -> RejudgeResponse:
+    return RejudgeResponse(
+        document_id=document_id, applied=applied, spec_set=_spec_ref(target), previous_spec_set=_spec_ref(previous),
+        lot_recommendation_before=before.lot_recommendation, lot_recommendation_after=after.lot_recommendation,
+        summary_before=before.summary, summary_after=after.summary, changed_items=changes, result=after,
+    )
+
+
+# ---------------------------------------------------------------------------
 # 응답 변환
 # ---------------------------------------------------------------------------
 def to_reviewed_item(item: ExtractionItem) -> ReviewedItem:
@@ -199,13 +281,16 @@ def _specs_of(db: Session, doc: Document) -> list[SpecRule]:
     return spec_service.get_rules(db, spec_set.id) if spec_set else []
 
 
-def rejudge_document(doc: Document, specs: list[SpecRule]) -> tuple[ExtractionResult, list[str]]:
-    """규격이 바뀐 뒤 문서를 새 규격으로 다시 판정해 저장한다 (검수 상태 유지, 문서 상태는 그대로).
+def rejudge_result(
+    result: ExtractionResult, specs: list[SpecRule], spec_set: SpecSet | None = None
+) -> tuple[ExtractionResult, list[str]]:
+    """저장된 결과를 새 규격으로 다시 판정한다. DB 를 쓰지 않는 계산이며 result 를 직접 고쳐 돌려준다.
 
-    돌려주는 값: (새 결과, 판정이 바뀐 항목명). commit 은 호출한 쪽에서 한다.
+    돌려주는 값: (새 결과, 판정이 바뀐 항목명).
     서버가 만든 누락 항목은 버리고 새 규격으로 다시 만든다. 담당자가 확인·입력한 항목은 그 상태를 유지한다.
+    spec_set 을 주면 규격 버전 불일치(SPEC_VERSION_MISMATCH)도 그 세트의 버전으로 다시 계산한다.
+    다른 문서 정합성 오류(로트·날짜·제품)는 규격 세트와 무관하므로 그대로 둔다.
     """
-    result = extraction_service.get_result(doc)
     policy = default_policy()
     by_name = {name_key(s.item_name): s for s in specs}
     before = {i.item_id: i.judgement for i in result.items}
@@ -214,13 +299,39 @@ def rejudge_document(doc: Document, specs: list[SpecRule]) -> tuple[ExtractionRe
     result.items = [rejudge_item(i, by_name.get(name_key(i.normalized_name)), policy=policy)
                     for i in result.items if not _is_untouched_missing(i)]
     _sync_missing_items(result, specs, policy)
+    if spec_set is not None:
+        result.document_issues = _with_spec_version_issue(result, spec_set.version)
     refresh_summary(result, specs, policy)
 
     changed = [names[i.item_id] for i in result.items if i.item_id in before and before[i.item_id] != i.judgement]
+    return result, changed
+
+
+def rejudge_document(doc: Document, specs: list[SpecRule], spec_set: SpecSet | None = None) -> tuple[ExtractionResult, list[str]]:
+    """규격이 바뀐 뒤 문서를 새 규격으로 다시 판정해 저장한다 (검수 상태 유지, 문서 상태는 그대로).
+
+    commit 은 호출한 쪽에서 한다. 계산은 rejudge_result 가 한다.
+    """
+    result, changed = rejudge_result(extraction_service.get_result(doc), specs, spec_set)
     doc.lot_recommendation = result.lot_recommendation
     doc.extraction.result = result.to_json()
     doc.extraction.updated_at = datetime.now(timezone.utc)
     return result, changed
+
+
+def _with_spec_version_issue(result: ExtractionResult, version: str | None) -> list[DocumentIssue]:
+    """document_issues 에서 규격 버전 불일치만 새 세트 버전으로 다시 계산한다 (같은 자리에 두고, 없던 것이면 끝에 붙인다)."""
+    fresh = check_spec_version(result.applied_standard, version)
+    out: list[DocumentIssue] = []
+    for issue in result.document_issues:
+        if issue.code != DocumentIssueCode.SPEC_VERSION_MISMATCH:
+            out.append(issue)
+        elif fresh is not None:
+            out.append(fresh)
+            fresh = None
+    if fresh is not None:
+        out.append(fresh)
+    return out
 
 
 def _find_item(result: ExtractionResult, item_id: str) -> tuple[int, ExtractionItem]:
