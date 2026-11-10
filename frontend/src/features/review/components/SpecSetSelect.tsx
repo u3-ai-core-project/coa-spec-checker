@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { api } from '../shared/api';
 import type { DocumentDetail, SpecSet } from '../shared/api/types';
+import { specSetName, specSetOptionLabel, visibleSpecSets } from '../shared/domain/specSets';
 import { useAsync } from '../shared/hooks/useAsync';
 import { RejudgeDialog } from './RejudgeDialog';
 
@@ -20,7 +21,8 @@ function setsOfMaterial(sets: SpecSet[], materialCode: string): SpecSet[] {
 }
 
 /**
- * 문서 정보의 "적용 규격" 드롭다운. 현재 적용 중인 세트(문서 상세의 spec_set_code)가 선택돼 있고,
+ * 문서 정보의 "적용 규격" 드롭다운. 보이는 세트와 이름은 shared/domain/specSets.ts의 이름 맵을 따릅니다(표시만 바꾸고 서버 코드와 요청 값은 그대로).
+ * 현재 적용 중인 세트(문서 상세의 spec_set_code)가 선택돼 있고,
  * 다른 세트를 고르면 다이얼로그가 서버 미리보기(이전 → 이후)를 보여 주고, 처분 전 문서는 사유를 적어 적용합니다
  * (화면에서 판정을 다시 계산하지 않습니다). 처분 완료 문서도 드롭다운은 열려 있고 미리보기만 됩니다(적용은 다이얼로그에서 비활성).
  */
@@ -29,7 +31,7 @@ export function SpecSetSelect({ doc, locked = false, onDone, onStale }: SpecSetS
   /** 확인 다이얼로그에서 확정을 기다리는 세트 */
   const [target, setTarget] = useState<SpecSet | null>(null);
 
-  const sets = setsOfMaterial(setsQuery.data ?? [], doc.material_code);
+  const sets = visibleSpecSets(setsOfMaterial(setsQuery.data ?? [], doc.material_code), doc.material_code, doc.spec_set_code);
   const current = sets.find((set) => set.code === doc.spec_set_code) ?? null;
 
   const disabledReason = setsQuery.error && !setsQuery.data ? '규격 세트 목록을 불러오지 못했습니다.' : null;
@@ -53,16 +55,15 @@ export function SpecSetSelect({ doc, locked = false, onDone, onStale }: SpecSetS
             disabled ? 'cursor-not-allowed bg-[#F3F4F6] text-[#8A9099]' : 'bg-white text-[#1F2328]'
           }`}
         >
-          {/* 문서에 규격 세트 정보가 없거나 목록에 없는 세트이면, 지금 값을 그대로 보여 줍니다. */}
+          {/* 문서에 규격 세트 정보가 없거나 서버 목록에 없는 세트이면, 지금 값을 그대로 보여 줍니다. */}
           {!current && (
             <option value={doc.spec_set_code ?? ''} disabled>
-              {doc.spec_set_code ?? '지정되지 않음'}
+              {specSetName(doc.spec_set_code) ?? doc.spec_set_code ?? '지정되지 않음'}
             </option>
           )}
           {sets.map((set) => (
             <option key={set.code} value={set.code} title={[set.version, set.description].filter(Boolean).join(' · ')}>
-              {set.code}
-              {set.is_default ? ' (기본)' : ''}
+              {specSetOptionLabel(set)}
             </option>
           ))}
         </select>

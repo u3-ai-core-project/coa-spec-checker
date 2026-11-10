@@ -5,6 +5,7 @@ import type { DocumentDetail, Judgement, LotRecommendation, RejudgeResult, SpecS
 import { Icon } from '../shared/components/Icon';
 import { JUDGEMENT_META, JUDGEMENT_ORDER } from '../shared/domain/judgement';
 import { RECOMMENDATION_META } from '../shared/domain/recommendation';
+import { specSetName } from '../shared/domain/specSets';
 import { isEditableStatus } from '../shared/domain/status';
 import { useAsync } from '../shared/hooks/useAsync';
 import { Modal } from './Modal';
@@ -26,7 +27,9 @@ function serverMessage(failure: unknown): string {
   return errorMessage(failure);
 }
 
-const specLabel = (ref: SpecSetRef | null) => (ref ? `${ref.code}${ref.version ? ` (${ref.version})` : ''}` : '-');
+/** 이름 맵에 있으면 화면 이름, 없으면 서버 코드(와 버전)를 그대로 보여 줍니다. */
+const specLabel = (ref: SpecSetRef | null) =>
+  ref ? (specSetName(ref.code) ?? `${ref.code}${ref.version ? ` (${ref.version})` : ''}`) : '-';
 const recommendationLabel = (value: LotRecommendation | null) => (value ? RECOMMENDATION_META[value].label : '-');
 const judgementLabel = (value: Judgement | null) => (value ? JUDGEMENT_META[value].label : '없음');
 
@@ -134,7 +137,7 @@ export function RejudgeDialog({ doc, target, onClose, onDone, onStale }: Rejudge
         적용 규격 변경
       </h4>
       <p className="modal-body text-[13px] leading-relaxed text-[#5B616A]">
-        <b className="font-semibold text-[#1F2328]">{target.code}</b> 기준으로 서버가 다시 판정한 결과를 미리 보여 줍니다. 적용하기 전에는 문서가 바뀌지 않습니다.
+        <b className="font-semibold text-[#1F2328]">{specSetName(target.code) ?? target.code}</b> 기준으로 서버가 다시 판정한 결과를 미리 보여 줍니다. 적용하기 전에는 문서가 바뀌지 않습니다.
       </p>
       {!preview && !previewError && <p className="rejudge-loading text-[13px] text-[#5B616A]">서버가 미리보기를 계산하는 중입니다.</p>}
       {preview && <PreviewBody preview={preview} />}
