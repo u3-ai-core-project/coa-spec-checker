@@ -13,6 +13,8 @@
                         (10.25 회의 결정). 처분 완료·처리 중·실패 문서는 건드리지 않는다.
   - GET /specs/{id}/change-logs : 규격 변경 이력 (v1.4)
 """
+import re
+
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload
 
@@ -20,7 +22,8 @@ from app.core.errors import AppException, ErrorCode
 from app.core.enums import DocumentStatus
 from app.models import Document, SpecChangeLog, SpecItem, SpecSet, User
 from app.schemas.spec import (
-    RejudgedDocument, SpecChangeLogOut, SpecItemOut, SpecSetOut, SpecUpdateOut, SpecUpdateRequest,
+    RejudgedDocument, SpecChangeLogOut, SpecItemOut, SpecPreviewOut, SpecRevertRequest, SpecSetOut, SpecUpdateOut,
+    SpecUpdateRequest,
 )
 from app.services.judgement.spec_rule import SpecRule
 
@@ -112,13 +115,7 @@ def update_item(db: Session, spec_id: int, req: SpecUpdateRequest, user: User) -
     reason = (req.reason or "").strip() or None
     if reason is None:
         raise AppException(ErrorCode.REASON_REQUIRED, "규격 변경 사유를 입력해야 합니다")
-    changes = req.model_dump(exclude_unset=True, exclude={"reason"})
-    if "unit" in changes:
-        changes["unit"] = (changes["unit"] or "").strip() or None
-    lsl = changes.get("lsl", item.lsl)
-    usl = changes.get("usl", item.usl)
-    if lsl is not None and usl is not None and lsl > usl:
-        raise AppException(ErrorCode.INVALID_SPEC_RANGE)
+    changes = _parse_changes(item, req)
 
     changed = [f for f in _LOGGED_FIELDS if f in changes and changes[f] != getattr(item, f)]
     if changed:
@@ -137,6 +134,81 @@ def update_item(db: Session, spec_id: int, req: SpecUpdateRequest, user: User) -
     db.commit()
     db.refresh(item)
     return SpecUpdateOut(**to_item_out(item).model_dump(), rejudged_documents=rejudged)
+
+
+def _parse_changes(item: SpecItem, req: SpecUpdateRequest) -> dict:
+    """요청에서 바꿀 필드만 뽑고 범위를 검사한다. 범위가 틀리면 400 INVALID_SPEC_RANGE."""
+    changes = req.model_dump(exclude_unset=True, exclude={"reason", "rejudge"})
+    if "unit" in changes:
+        changes["unit"] = (changes["unit"] or "").strip() or None
+    lsl = changes.get("lsl", item.lsl)
+    usl = changes.get("usl", item.usl)
+    if lsl is not None and usl is not None and lsl > usl:
+        raise AppException(ErrorCode.INVALID_SPEC_RANGE)
+    return changes
+
+
+def preview_update(db: Session, spec_id: int, req: SpecUpdateRequest) -> SpecPreviewOut:
+    """POST /specs/{id}/preview. 수정을 저장하지 않고 영향 범위(문서 수, 로트 권고 변화)를 계산한다 (운영 정책 5장).
+
+    실제 적용과 같은 재판정 코드를 돌린 뒤 transaction 을 되돌려 아무것도 저장하지 않는다.
+    """
+    item = db.get(SpecItem, spec_id)
+    if item is None:
+        raise AppException(ErrorCode.SPEC_NOT_FOUND)
+    changes = _parse_changes(item, req)
+    changed_fields = [f for f in _LOGGED_FIELDS if f in changes and changes[f] != getattr(item, f)]
+    set_id = item.spec_set_id
+    try:
+        for field, value in changes.items():
+            setattr(item, field, value)
+        targets = rejudge_open_documents(db, set_id)
+    finally:
+        db.rollback()
+    affected = [t for t in targets if t.changed_items or t.lot_recommendation_before != t.lot_recommendation_after]
+    return SpecPreviewOut(
+        changed_fields=changed_fields,
+        target_documents=len(targets),
+        affected_documents=len(affected),
+        recommendation_changed_documents=sum(1 for t in affected if t.lot_recommendation_before != t.lot_recommendation_after),
+        documents=affected,
+    )
+
+
+_LOG_FIELD = re.compile(r"(lsl|usl|unit): (.*?)(?=, (?:lsl|usl|unit): |$)")
+
+
+def _parse_log_values(text: str) -> dict:
+    """변경 이력 문자열("lsl: 1, usl: 없음") → {"lsl": 1.0, "usl": None}. _fmt_spec_value 의 반대."""
+    out: dict = {}
+    for name, raw in _LOG_FIELD.findall(text):
+        if raw == "없음":
+            out[name] = None
+        elif name == "unit":
+            out[name] = raw
+        else:
+            out[name] = float(raw)
+    return out
+
+
+def revert_last_change(db: Session, spec_id: int, req: SpecRevertRequest, user: User) -> SpecUpdateOut:
+    """POST /specs/{id}/revert. 가장 최근 변경 이력의 이전 값으로 되돌린다 (운영 정책 5장).
+
+    되돌리기도 규격 변경이라 사유가 필수이고 변경 이력이 새로 남는다(사유 앞에 "되돌리기: "). 이력은 지우지 않는다.
+    되돌린 뒤에 다시 되돌리면 되돌리기 전 값으로 돌아간다. 이전 이력이 없으면 409 NOTHING_TO_REVERT.
+    """
+    if db.get(SpecItem, spec_id) is None:
+        raise AppException(ErrorCode.SPEC_NOT_FOUND)
+    reason = (req.reason or "").strip()
+    if not reason:
+        raise AppException(ErrorCode.REASON_REQUIRED, "되돌리는 사유를 입력해야 합니다")
+    last = db.scalar(select(SpecChangeLog).where(SpecChangeLog.spec_item_id == spec_id)
+                     .order_by(SpecChangeLog.created_at.desc(), SpecChangeLog.id.desc()).limit(1))
+    if last is None:
+        raise AppException(ErrorCode.NOTHING_TO_REVERT)
+    restored = _parse_log_values(last.before_value)
+    update = SpecUpdateRequest(**restored, reason=f"되돌리기: {reason}", rejudge=req.rejudge)
+    return update_item(db, spec_id, update, user)
 
 
 # 규격을 고쳤을 때 다시 판정하는 문서 상태. 처분 완료 문서는 당시 판정이 근거라 바꾸지 않는다.

@@ -6,12 +6,12 @@ from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.config import settings
-from app.core.enums import DocumentStatus, LotRecommendation, Role
+from app.core.enums import DocumentStatus, ErrorKind, FailStage, LotRecommendation, Role
 from app.core.errors import AppException, ErrorCode
 from app.models import Document, User
 from app.schemas.document import DocumentDetail, DocumentListItem
 from app.schemas.extraction import Summary
-from app.services import spec_service
+from app.services import reissue_service, spec_service
 
 logger = logging.getLogger(__name__)
 
@@ -163,7 +163,7 @@ def retry_document(db: Session, document_id: str, user: User) -> Document:
     claimed = db.execute(
         update(Document)
         .where(Document.id == doc.id, Document.status == DocumentStatus.FAILED)
-        .values(status=DocumentStatus.QUEUED, error_message=None)
+        .values(status=DocumentStatus.QUEUED, error_message=None, attempt_count=0, failed_stage=None, error_kind=None)
     )
     if claimed.rowcount == 0:
         db.rollback()
@@ -173,17 +173,39 @@ def retry_document(db: Session, document_id: str, user: User) -> Document:
     return doc
 
 
-def recover_stuck_documents(db: Session) -> int:
-    """서버 시작 시 호출. 대기·처리 중으로 남은 문서를 failed 로 바꾸고 바꾼 건수를 돌려준다. commit 까지 한다.
+def list_resumable_documents(db: Session, max_attempts: int) -> list[str]:
+    """서버 시작 때 자동으로 다시 시작할 수 있는 문서 ID. 대기·처리 중이면서 시도 횟수가 상한보다 적은 문서."""
+    return list(db.scalars(
+        select(Document.id)
+        .where(Document.status.in_([DocumentStatus.QUEUED, DocumentStatus.PROCESSING]),
+               Document.attempt_count < max_attempts)
+        .order_by(Document.uploaded_at, Document.id)
+    ))
+
+
+def recover_stuck_documents(db: Session, *, max_attempts: int | None = None) -> int:
+    """서버 시작 시 호출. 대기·처리 중으로 남은 문서를 정리하고, failed 로 바꾼 건수를 돌려준다. commit 까지 한다.
 
     추출은 서버 안의 백그라운드 작업이라 서버가 꺼지면 사라진다. 그대로 두면 문서가 영원히 대기·처리 중으로 남아
-    삭제할 수도(처리 중 문서는 삭제 불가), 다시 처리할 수도 없다. failed 로 바꿔 두면 재처리나 삭제를 할 수 있다.
-    서버 1개(프로세스 1개)로 돌린다는 전제다. 여러 개를 동시에 띄우면 다른 서버가 처리 중인 문서도 failed 가 된다.
+    삭제할 수도(처리 중 문서는 삭제 불가), 다시 처리할 수도 없다.
+    - max_attempts 가 없으면 (1단계) 모두 failed 로 바꾼다. 실패 단계는 interrupted, 오류 종류는 일시 오류로 기록한다
+    - max_attempts 가 있으면 (2단계) 시도 횟수가 상한보다 적은 문서는 queued 로 되돌려 다시 시작할 수 있게 하고(건수에 안 셈),
+      나머지만 failed 로 바꾼다. 문제 있는 문서가 서버를 켤 때마다 반복되는 것을 막는다
+    서버 1개(프로세스 1개)로 돌린다는 전제다. 여러 개를 동시에 띄우면 다른 서버가 처리 중인 문서도 정리된다.
     """
+    stuck = [DocumentStatus.QUEUED, DocumentStatus.PROCESSING]
+    if max_attempts is not None:
+        db.execute(update(Document).where(Document.status.in_(stuck), Document.attempt_count < max_attempts)
+                   .values(status=DocumentStatus.QUEUED))
+        stuck_where = Document.attempt_count >= max_attempts
+    else:
+        stuck_where = Document.attempt_count >= 0
     result = db.execute(
         update(Document)
-        .where(Document.status.in_([DocumentStatus.QUEUED, DocumentStatus.PROCESSING]))
-        .values(status=DocumentStatus.FAILED, error_message=MSG_INTERRUPTED)
+        .where(Document.status.in_(stuck), stuck_where)
+        .values(status=DocumentStatus.FAILED, error_message=MSG_INTERRUPTED,
+                failed_stage=FailStage.INTERRUPTED.value, error_kind=ErrorKind.TRANSIENT,
+                processing_finished_at=func.now())
     )
     db.commit()
     return result.rowcount
@@ -219,12 +241,16 @@ def to_list_item(doc: Document) -> DocumentListItem:
         approved_by=doc.approver.name if doc.approver else None,
         approved_at=doc.approved_at,
         error_message=doc.error_message,
+        attempt_count=doc.attempt_count,
+        failed_stage=doc.failed_stage,
+        error_kind=doc.error_kind,
     )
 
 
 def to_detail(db: Session, doc: Document) -> DocumentDetail:
     # 세트가 연결되지 않은 옛 문서는 원자재 기본 세트 정보를 보여준다
     spec_set = doc.spec_set or spec_service.get_default_set(db, doc.material_code)
+    lot_nos = (doc.extraction.result.get("lot_nos") or []) if doc.extraction else []
     return DocumentDetail(
         document_id=doc.id,
         file_name=doc.file_name,
@@ -233,6 +259,8 @@ def to_detail(db: Session, doc: Document) -> DocumentDetail:
         material_name=doc.material_name,
         po_no=doc.po_no,
         lot_no=doc.lot_no,
+        lot_nos=lot_nos,
+        is_multi_lot=len(lot_nos) >= 2,
         received_lot_no=doc.received_lot_no,
         test_date=doc.test_date,
         origin=doc.origin,
@@ -241,11 +269,15 @@ def to_detail(db: Session, doc: Document) -> DocumentDetail:
         spec_set_code=spec_set.code if spec_set else None,
         spec_version=spec_set.version if spec_set else None,
         batch_id=doc.batch_id,
+        reissue_status=reissue_service.status_of(db, doc),
         status=doc.status,
         lot_recommendation=doc.lot_recommendation,
         final_decision=doc.final_decision,
         decision_reason=doc.decision_reason,
         error_message=doc.error_message,
+        attempt_count=doc.attempt_count,
+        failed_stage=doc.failed_stage,
+        error_kind=doc.error_kind,
         uploaded_by=doc.uploader.name,
         uploaded_at=doc.uploaded_at,
         approved_by=doc.approver.name if doc.approver else None,

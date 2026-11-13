@@ -64,6 +64,7 @@ def judge_document(
         document_id=document_id,
         supplier=extraction.supplier,
         lot_no=extraction.lot_no,
+        lot_nos=extraction.lot_nos,
         test_date=extraction.test_date,
         origin=extraction.origin,
         applied_standard=extraction.applied_standard,

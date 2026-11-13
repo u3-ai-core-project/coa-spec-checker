@@ -40,10 +40,26 @@ def _crash():
 app.include_router(_router)
 
 
+from app import __version__
+
+
 def test_health(client):
     r = client.get("/health")
     assert r.status_code == 200
-    assert r.json() == {"success": True, "data": {"status": "ok"}, "error": None}
+    assert r.json() == {"success": True, "data": {"status": "ok", "database": "ok", "version": __version__}, "error": None}
+
+
+def test_health_reports_db_failure(client, monkeypatch):
+    """DB 연결이 끊기면 정상으로 보이지 않고 503 (운영 정책 4장)."""
+    from app import main
+
+    def broken():
+        raise RuntimeError("db down")
+
+    monkeypatch.setattr(main, "SessionLocal", broken)
+    r = client.get("/health")
+    assert r.status_code == 503
+    assert r.json()["error"]["code"] == "DB_UNAVAILABLE"
 
 
 def test_app_exception_uses_spec_format(client):

@@ -66,6 +66,8 @@ alembic upgrade head
 ```
 이 절차를 건너뛰면 다른 팀원 로컬 DB에서 컬럼 누락으로 인한 500 에러가 발생합니다.
 
+기존 DB를 쓰던 중 코드를 새로 받았다면 서버를 끄고 `alembic upgrade head`를 먼저 실행한 뒤 서버를 다시 시작합니다. 새 컬럼이 없는 채로 서버가 뜨면 문서 업로드와 조회에서 오류가 납니다.
+
 **6. 시드 적재 (최초 1회, 여러 번 실행해도 됨)**
 ```bash
 python -m seeds.seed
@@ -125,5 +127,19 @@ CROSS_RULES=["heavy_metal_total", "na_k_sum"]
 - `ND_LIMIT_INCLUSIVE`: 검출한계가 사내 상한과 같으면 적합 (기본 `true`)
 - `UNMAPPED_AI_ITEM`: 사내 규격에 없는 AI 추정 항목명을 `check`(확인 필요) 또는 `reference`(참고)로 처리 (기본 `check`)
 - `CROSS_RULES`: 켤 교차 규칙. 중금속 총량 → Pb·Cu 판정(`heavy_metal_total`), Na+K 합산 → Na·K 원소별 판정(`na_k_sum`)
+
+**12. 처리 실패·재시도 설정 (선택)**
+
+추출이 오래 걸리거나 실패했을 때의 동작은 `.env` 값으로 바꿀 수 있습니다. 비워 두면 기본값이 적용됩니다.
+```
+EXTRACTION_TIMEOUT_SEC=300
+EXTRACTION_AUTO_RETRIES=1
+RESUME_STUCK_ON_START=false
+MAX_EXTRACTION_ATTEMPTS=2
+```
+- `EXTRACTION_TIMEOUT_SEC`: 추출 1회의 제한 시간(초). 넘으면 실패로 처리합니다 (기본 300, 5분)
+- `EXTRACTION_AUTO_RETRIES`: 시간 초과나 연결 오류 같은 일시 오류일 때 자동으로 다시 시도하는 횟수 (기본 1). 손상된 파일 같은 영구 오류는 다시 시도하지 않습니다
+- `RESUME_STUCK_ON_START`: 서버를 켤 때 처리 중이던 문서를 다시 시작할지 여부 (기본 `false`). `false`이면 실패로만 정리하고, `true`이면 시도 횟수가 상한 안인 문서는 다시 시작합니다
+- `MAX_EXTRACTION_ATTEMPTS`: 서버 시작 때 자동으로 다시 시작할 수 있는 시도 상한 (기본 2)
 
 평가 스크립트와 데모 PDF 만들기는 `evaluation/README.md`를 참고하세요.

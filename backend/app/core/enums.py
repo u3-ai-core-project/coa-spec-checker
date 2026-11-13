@@ -21,6 +21,20 @@ class DocumentStatus(StrEnum):
     FAILED = "failed"
 
 
+class ErrorKind(StrEnum):
+    """추출 실패 종류 (운영 정책 4장). 영구 오류는 다시 해도 같은 결과라 자동 재시도하지 않는다."""
+    PERMANENT = "permanent"   # 손상된 파일, 시험 항목 없음 등
+    TRANSIENT = "transient"   # 시간 초과, 서버 재시작 등 다시 하면 성공할 수 있는 오류
+
+
+class FailStage(StrEnum):
+    """추출이 실패한 단계 (운영 정책 4장). documents.failed_stage 에 문자열로 저장한다."""
+    EXTRACT = "extract"          # 문서 읽기·추출
+    JUDGE = "judge"              # 판정·저장
+    TIMEOUT = "timeout"          # 제한 시간 초과
+    INTERRUPTED = "interrupted"  # 서버 재시작으로 중단
+
+
 # 검수/처분이 가능한 상태 (그 외는 409 NOT_READY 또는 ALREADY_APPROVED)
 REVIEWABLE_STATUSES = {DocumentStatus.EXTRACTED, DocumentStatus.IN_REVIEW, DocumentStatus.ON_HOLD}
 NOT_READY_STATUSES = {DocumentStatus.QUEUED, DocumentStatus.PROCESSING, DocumentStatus.FAILED}
@@ -87,6 +101,7 @@ class DocumentIssueCode(StrEnum):
     DATE_CONFLICT = "DATE_CONFLICT"
     SUPPLIER_CONFLICT = "SUPPLIER_CONFLICT"
     SPEC_VERSION_UNKNOWN = "SPEC_VERSION_UNKNOWN"  # 예약. 지금은 탐지하지 않는다 (같은 규격 다른 연도는 SPEC_VERSION_MISMATCH)
+    MULTI_LOT = "MULTI_LOT"  # 한 문서에서 로트번호가 2개 이상 확인됨 (운영 정책 8.1). 담당자가 로트별로 확인해야 한다
     SPEC_VERSION_MISMATCH = "SPEC_VERSION_MISMATCH"  # CoA 적용 규격과 사내 규격 세트가 같은 규격의 다른 연도판
 
 

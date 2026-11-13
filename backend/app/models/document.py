@@ -5,10 +5,10 @@
 import uuid
 from datetime import date, datetime
 
-from sqlalchemy import BigInteger, Date, DateTime, ForeignKey, String, Text, func
+from sqlalchemy import BigInteger, Date, DateTime, ForeignKey, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.core.enums import DocumentStatus, FinalDecision, LotRecommendation
+from app.core.enums import DocumentStatus, ErrorKind, FinalDecision, LotRecommendation
 from app.db.base import Base, enum_check, str_enum
 from app.models.user import User
 
@@ -23,6 +23,7 @@ class Document(Base):
         enum_check("status", DocumentStatus),
         enum_check("lot_recommendation", LotRecommendation),
         enum_check("final_decision", FinalDecision),
+        enum_check("error_kind", ErrorKind),
     )
 
     # 명세에서 document_id 가 string 이라 UUID 문자열로 둔다
@@ -63,6 +64,14 @@ class Document(Base):
     final_decision: Mapped[FinalDecision | None] = mapped_column(str_enum(FinalDecision, "final_decision"))
     decision_reason: Mapped[str | None] = mapped_column(Text)
     error_message: Mapped[str | None] = mapped_column(Text)
+
+    # 처리 실패·재시도 기록 (운영 정책 4장). 담당자가 원인을 알고, 자동 재시도 상한을 셀 수 있게 한다.
+    attempt_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    failed_stage: Mapped[str | None] = mapped_column(String(32))
+    error_kind: Mapped[ErrorKind | None] = mapped_column(str_enum(ErrorKind, "error_kind"))
+    # 추출이 실제로 작동한 시간 (운영 정책 7장). 마지막 시도의 시작·종료 시각
+    processing_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    processing_finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     # 사람과 시각
     uploaded_by: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)

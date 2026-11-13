@@ -225,3 +225,116 @@ def test_rejudge_skips_approved_documents(auth_client, sets, admin):
     r = auth_client.patch(f"/api/v1/specs/{na_id(sets)}", json={"usl": 10, "reason": "D1 개정", "rejudge": True})
     assert r.json()["data"]["rejudged_documents"] == []
     assert na_judgement(auth_client, doc_id) == "pass"
+
+
+# ---- 영향 미리보기·되돌리기 (운영 정책 5장) ------------------------------------
+def preview(client, spec_id, **body):
+    return client.post(f"/api/v1/specs/{spec_id}/preview", json=body)
+
+
+def revert(client, spec_id, **body):
+    return client.post(f"/api/v1/specs/{spec_id}/revert", json=body)
+
+
+def current_spec(client, spec_id):
+    return next(s for s in client.get("/api/v1/specs").json()["data"] if s["id"] == spec_id)
+
+
+def test_preview_shows_impact_without_saving(auth_client, sets, admin):
+    doc_id = upload(auth_client)
+    auth_client.login_as(admin)
+    r = preview(auth_client, na_id(sets), usl=10)
+    assert r.status_code == 200, r.text
+    data = r.json()["data"]
+    assert data["changed_fields"] == ["usl"]
+    assert (data["target_documents"], data["affected_documents"]) == (1, 1)
+    assert data["documents"][0]["document_id"] == doc_id and "Na" in data["documents"][0]["changed_items"]
+    # 아무것도 저장되지 않는다: 규격, 이력, 문서 판정이 그대로
+    assert current_spec(auth_client, na_id(sets))["usl"] == 50
+    assert change_logs(auth_client, na_id(sets)) == []
+    assert na_judgement(auth_client, doc_id) == "pass"
+
+
+def test_preview_counts_only_changed_recommendations(auth_client, sets, admin):
+    """이 목업 문서는 다른 항목 때문에 이미 보류 권고라서, Na 판정이 바뀌어도 권고는 그대로다."""
+    upload(auth_client)
+    auth_client.login_as(admin)
+    data = preview(auth_client, na_id(sets), usl=10).json()["data"]
+    d = data["documents"][0]
+    assert d["lot_recommendation_before"] == d["lot_recommendation_after"] == "hold"
+    assert (data["affected_documents"], data["recommendation_changed_documents"]) == (1, 0)
+
+
+def test_preview_without_effective_change(auth_client, sets, admin):
+    upload(auth_client)
+    auth_client.login_as(admin)
+    data = preview(auth_client, na_id(sets), usl=50).json()["data"]      # 현재 값과 같다
+    assert data["changed_fields"] == [] and data["affected_documents"] == 0 and data["target_documents"] == 1
+
+
+def test_preview_ignores_other_spec_sets_and_checks_input(auth_client, sets, admin):
+    upload(auth_client)
+    auth_client.login_as(admin)
+    assert preview(auth_client, na_id(sets, "d3"), usl=10).json()["data"]["target_documents"] == 0
+    assert preview(auth_client, na_id(sets), lsl=60, usl=10).status_code == 400   # INVALID_SPEC_RANGE
+    assert preview(auth_client, 99999, usl=10).status_code == 404
+
+
+def test_preview_admin_only(auth_client, sets):
+    assert preview(auth_client, na_id(sets), usl=10).status_code == 403
+
+
+def test_revert_restores_previous_values_and_logs(auth_client, sets, admin):
+    auth_client.login_as(admin)
+    spec_id = na_id(sets)
+    auth_client.patch(f"/api/v1/specs/{spec_id}", json={"usl": 40, "unit": "ppb", "reason": "개정"})
+    r = revert(auth_client, spec_id, reason="잘못 입력")
+    assert r.status_code == 200, r.text
+    assert (r.json()["data"]["usl"], r.json()["data"]["unit"]) == (50, "ppm")
+    logs = change_logs(auth_client, spec_id)
+    assert len(logs) == 2                                                  # 이력은 지우지 않고 한 건이 더 생긴다
+    assert logs[-1]["reason"] == "되돌리기: 잘못 입력"
+    assert (logs[-1]["before_value"], logs[-1]["after_value"]) == ("usl: 40, unit: ppb", "usl: 50, unit: ppm")
+
+
+def test_revert_restores_cleared_limit(auth_client, sets, admin):
+    auth_client.login_as(admin)
+    purity = next(i.id for i in sets["d1"].items if i.item_name == "순도")
+    auth_client.patch(f"/api/v1/specs/{purity}", json={"lsl": None, "reason": "하한 삭제"})
+    assert current_spec(auth_client, purity)["lsl"] is None
+    revert(auth_client, purity, reason="복원")
+    assert current_spec(auth_client, purity)["lsl"] == 99.5
+
+
+def test_revert_twice_returns_to_changed_value(auth_client, sets, admin):
+    auth_client.login_as(admin)
+    spec_id = na_id(sets)
+    auth_client.patch(f"/api/v1/specs/{spec_id}", json={"usl": 40, "reason": "개정"})
+    revert(auth_client, spec_id, reason="되돌림")
+    revert(auth_client, spec_id, reason="다시 적용")
+    assert current_spec(auth_client, spec_id)["usl"] == 40
+
+
+def test_revert_requires_reason_history_and_admin(auth_client, sets, admin):
+    spec_id = na_id(sets)
+    assert revert(auth_client, spec_id, reason="사유").status_code == 403
+    auth_client.login_as(admin)
+    r = revert(auth_client, spec_id, reason="사유")                         # 되돌릴 이력 없음
+    assert (r.status_code, r.json()["error"]["code"]) == (409, "NOTHING_TO_REVERT")
+    auth_client.patch(f"/api/v1/specs/{spec_id}", json={"usl": 40, "reason": "개정"})
+    for reason in (None, "", "  "):
+        r = revert(auth_client, spec_id, reason=reason)
+        assert (r.status_code, r.json()["error"]["code"]) == (400, "REASON_REQUIRED")
+    assert current_spec(auth_client, spec_id)["usl"] == 40
+    assert revert(auth_client, 99999, reason="사유").status_code == 404
+
+
+def test_revert_can_rejudge_open_documents(auth_client, sets, admin):
+    doc_id = upload(auth_client)
+    auth_client.login_as(admin)
+    spec_id = na_id(sets)
+    auth_client.patch(f"/api/v1/specs/{spec_id}", json={"usl": 10, "reason": "개정", "rejudge": True})
+    assert na_judgement(auth_client, doc_id) == "undetermined"
+    r = revert(auth_client, spec_id, reason="되돌림", rejudge=True)
+    assert [d["document_id"] for d in r.json()["data"]["rejudged_documents"]] == [doc_id]
+    assert na_judgement(auth_client, doc_id) == "pass"

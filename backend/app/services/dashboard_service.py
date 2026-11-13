@@ -7,10 +7,13 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.core.config import settings
-from app.core.enums import DocumentStatus, FinalDecision, Judgement, LotRecommendation, Role
+from app.core.enums import DocumentStatus, FinalDecision, Judgement, LotRecommendation, ReviewAction, Role
 from app.core.errors import AppException, ErrorCode
-from app.models import Document, User
-from app.schemas.dashboard import DashboardSummary, DeviationByItem, LotTrendPoint, LotTrends
+from app.models import Document, ReviewLog, User
+from app.models.review_log import DOCUMENT_LOG_ITEM_ID
+from app.schemas.dashboard import (
+    DashboardSummary, DeviationByItem, ItemEditStat, LotTrendPoint, LotTrends, SupplierEditStat,
+)
 
 # 로트 권고와 최종 처분이 "일치"하는 조합 (명세 4.18).
 # 보류 권고는 대응하는 처분이 없어 권고 일치율 계산에서 뺀다 (2026-10-11 팀 결정).
@@ -79,6 +82,10 @@ def get_summary(
     comparable = [d for d in approved if d.lot_recommendation in _MATCHING_DECISION]
     matched = sum(1 for d in comparable if _MATCHING_DECISION[d.lot_recommendation] == d.final_decision)
     durations = [(d.approved_at - d.uploaded_at).total_seconds() for d in approved if d.approved_at]
+    work = [(d.processing_finished_at - d.processing_started_at).total_seconds() for d in approved
+            if d.processing_started_at and d.processing_finished_at]
+    edited = _edited_items(db, approved)
+    avg_decision = round(sum(durations) / len(durations), 1) if durations else 0.0
 
     return DashboardSummary(
         total_processed=total,
@@ -87,13 +94,69 @@ def get_summary(
         reject_count=decisions[FinalDecision.REJECT],
         on_hold_count=on_hold_count,
         pass_rate=_percent(accepted, total),
-        avg_processing_time_sec=round(sum(durations) / len(durations), 1) if durations else 0.0,
+        avg_processing_time_sec=avg_decision,
+        avg_time_to_decision_sec=avg_decision,
+        avg_system_processing_sec=round(sum(work) / len(work), 1) if work else None,
         recommendation_match_rate=_percent(matched, len(comparable)),
         auto_approve_rate=_auto_approve_rate(approved),
         reviewed_item_ratio=_reviewed_item_ratio(approved),
+        human_edit_rate=_percent(sum(1 for d in approved if edited.get(d.id)), total),
+        edit_rate_by_supplier=_edit_rate_by_supplier(approved, edited),
+        edit_rate_by_item=_edit_rate_by_item(approved, edited),
         reason_code_counts=_reason_code_counts(approved),
         deviation_by_item=_deviation_by_item(approved),
     )
+
+
+def _edited_items(db: Session, docs: list[Document]) -> dict[str, set[str]]:
+    """{문서 ID: 담당자가 값(edit)이나 항목명(rename)을 고친 항목 ID 집합}. 확인(confirm)과 규격 세트 변경(respec)은 수정이 아니다."""
+    if not docs:
+        return {}
+    rows = db.execute(
+        select(ReviewLog.document_id, ReviewLog.item_id)
+        .where(ReviewLog.document_id.in_([d.id for d in docs]),
+               ReviewLog.action.in_([ReviewAction.EDIT, ReviewAction.RENAME]),
+               ReviewLog.item_id != DOCUMENT_LOG_ITEM_ID)
+    )
+    out: dict[str, set[str]] = {}
+    for document_id, item_id in rows:
+        out.setdefault(document_id, set()).add(item_id)
+    return out
+
+
+def _edit_rate_by_supplier(docs: list[Document], edited: dict[str, set[str]]) -> list[SupplierEditStat]:
+    """공급사별 사람 수정률. 수정률 높은 순, 같으면 문서 많은 순.
+
+    CoA 양식을 따로 저장하지 않으므로 공급사를 양식의 대용으로 쓴다 (공급사마다 양식이 다르다).
+    """
+    total: Counter[str] = Counter()
+    touched: Counter[str] = Counter()
+    for d in docs:
+        name = (d.supplier or "").strip() or "(미상)"
+        total[name] += 1
+        touched[name] += 1 if edited.get(d.id) else 0
+    stats = [SupplierEditStat(supplier=n, documents=total[n], edited_documents=touched[n],
+                              edit_rate=_percent(touched[n], total[n]),
+                              success_rate=round(100 - _percent(touched[n], total[n]), 1))
+             for n in total]
+    return sorted(stats, key=lambda s: (-s.edit_rate, -s.documents, s.supplier))
+
+
+def _edit_rate_by_item(docs: list[Document], edited: dict[str, set[str]]) -> list[ItemEditStat]:
+    """항목별 사람 수정률. 수정률 높은 순, 같으면 항목 많은 순. 누락 항목(서버가 만든 것)도 사람이 값을 넣으면 수정으로 센다."""
+    total: Counter[str] = Counter()
+    touched: Counter[str] = Counter()
+    for d in docs:
+        for item in _items(d):
+            name = item.get("normalized_name")
+            if not name:
+                continue
+            total[name] += 1
+            if item.get("item_id") and item["item_id"] in edited.get(d.id, ()):
+                touched[name] += 1
+    stats = [ItemEditStat(item_name=n, items=total[n], edited_items=touched[n], edit_rate=_percent(touched[n], total[n]))
+             for n in total]
+    return sorted(stats, key=lambda s: (-s.edit_rate, -s.items, s.item_name))
 
 
 def get_lot_trends(

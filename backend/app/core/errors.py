@@ -34,9 +34,12 @@ class ErrorCode(Enum):
     DOCUMENT_NOT_FOUND = (404, "존재하지 않는 문서입니다")
     ITEM_NOT_FOUND = (404, "문서에 존재하지 않는 항목입니다")
     SPEC_NOT_FOUND = (404, "존재하지 않는 규격 항목입니다")
+    NOTHING_TO_REVERT = (409, "되돌릴 규격 변경 이력이 없습니다")  # 운영 정책 5장
     ALREADY_APPROVED = (409, "이미 처분된 문서입니다")
     NOT_APPROVED = (409, "처분되지 않은 문서입니다")
     NOT_READY = (409, "추출이 끝나지 않은 문서입니다")
+    REISSUE_UNRESOLVED = (409, "같은 로트의 CoA 가 여러 개입니다. 기준 버전을 먼저 선택해야 합니다")  # 운영 정책 8.2
+    NOT_BASE_VERSION = (409, "기준 버전으로 선택되지 않은 문서는 처분할 수 없습니다")  # 운영 정책 8.2
     NOT_FAILED = (409, "추출에 실패한 문서만 다시 처리할 수 있습니다")  # 명세 외 추가 (POST /documents/{id}/retry)
     PENDING_LOW_CONFIDENCE_ITEMS = (422, "신뢰도 낮음 항목을 먼저 확인해야 합니다")
     INVALID_DECISION = (422, "부적합 항목이 있는 로트는 승인할 수 없습니다")
