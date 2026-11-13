@@ -270,7 +270,10 @@ def test_account_changes_logged_without_passwords(client, db, boss, worker, capl
 
     text = caplog.text
     for action in ("create_user", "change_role", "deactivate", "reset_password"):
-        assert f"actor=boss(id={boss.id}) action={action}" in text
-    assert "target=worker" in text
+        assert f"actor_id={boss.id} action={action}" in text
+    assert f"target_id={worker.id}" in text
+    # 운영 정책 3장: 아이디·이름도 남기지 않는다 (id 만)
+    for name in ("boss", "worker", "logme"):
+        assert name not in text
     for secret in ("secret123", "temp5678", "$2b$"):
         assert secret not in text

@@ -9,6 +9,7 @@ from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.config import settings
+from app.core.private_files import ensure_private_dir, write_private_file
 from app.core.enums import DeletionRule, DocumentStatus, ErrorKind, FailStage, LotRecommendation, Role
 from app.core.errors import AppException, ErrorCode
 from app.models import Document, User
@@ -99,10 +100,10 @@ def create_document(
     db.flush()  # id 확정
 
     # 저장 파일 이름은 문서 ID. 원래 이름은 file_name 컬럼에 둔다 (한글·중복 이름 문제 회피)
-    upload_dir = Path(settings.UPLOAD_DIR)
-    upload_dir.mkdir(parents=True, exist_ok=True)
+    # 폴더 0o700, 파일 0o600 (운영 정책 3장: 비공개, 실행 권한 없음)
+    upload_dir = ensure_private_dir(settings.UPLOAD_DIR)
     path = upload_dir / f"{doc.id}{Path(file_name).suffix.lower()}"
-    path.write_bytes(content)
+    write_private_file(path, content)
     doc.file_path = str(path)
 
     try:

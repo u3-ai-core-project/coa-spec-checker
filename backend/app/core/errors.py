@@ -56,6 +56,7 @@ class ErrorCode(Enum):
     NOT_FAILED = (409, "추출에 실패한 문서만 다시 처리할 수 있습니다")  # 명세 외 추가 (POST /documents/{id}/retry)
     PENDING_LOW_CONFIDENCE_ITEMS = (422, "신뢰도 낮음 항목을 먼저 확인해야 합니다")
     INVALID_DECISION = (422, "부적합 항목이 있는 로트는 승인할 수 없습니다")
+    REQUEST_TOO_LARGE = (413, "요청 크기가 너무 큽니다")  # 운영 정책 3장 (요청 전체 크기 상한, core/request_limit.py)
     STORAGE_FULL = (507, "저장 공간이 부족해 새 업로드를 받을 수 없습니다. 관리자에게 문의하세요")  # 운영 정책 1장
     EXTRACTION_FAILED = (500, "AI 추출 처리에 실패했습니다")
     REPORT_GENERATION_FAILED = (500, "리포트 생성에 실패했습니다")
@@ -88,6 +89,11 @@ def _json(code: ErrorCode, message: str | None = None, headers: dict | None = No
     return JSONResponse(status_code=code.status_code, content=body, headers=headers)
 
 
+def error_response(code: ErrorCode, message: str | None = None) -> JSONResponse:
+    """라우터 밖(미들웨어 등)에서 공통 에러 형식 응답을 직접 만들 때."""
+    return _json(code, message)
+
+
 def register_exception_handlers(app: FastAPI) -> None:
     @app.exception_handler(AppException)
     async def _app_exc(_: Request, exc: AppException):
@@ -105,11 +111,13 @@ def register_exception_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(StarletteHTTPException)
     async def _http(_: Request, exc: StarletteHTTPException):
-        mapping = {401: ErrorCode.UNAUTHORIZED, 403: ErrorCode.FORBIDDEN, 404: ErrorCode.NOT_FOUND}
+        mapping = {401: ErrorCode.UNAUTHORIZED, 403: ErrorCode.FORBIDDEN, 404: ErrorCode.NOT_FOUND,
+                   413: ErrorCode.REQUEST_TOO_LARGE}
         code = mapping.get(exc.status_code, ErrorCode.INTERNAL_ERROR)
         return _json(code)
 
     @app.exception_handler(Exception)
-    async def _unhandled(_: Request, exc: Exception):
-        logger.exception("Unhandled error", exc_info=exc)
+    async def _unhandled(request: Request, exc: Exception):
+        from app.core.safe_log import log_exception  # 순환 import 방지
+        log_exception(logger, "처리하지 못한 오류: %s %s", request.method, request.url.path, exc=exc)
         return _json(ErrorCode.INTERNAL_ERROR)

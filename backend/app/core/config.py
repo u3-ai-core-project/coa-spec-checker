@@ -15,6 +15,10 @@ class Settings(BaseSettings):
     # 실행 환경. "production" 이면 시작할 때 보안 설정(JWT_SECRET 등)을 검사한다
     APP_ENV: str = "development"
 
+    # 로그 (운영 정책 3장): false 면 예외는 종류와 위치만 남긴다 (메시지에 문서 내용·개인정보가 섞일 수 있어서).
+    # 원인을 자세히 봐야 하는 개발 환경에서만 true 로 켠다 (전체 traceback)
+    LOG_DEBUG_DETAIL: bool = False
+
     # DB
     DATABASE_URL: str = "postgresql+psycopg://coa:coa@localhost:5432/coa"
 
@@ -64,6 +68,11 @@ class Settings(BaseSettings):
     # 같은 파일(SHA-256 이 같은 파일) 다시 올리기 경고 (운영 정책 1장). 끄면 해시는 저장하되 경고하지 않는다
     DUPLICATE_FILE_CHECK: bool = True
     MAX_BATCH_FILES: int = 20   # 일괄 접수 한 번에 올릴 수 있는 CoA 수 (멘토님 UC01 "CoA 1~20개")
+    # 요청 전체 크기 상한 (운영 정책 3장). 업로드가 아닌 모든 요청(JSON 등)의 본문 상한 (KB)
+    MAX_REQUEST_KB: int = Field(1024, ge=1)
+    # 업로드 요청에 파일 말고 더 붙는 부분(멀티파트 경계·헤더, 원자재 구분 같은 폼 값)에 주는 여유 (KB)
+    # 업로드 상한 = 파일 상한 합계 + 이 여유. 단건: MAX_UPLOAD_MB, 일괄: MAX_UPLOAD_MB × (MAX_BATCH_FILES + 입고 CSV 1개)
+    UPLOAD_FORM_OVERHEAD_KB: int = Field(1024, ge=0)
 
     # 처리 실패·재시도 (운영 정책 4장)
     EXTRACTION_TIMEOUT_SEC: int = 300        # 추출 1회가 이 시간을 넘으면 실패로 처리한다 (5분)

@@ -10,6 +10,7 @@ from sqlalchemy import func, select
 
 from app.core.config import settings
 from app.core.enums import Role
+from app.core.safe_log import username_tag
 from app.core.security import create_access_token, hash_password
 from app.models import LoginFailure, User
 from app.services import login_guard
@@ -165,11 +166,22 @@ def test_admin_reset_clears_lock_all_ips(client, kim, db, clock, monkeypatch):
 
 
 def test_logs_have_no_password(client, kim, clock, caplog):
+    """운영 정책 3장: 로그에 비밀번호도, 아이디 원문도 남기지 않는다. 사용자 id 와 아이디 표식만."""
     caplog.set_level(logging.WARNING, logger="app.services.login_guard")
     fail(client, 5)
-    assert "로그인 실패: username=kim ip=testclient count=1" in caplog.text
-    assert "로그인 잠김: username=kim ip=testclient" in caplog.text
+    tag = username_tag("kim")
+    assert f"로그인 실패: user_id={kim.id} user={tag} ip=testclient count=1" in caplog.text
+    assert f"로그인 잠김: user_id={kim.id} user={tag} ip=testclient" in caplog.text
     assert BAD not in caplog.text and PW not in caplog.text
+    assert "kim" not in caplog.text and "김검수" not in caplog.text
+
+
+def test_logs_for_unknown_username_have_no_raw_name(client, kim, clock, caplog):
+    """없는 아이디 칸에 비밀번호를 잘못 넣은 경우에도 그 글자가 로그에 남지 않는다."""
+    caplog.set_level(logging.WARNING, logger="app.services.login_guard")
+    login(client, username="MySecretPw99", password=BAD)
+    assert "mysecretpw99" not in caplog.text.lower()
+    assert f"user_id=- user={username_tag('MySecretPw99')}" in caplog.text
 
 
 def test_lock_survives_new_session(client, kim, clock, db):

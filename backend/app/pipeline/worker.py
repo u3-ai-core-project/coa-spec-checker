@@ -17,6 +17,7 @@ from pathlib import Path
 from sqlalchemy import update
 
 from app.core.config import settings
+from app.core.safe_log import log_exception
 from app.core.enums import DocumentStatus, ErrorKind, FailStage
 from app.db.session import SessionLocal
 from app.models import Document
@@ -82,10 +83,10 @@ def process_document(document_id: str) -> None:
                 kind = ErrorKind.TRANSIENT if e.transient else ErrorKind.PERMANENT
                 failure = (str(e), FailStage.EXTRACT, kind)
             except (ConnectionError, TimeoutError) as e:
-                logger.warning("문서 추출 연결 오류: %s (%s)", document_id, e)
+                logger.warning("문서 추출 연결 오류: %s (%s)", document_id, type(e).__name__)
                 failure = (MSG_UNEXPECTED, FailStage.EXTRACT, ErrorKind.TRANSIENT)
-            except Exception:
-                logger.exception("문서 추출 실패: %s", document_id)
+            except Exception as e:
+                log_exception(logger, "문서 추출 실패: %s", document_id, exc=e)
                 failure = (MSG_UNEXPECTED, FailStage.EXTRACT, ErrorKind.PERMANENT)
             else:
                 try:
@@ -96,8 +97,8 @@ def process_document(document_id: str) -> None:
                 except extraction_service.EmptyExtractionError as e:
                     db.rollback()
                     failure = (str(e), FailStage.EXTRACT, ErrorKind.PERMANENT)
-                except Exception:
-                    logger.exception("문서 판정·저장 실패: %s", document_id)
+                except Exception as e:
+                    log_exception(logger, "문서 판정·저장 실패: %s", document_id, exc=e)
                     db.rollback()
                     failure = (MSG_UNEXPECTED, FailStage.JUDGE, ErrorKind.PERMANENT)
 

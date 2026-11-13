@@ -30,6 +30,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.config import settings
+from app.core.safe_log import log_exception
 from app.core.enums import (
     ApprovalAction, DocumentStatus, FinalDecision, FollowUp, Judgement, LotRecommendation, NOT_READY_STATUSES,
     ReviewAction, ValueQualifier as Q, ValueSource,
@@ -41,6 +42,7 @@ from app.schemas.extraction import ExtractionItem, ExtractionResult
 from app.services import extraction_service, spec_service
 from app.services.inquiry_draft import REASON_LABELS, build_follow_ups, build_inquiry_draft
 from app.services.judgement.lot_recommend import FOLLOW_UP_GUIDE
+from app.services.pseudonym import Pseudonymizer
 
 logger = logging.getLogger(__name__)
 
@@ -105,8 +107,10 @@ APPROVAL_SPANS = [2, 1, 1, 3, 6, 2]     # 일시, 작업, 처분, 후속 조치,
 # ---------------------------------------------------------------------------
 # 진입점
 # ---------------------------------------------------------------------------
-def generate_report(db: Session, document_id: str) -> tuple[bytes, str]:
+def generate_report(db: Session, document_id: str, *, pseudonymize: bool = False) -> tuple[bytes, str]:
     """문서 1건의 리포트 (엑셀 바이너리, 다운로드 파일명).
+
+    pseudonymize=True: 팀 밖 공유용. 사용자 이름을 "담당자 A" 같은 가명으로 바꾼다 (운영 정책 3장, pseudonym.py)
 
     - 없는 문서 404, 추출 전·실패 문서 409 NOT_READY
     - 그 밖의 생성 오류는 500 REPORT_GENERATION_FAILED (화면의 "재생성" 버튼이 이 API 를 다시 호출)
@@ -118,20 +122,22 @@ def generate_report(db: Session, document_id: str) -> tuple[bytes, str]:
     if doc.status in NOT_READY_STATUSES or doc.extraction is None:
         raise AppException(ErrorCode.NOT_READY)
     try:
-        content = build_workbook(db, [doc])
-    except Exception:
-        logger.exception("리포트 생성 실패: %s", document_id)
+        content = build_workbook(db, [doc], pseudonymize=pseudonymize)
+    except Exception as e:
+        log_exception(logger, "리포트 생성 실패: %s", document_id, exc=e)
         raise AppException(ErrorCode.REPORT_GENERATION_FAILED) from None
-    return content, report_file_name(doc)
+    return content, report_file_name(doc, pseudonymize=pseudonymize)
 
 
-def report_file_name(doc: Document) -> str:
-    """예: CoA검수리포트_A0481544_20261017.xlsx"""
+def report_file_name(doc: Document, *, pseudonymize: bool = False) -> str:
+    """예: CoA검수리포트_A0481544_20261017.xlsx (가명 처리본은 끝에 _가명)"""
     key = _safe(doc.lot_no or doc.file_name.rsplit(".", 1)[0], 40)
-    return f"CoA검수리포트_{key}_{_now().strftime('%Y%m%d')}.xlsx"
+    return f"CoA검수리포트_{key}_{_now().strftime('%Y%m%d')}{'_가명' if pseudonymize else ''}.xlsx"
 
 
-def build_workbook(db: Session, docs: Sequence[Document]) -> bytes:
+def build_workbook(db: Session, docs: Sequence[Document], *, pseudonymize: bool = False) -> bytes:
+    """pseudonymize=True 면 파일 전체에서 같은 사람은 같은 가명 (여러 문서를 한 파일로 받을 때도)."""
+    people = Pseudonymizer(db, enabled=pseudonymize)
     wb = Workbook()
     wb.remove(wb.active)
     used_names: set[str] = set()
@@ -139,7 +145,7 @@ def build_workbook(db: Session, docs: Sequence[Document]) -> bytes:
     for doc in docs:
         result = extraction_service.get_result(doc)
         ws = wb.create_sheet(_sheet_name(doc, used_names))
-        _write_lot_sheet(db, ws, doc, result)
+        _write_lot_sheet(db, ws, doc, result, people)
         drafts.append((doc, result))
     _write_inquiry_sheet(wb.create_sheet("문의 초안"), drafts)
 
@@ -151,7 +157,9 @@ def build_workbook(db: Session, docs: Sequence[Document]) -> bytes:
 # ---------------------------------------------------------------------------
 # 로트 시트
 # ---------------------------------------------------------------------------
-def _write_lot_sheet(db: Session, ws: Worksheet, doc: Document, result: ExtractionResult) -> None:
+def _write_lot_sheet(db: Session, ws: Worksheet, doc: Document, result: ExtractionResult,
+                     people: Pseudonymizer | None = None) -> None:
+    people = people or Pseudonymizer(enabled=False)
     for n, (_, width) in enumerate(ITEM_COLUMNS, start=1):
         ws.column_dimensions[get_column_letter(n)].width = width
     _print_setup(ws)
@@ -171,7 +179,7 @@ def _write_lot_sheet(db: Session, ws: Worksheet, doc: Document, result: Extracti
         ("원산지", doc.origin), ("협력사 적용 규격", doc.applied_standard),
         ("사내 규격", _join(spec_set.code if spec_set else None,
                           " ".join(v for v in (spec_set.grade, spec_set.version) if v) if spec_set else None)),
-        ("업로드", f"{doc.uploader.name} / {_fmt_dt(doc.uploaded_at)}"), ("문서 상태", STATUS_KO.get(doc.status)),
+        ("업로드", f"{people.user(doc.uploader)} / {_fmt_dt(doc.uploaded_at)}"), ("문서 상태", STATUS_KO.get(doc.status)),
     ])
 
     # 2. 로트 요약
@@ -217,8 +225,8 @@ def _write_lot_sheet(db: Session, ws: Worksheet, doc: Document, result: Extracti
         item_label = "(문서 전체)" if log.item_id == DOCUMENT_LOG_ITEM_ID else names.get(log.item_id, log.item_id)
         _row(ws, row, [_fmt_dt(log.reviewed_at), item_label,
                        REVIEW_ACTION_KO.get(log.action), log.before_value, log.after_value,
-                       VALUE_SOURCE_KO.get(log.value_source) if log.value_source else None, log.reason,
-                       log.reviewer.name],
+                       VALUE_SOURCE_KO.get(log.value_source) if log.value_source else None, people.text(log.reason),
+                       people.user(log.reviewer)],
              LOG_SPANS)
         row += 1
     if not logs:
@@ -232,7 +240,8 @@ def _write_lot_sheet(db: Session, ws: Worksheet, doc: Document, result: Extracti
     for log in alogs:
         _row(ws, row, [_fmt_dt(log.created_at), APPROVAL_ACTION_KO.get(log.action),
                        DECISION_KO.get(log.decision) if log.decision else None,
-                       FOLLOW_UP_KO.get(log.follow_up) if log.follow_up else None, log.reason, log.user.name],
+                       FOLLOW_UP_KO.get(log.follow_up) if log.follow_up else None, people.text(log.reason),
+                       people.user(log.user)],
              APPROVAL_SPANS)
         row += 1
     if not alogs:
@@ -243,9 +252,9 @@ def _write_lot_sheet(db: Session, ws: Worksheet, doc: Document, result: Extracti
     _pairs(ws, row, [
         ("AI 권고", RECOMMENDATION_KO.get(result.lot_recommendation)),
         ("최종 처분", DECISION_KO.get(doc.final_decision) if doc.final_decision else None),
-        ("처분자", doc.approver.name if doc.approver else None),
+        ("처분자", people.user(doc.approver)),
         ("처분 일시", _fmt_dt(doc.approved_at) if doc.approved_at else None),
-        ("처분 사유", doc.decision_reason),
+        ("처분 사유", people.text(doc.decision_reason)),
     ])
 
 

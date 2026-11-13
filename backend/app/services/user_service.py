@@ -24,9 +24,8 @@ logger = logging.getLogger(__name__)
 
 
 def _audit(actor: User, action: str, target: User, detail: str = "") -> None:
-    """계정 변경 기록. 비밀번호·해시는 넣지 않는다."""
-    logger.info("계정 변경: actor=%s(id=%s) action=%s target=%s(id=%s)%s",
-                actor.username, actor.id, action, target.username, target.id, f" {detail}" if detail else "")
+    """계정 변경 기록. 사용자 id 만 남긴다. 이름·아이디·비밀번호·해시는 넣지 않는다 (운영 정책 3장)."""
+    logger.info("계정 변경: actor_id=%s action=%s target_id=%s%s", actor.id, action, target.id, f" {detail}" if detail else "")
 
 
 # 없는 아이디일 때도 bcrypt 검사를 한 번 해서 응답 시간으로 아이디 존재 여부를 알 수 없게 한다
@@ -45,7 +44,7 @@ def authenticate(db: Session, username: str, password: str, ip: str) -> User:
     user = db.scalar(select(User).where(User.username == username))
     password_ok = verify_password(password, user.password_hash if user is not None else _DUMMY_HASH)
     if user is None or not password_ok:
-        login_guard.record_failure(db, username, ip)
+        login_guard.record_failure(db, username, ip, user.id if user is not None else None)
         raise AppException(ErrorCode.INVALID_CREDENTIALS)
     if not user.is_active:
         raise AppException(ErrorCode.ACCOUNT_DISABLED)
@@ -76,7 +75,7 @@ def change_own_password(db: Session, user: User, current_password: str, new_pass
     """
     login_guard.ensure_not_locked(db, user.username, ip)
     if not verify_password(current_password, user.password_hash):
-        login_guard.record_failure(db, user.username, ip)
+        login_guard.record_failure(db, user.username, ip, user.id)
         raise AppException(ErrorCode.WRONG_PASSWORD)
     validate_password(new_password)
     if new_password == current_password:

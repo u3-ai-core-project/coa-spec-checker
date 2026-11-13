@@ -223,3 +223,35 @@ def test_text_starting_with_equals_is_not_a_formula(auth_client, doc_id):
     ws = wb["A0481544"]
     cell = next(c for row in ws.iter_rows() for c in row if c.value == "=<100")
     assert cell.data_type == "s"
+
+
+# ---- 가명 처리 (운영 정책 3장: 팀 밖 공유) ----------------------------------------------
+def test_pseudonymized_report(auth_client, doc_id, admin):
+    items = auth_client.get(f"/api/v1/documents/{doc_id}/extraction").json()["data"]["items"]
+    ids = {i["normalized_name"]: i["item_id"] for i in items}
+    auth_client.post(f"/api/v1/documents/{doc_id}/extraction/{ids['순도']}/confirm")
+    auth_client.patch(f"/api/v1/documents/{doc_id}/extraction/{ids['Fe']}",
+                      json={"detection_limit": 2, "value_source": "supplier_reply", "reason": "관리자 님이 공급사에 확인"})
+    auth_client.login_as(admin)
+    auth_client.post(f"/api/v1/documents/{doc_id}/approve",
+                     json={"decision": "conditional_accept", "reason": "김사용 확인 후 혼합 사용"})
+
+    r = auth_client.get(f"/api/v1/documents/{doc_id}/report", params={"pseudonymize": "true"})
+    assert r.status_code == 200
+    assert unquote(r.headers["content-disposition"]).endswith("_가명.xlsx")
+    wb = load_workbook(io.BytesIO(r.content))
+    rows = cells(wb["A0481544"])
+    text = " ".join(str(v) for row in rows for v in row if v is not None)
+    assert "김사용" not in text and "관리자 님" not in text
+    assert find_value(rows, "업로드").startswith("담당자 A / ")       # 업로드한 사람 = 처음 나온 사람
+    review = table(rows, "일시", "항목")
+    assert [r[13] for r in review] == ["담당자 A", "담당자 A"]          # 같은 사람은 같은 가명
+    assert review[1][9] == "담당자 B 님이 공급사에 확인"               # 사유 글 속 이름도
+    assert find_value(rows, "처분자") == "담당자 B"
+    assert find_value(rows, "처분 사유") == "담당자 A 확인 후 혼합 사용"
+
+    # 기본(사내용)은 실명 그대로
+    _, plain = download(auth_client, doc_id)
+    plain_rows = cells(plain["A0481544"])
+    assert find_value(plain_rows, "처분자") == "관리자"
+    assert find_value(plain_rows, "업로드").startswith("김사용 / ")

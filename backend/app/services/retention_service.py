@@ -5,7 +5,6 @@
 - 보관 기간이 지나도 처분 완료 원본은 지우지 않는다. 보관용 폴더(ARCHIVE_DIR)로 옮기는 것만 한다 (ADMIN)
 """
 import logging
-import os
 import shutil
 from datetime import datetime, timezone
 from pathlib import Path
@@ -14,6 +13,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.config import settings
+from app.core.private_files import ensure_private_dir, make_private
 from app.core.enums import DocumentStatus
 from app.core.errors import AppException, ErrorCode
 from app.models import Document, User
@@ -52,13 +52,7 @@ def list_expired(db: Session, *, page: int, size: int) -> tuple[int, list[Docume
 
 
 def _archive_dir() -> Path:
-    path = Path(settings.ARCHIVE_DIR)
-    path.mkdir(parents=True, exist_ok=True)
-    try:
-        os.chmod(path, 0o700)  # 서버 계정만 읽고 쓸 수 있게
-    except OSError:
-        pass
-    return path
+    return ensure_private_dir(settings.ARCHIVE_DIR)  # 서버 계정만 읽고 쓸 수 있게 (0o700, 운영 정책 3장)
 
 
 def archive_document(db: Session, document_id: str, actor: User) -> Document:
@@ -87,6 +81,7 @@ def archive_document(db: Session, document_id: str, actor: User) -> Document:
         raise AppException(ErrorCode.DOCUMENT_NOT_FOUND, "원본 파일을 찾을 수 없습니다")
     target = _archive_dir() / source.name  # 저장 이름(문서 ID + 확장자)을 그대로 쓴다
     shutil.move(str(source), str(target))
+    make_private(target)  # 옮긴 파일도 0o600 (실행 권한 없음)
     try:
         doc.file_path = str(target)
         doc.archived_at = func.now()

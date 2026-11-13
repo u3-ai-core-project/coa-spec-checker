@@ -105,5 +105,5 @@ def test_unhandled_exception_is_500(client):
 
 def test_every_error_code_has_valid_status():
     for code in ErrorCode:
-        # 429: 로그인 잠금 ACCOUNT_LOCKED, 507: 저장 공간 부족 STORAGE_FULL (운영 정책)
-        assert code.status_code in {400, 401, 403, 404, 409, 422, 429, 500, 507}
+        # 413: 요청 크기 상한 REQUEST_TOO_LARGE, 429: 로그인 잠금 ACCOUNT_LOCKED, 507: 저장 공간 부족 STORAGE_FULL (운영 정책)
+        assert code.status_code in {400, 401, 403, 404, 409, 413, 422, 429, 500, 507}

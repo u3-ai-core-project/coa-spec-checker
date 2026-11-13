@@ -4,7 +4,8 @@
 - 잠긴 동안에는 비밀번호가 맞아도 429 ACCOUNT_LOCKED. 비밀번호를 확인하기 전에 막는다
 - 잠금이 풀리면 처음부터 다시 센다. 마지막 실패 뒤 LOGIN_LOCK_MINUTES 분이 지나도 처음부터 센다
 - 로그인 성공·비밀번호 변경 성공이면 그 (아이디, IP) 기록을 지운다. 관리자가 비밀번호를 초기화하면 그 아이디의 기록을 모두 지운다
-- 로그에는 시각(로그 자체), 아이디, IP 만 남긴다. 비밀번호는 절대 남기지 않는다
+- 로그에는 시각(로그 자체), 사용자 id(있는 계정일 때), 아이디 표식(username_tag), IP 만 남긴다.
+  아이디 원문과 비밀번호는 남기지 않는다 (운영 정책 3장)
 """
 import logging
 import math
@@ -17,6 +18,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.errors import AppException, ErrorCode
+from app.core.safe_log import username_tag
 from app.models import LoginFailure
 
 logger = logging.getLogger(__name__)
@@ -68,8 +70,10 @@ def ensure_not_locked(db: Session, username: str, ip: str) -> None:
     db.commit()
 
 
-def record_failure(db: Session, username: str, ip: str) -> None:
+def record_failure(db: Session, username: str, ip: str, user_id: int | None = None) -> None:
     """실패 1회 기록. LOGIN_MAX_FAILURES 번째면 잠그고 429 ACCOUNT_LOCKED 를 던진다. commit 까지 한다.
+
+    user_id: 있는 계정이면 그 id (로그용). 없는 아이디면 None.
 
     동시에 여러 요청이 와도 횟수가 빠지지 않도록 INSERT ... ON CONFLICT 로 한 번에 더한다.
     """
@@ -90,10 +94,12 @@ def record_failure(db: Session, username: str, ip: str) -> None:
         locked_until = now + timedelta(minutes=settings.LOGIN_LOCK_MINUTES)
         db.execute(table.update().where(table.c.username == key, table.c.ip == ip).values(locked_until=locked_until))
         db.commit()
-        logger.warning("로그인 잠김: username=%s ip=%s until=%s", key, ip, locked_until.isoformat())
+        logger.warning("로그인 잠김: user_id=%s user=%s ip=%s until=%s",
+                       user_id if user_id is not None else "-", username_tag(key), ip, locked_until.isoformat())
         raise _locked_error(locked_until, now)
     db.commit()
-    logger.warning("로그인 실패: username=%s ip=%s count=%d", key, ip, count)
+    logger.warning("로그인 실패: user_id=%s user=%s ip=%s count=%d",
+                   user_id if user_id is not None else "-", username_tag(key), ip, count)
 
 
 def clear(db: Session, username: str, ip: str | None = None) -> None:
