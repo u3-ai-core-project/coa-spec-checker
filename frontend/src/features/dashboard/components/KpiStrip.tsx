@@ -46,7 +46,7 @@ export default function KpiStrip({ data }: Props) {
                 )}
             </Cell>
 
-            <Cell label="평균 검수 소요 시간">
+            <Cell label="처분까지 걸린 시간">
                 <div className="flex flex-wrap items-end gap-x-1.5">
                     <span className={`${VALUE} whitespace-nowrap`}>
                         {data ? formatDuration(data.avg_time_to_decision_sec ?? data.avg_processing_time_sec) : '—'}
