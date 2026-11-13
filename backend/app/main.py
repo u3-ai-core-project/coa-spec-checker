@@ -14,6 +14,7 @@ from app.core.errors import register_exception_handlers
 from app.core.private_files import ensure_storage_dirs
 from app.core.request_limit import RequestSizeLimitMiddleware
 from app.core.safe_log import log_exception
+from app.core.security_headers import SecurityHeadersMiddleware
 from app.core.response import error_body, ok
 from sqlalchemy import text
 
@@ -99,6 +100,8 @@ app.add_middleware(
     allow_headers=["*"],
     expose_headers=["Content-Disposition", "Retry-After"],  # 엑셀 리포트 파일명, 로그인 잠금 남은 시간(초)
 )
+# 보안 헤더 (운영 정책 2장). 마지막에 등록해 가장 바깥에 둔다: 413·CORS 사전 요청(OPTIONS) 응답에도 붙는다
+app.add_middleware(SecurityHeadersMiddleware)
 
 register_exception_handlers(app)
 app.include_router(api_router)

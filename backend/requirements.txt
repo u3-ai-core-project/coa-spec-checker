@@ -7,6 +7,9 @@ pydantic>=2.7
 pydantic-settings>=2.3
 python-multipart>=0.0.9
 python-jose[cryptography]>=3.3
+# 보안 수정판 바닥 (운영 정책 2장 사용 부품 점검, pip-audit). 직접 쓰지 않고 다른 부품이 쓰는 것
+pyasn1>=0.6.5       # python-jose·rsa 가 씀. 0.6.4 이하 ASN.1 해석 CPU 과다 사용 (GHSA-2qm8-x737-gmw5 외 3건)
+certifi>=2026.10.18 # httpx 가 씀. 개인키가 유출된 인증기관(emSign ECC Root CA - G3) 제거 (GHSA-6q48-6c7w-9gw2)
 passlib[bcrypt]>=1.7
 bcrypt<4.1  # passlib 1.7.4 는 bcrypt 4.1 이상과 호환되지 않음
 openpyxl>=3.1

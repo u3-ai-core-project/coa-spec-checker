@@ -128,6 +128,8 @@ class Settings(BaseSettings):
     LLM_BASE_URL: str | None = None
 
     CORS_ORIGINS: list[str] = ["http://localhost:5173", "http://localhost:3000"]
+    # API 응답 보안 헤더 (운영 정책 2장: CSP, nosniff, 다른 사이트 iframe 금지 등). 자세한 내용은 app/core/security_headers.py
+    SECURITY_HEADERS_ENABLED: bool = True
 
     @model_validator(mode="after")
     def _check_production_secrets(self) -> "Settings":
