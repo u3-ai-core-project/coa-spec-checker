@@ -105,3 +105,10 @@ def test_threads_share_cache_safely():
             t.join()
     assert errors == []
     assert results == [{"name": "Na"}] * 8
+
+
+def test_garbage_json_log_has_no_answer_text(caplog):
+    with FakeLLMServer(["Na 0.0076 secret"]) as srv:
+        assert LLMClient(srv.url).json_chat("sys", "user", SCHEMA) is None
+    assert "JSON" in caplog.text
+    assert "0.0076" not in caplog.text and "secret" not in caplog.text
