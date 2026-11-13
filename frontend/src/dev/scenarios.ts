@@ -30,12 +30,13 @@ function addManyDocs(state: MockState): void {
  * ?mock=issues 는 A0390221에 문서 수준 문제(로트 불일치, 날짜 충돌)가 있어 로트 권고가 보류인 상태([v1.4])로,
  * ?mock=failed-transient 는 실패 문서가 일시 오류(처리 시간 초과, 서버 재시작으로 중단), ?mock=failed-permanent 는 영구 오류(추출·판정 실패),
  * ?mock=multilot 는 A0266047이 한 문서에서 로트 2개가 읽힌 복수 로트인 상태로,
+ * ?mock=reissue-conflict 는 A0266047의 같은 로트 CoA가 3개 버전이라 기준 버전을 골라야 하는 상태, ?mock=reissue-review 는 처분된 A0355190에 재발행본이 들어온 상태로,
  * ?mock=sets 는 탄산리튬에 규격 세트가 D1, D3, STRICT, RELAXED인 상태로, ?mock=many 는 문서가 105건인 상태(검수 목록 페이지 넘김 확인)로
  * 목업 데이터를 바꿉니다. 지정하지 않으면 기본 목업(보류 1건, 오류 1건 포함)을 그대로 씁니다.
  */
 export function applyMockScenario(): void {
   const flag = devParam('mock');
-  const scenarios = ['anomaly', 'issues', 'sets', 'failed-transient', 'failed-permanent', 'multilot'] as const;
+  const scenarios = ['anomaly', 'issues', 'sets', 'failed-transient', 'failed-permanent', 'multilot', 'reissue-conflict', 'reissue-review'] as const;
   const scenario = scenarios.find((name) => name === flag);
   if (!mockApi || (flag !== 'empty' && flag !== 'many' && !scenario)) return;
   if (flag === 'many') {

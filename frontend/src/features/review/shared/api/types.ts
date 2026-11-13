@@ -250,6 +250,12 @@ export interface DocumentDetail {
   /** 한 문서에서 읽힌 로트번호 전체와 복수 로트 여부(백엔드 #61). 복수 로트이면 lot_no는 null입니다. 판정은 서버가 하고 화면은 표시만 합니다. */
   lot_nos?: string[] | null;
   is_multi_lot?: boolean | null;
+  /**
+   * 같은 원자재·같은 로트의 CoA가 여러 개일 때의 재발행 충돌 상태(백엔드 #61). 서버가 보내지 않으면 none으로 취급합니다.
+   * conflict: 기준 버전을 골라야 확정 처분할 수 있음(보류는 가능), review_needed: 이미 처분된 로트에 재발행본이 들어옴(기존 처분은 그대로),
+   * resolved: 기준 버전 선택됨, none: 해당 없음
+   */
+  reissue_status?: ReissueStatus | null;
 }
 
 export interface PatchItemBody {
@@ -543,6 +549,48 @@ export interface MappingRecord {
 }
 
 /** DELETE /documents/{id} 응답 */
+/** 재발행 충돌 상태(백엔드 #61 reissue_status) */
+export type ReissueStatus = 'none' | 'conflict' | 'review_needed' | 'resolved';
+
+/** 같은 로트의 CoA 1건(GET /reissue/{id}의 versions). 두 문서를 나란히 보여 줄 때 서버가 주는 필드입니다. */
+export interface ReissueVersion {
+  document_id: string;
+  file_name: string;
+  supplier: string | null;
+  lot_no: string | null;
+  status: DocumentStatus;
+  lot_recommendation: LotRecommendation | null;
+  final_decision: FinalDecision | null;
+  uploaded_at: string;
+  approved_at: string | null;
+  /** 기준 버전으로 선택된 문서인지 */
+  is_base: boolean;
+}
+
+/** GET /reissue/{document_id}, POST /reissue/{document_id}/base 응답. 같은 로트가 없으면 versions는 비어 있습니다. */
+export interface ReissueInfo {
+  status: ReissueStatus;
+  material_code: string;
+  lot_no: string | null;
+  base_document_id: string | null;
+  decided_reason: string | null;
+  versions: ReissueVersion[];
+}
+
+/** POST /reissue/{document_id}/base 요청. 기준 버전으로 정할 문서(같은 로트 묶음 안)와 사유(필수)입니다. */
+export interface ReissueBaseBody {
+  base_document_id: string;
+  reason: string;
+}
+
+/** GET /reissue/conflicts 의 로트 묶음 1개(기준 버전을 골라야 하거나 재검토가 필요한 묶음) */
+export interface ReissueAttentionGroup {
+  material_code: string;
+  lot_no: string | null;
+  status: ReissueStatus;
+  document_ids: string[];
+}
+
 export interface DocumentDeleted {
   document_id: string;
 }

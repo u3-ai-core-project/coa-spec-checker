@@ -615,10 +615,12 @@ export interface MockOptions {
    * 'issues': [v1.4] 모든 항목이 적합한 A0390221에 문서 수준 문제(로트 불일치, 날짜 충돌)가 있어 로트 권고가 보류인 상태
    */
   /** 'sets': 탄산리튬에 규격 세트가 둘(D1, D3)인 상태. 규격 관리 화면의 세트 선택을 볼 때 씁니다. */
-  scenario?: 'anomaly' | 'issues' | 'sets' | 'failed-transient' | 'failed-permanent' | 'multilot';
+  scenario?: 'anomaly' | 'issues' | 'sets' | 'failed-transient' | 'failed-permanent' | 'multilot' | 'reissue-conflict' | 'reissue-review';
   /**
    * 'failed-transient': 실패 문서가 일시 오류(처리 시간 초과, 서버 재시작으로 중단)인 상태
    * 'failed-permanent': 실패 문서가 영구 오류(추출 실패, 판정 실패: 파일을 고쳐 다시 올려야 함)인 상태
+   * 'reissue-conflict': A0266047과 같은 로트의 CoA가 2건 더 있어(총 3개 버전, 모두 처분 전) 기준 버전을 골라야 하는 상태
+   * 'reissue-review': 이미 처분된 A0355190에 같은 로트의 재발행본이 들어온 상태(총 2개 버전, 기존 처분은 그대로)
    * 'multilot': A0266047이 한 문서에서 로트 2개가 읽힌 복수 로트 상태(lot_no는 null, lot_nos와 is_multi_lot, 문서 수준 문제 MULTI_LOT)
    */
 }
@@ -726,6 +728,30 @@ export function createMockState(options: MockOptions = {}): MockState {
         null,
       ),
     );
+  }
+  // 재발행 시나리오: 같은 로트(대소문자와 구분 기호만 다른 로트번호 포함)의 CoA를 더해 서버가 conflict, review_needed로 판정하게 합니다.
+  if (options.scenario === 'reissue-conflict' || options.scenario === 'reissue-review') {
+    const conflict = options.scenario === 'reissue-conflict';
+    const baseId = conflict ? 'A0266047' : 'A0355190';
+    const base = docs.find((entry) => entry.detail.document_id === baseId);
+    if (base) {
+      const lotVariants = conflict ? ['a0266047', 'A0266-047'] : ['A0355-190'];
+      lotVariants.forEach((lot, index) => {
+        const copy = buildDoc(
+          {
+            lot: baseId, supplier: base.detail.supplier, po: base.detail.po_no ?? '', testDate: base.detail.test_date ?? '2026-09-28',
+            uploadedAt: `2026-10-06T1${index}:30:00+09:00`, status: conflict && index === 1 ? 'in_review' : 'extracted', fileSize: 505_000 + index * 11_000,
+          },
+          itemsStandard(specs, 'allpass'),
+          { id: `${baseId}-R${index + 1}` },
+        );
+        copy.detail.file_name = `coa_${baseId}_${base.detail.supplier}_재발행${index + 1}.pdf`;
+        copy.detail.lot_no = lot;
+        copy.detail.received_lot_no = lot;
+        if (copy.extraction) copy.extraction.lot_no = lot;
+        docs.push(copy);
+      });
+    }
   }
   // 시나리오 'multilot': 한 문서에서 로트가 2개 읽혀 lot_no가 null이고, 서버가 문서 수준 문제 MULTI_LOT을 내려 준 상태입니다.
   if (options.scenario === 'multilot') {

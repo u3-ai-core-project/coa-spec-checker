@@ -27,6 +27,9 @@ import type {
   PatchSpecBody,
   PatchSpecResult,
   PreviewSpecBody,
+  ReissueAttentionGroup,
+  ReissueBaseBody,
+  ReissueInfo,
   RevertSpecBody,
   SpecPreview,
   ReviewLog,
@@ -53,6 +56,17 @@ export interface Api {
    * 처분 완료 문서는 409 ALREADY_APPROVED, 추출 중 문서는 409 NOT_READY, 권한이 없으면 403 FORBIDDEN입니다.
    */
   deleteDocument(documentId: string): Promise<DocumentDeleted>;
+  /**
+   * 문서의 같은 로트 CoA 목록과 재발행 충돌 상태(GET /reissue/{document_id}, 백엔드 #61). 같은 로트가 없으면 status는 none, versions는 빈 배열입니다.
+   */
+  getReissue(documentId: string): Promise<ReissueInfo>;
+  /**
+   * 기준 버전 선택(POST /reissue/{document_id}/base). 사유는 필수(없으면 400 REASON_REQUIRED)이고, 같은 로트 묶음 안의 문서만 고를 수 있습니다(400).
+   * 고르기 전에는 확정 처분이 409 REISSUE_UNRESOLVED로 막히고, 기준이 아닌 문서의 처분은 409 NOT_BASE_VERSION입니다(보류는 가능).
+   */
+  setReissueBase(documentId: string, body: ReissueBaseBody): Promise<ReissueInfo>;
+  /** 기준 버전을 골라야 하거나(conflict) 재검토가 필요한(review_needed) 로트 묶음 목록(GET /reissue/conflicts) */
+  getReissueConflicts(): Promise<ReissueAttentionGroup[]>;
   /**
    * 적용 규격(규격 세트)을 바꿔 서버가 문서를 다시 판정합니다(POST /documents/{id}/rejudge, 백엔드 PR #59).
    * apply가 false(기본)이면 미리보기로 문서를 바꾸지 않고 처분 완료 문서도 됩니다. true이면 저장하고 reason(변경 사유)이 필수이며

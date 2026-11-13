@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from './shared/api';
 import { errorMessage } from './shared/api/errors';
-import type { DocumentListItem } from './shared/api/types';
+import type { DocumentListItem, ReissueStatus } from './shared/api/types';
 import { useCurrentUser } from './shared/currentUser';
 import { DispositionBadge, RecommendationBadge, StatusBadge } from './shared/components/badges';
 import { EmptyState, ErrorNotice } from './shared/components/EmptyState';
@@ -78,6 +78,14 @@ export function ReviewListPage() {
       ),
     [user.id, user.role],
   );
+
+  // 같은 로트의 CoA가 여러 개라 확인이 필요한 문서(GET /reissue/conflicts). 이 정보를 못 불러와도 목록은 그대로 보여 줍니다.
+  const reissueQuery = useAsync(() => api.getReissueConflicts().catch(() => []), [user.id]);
+  const reissueOf = useMemo(() => {
+    const map = new Map<string, ReissueStatus>();
+    for (const group of reissueQuery.data ?? []) for (const id of group.document_ids) map.set(id, group.status);
+    return map;
+  }, [reissueQuery.data]);
 
   const docs = useMemo(() => data?.items ?? [], [data]);
   const total = data?.total ?? 0;
@@ -193,7 +201,7 @@ export function ReviewListPage() {
               </thead>
               <tbody>
                 {docs.map((doc, index) => (
-                  <DocRow key={doc.document_id} doc={doc} index={(page - 1) * PAGE_SIZE + index} highlighted={doc.document_id === highlightId}
+                  <DocRow key={doc.document_id} doc={doc} reissue={reissueOf.get(doc.document_id)} index={(page - 1) * PAGE_SIZE + index} highlighted={doc.document_id === highlightId}
                     onOpen={() => navigate(`${REVIEW_PATH}/${doc.document_id}`)}
                     deletable={canDelete(doc)}
                     onDelete={() => setDeleting(doc)}
@@ -271,6 +279,8 @@ function FilterTab({ label, count, active, onClick }: { label: string; count: nu
 
 interface DocRowProps {
   doc: DocumentListItem;
+  /** GET /reissue/conflicts가 알려 준 이 문서의 재발행 상태(conflict, review_needed). 없으면 배지가 없습니다. */
+  reissue?: ReissueStatus;
   index: number;
   highlighted: boolean;
   onOpen: () => void;
@@ -279,7 +289,7 @@ interface DocRowProps {
   onDelete: () => void;
 }
 
-function DocRow({ doc, index, highlighted, onOpen, deletable, onDelete }: DocRowProps) {
+function DocRow({ doc, reissue, index, highlighted, onOpen, deletable, onDelete }: DocRowProps) {
   const openable = isOpenable(doc);
   const blockReason = deleteBlockReason(doc);
   const disposition = dispositionOf(doc);
@@ -295,7 +305,17 @@ function DocRow({ doc, index, highlighted, onOpen, deletable, onDelete }: DocRow
       }
     >
       <td className="w-10 px-5 py-2 text-[12px] tabular-nums text-[#8A9099]">{index + 1}</td>
-      <td className="px-2 py-2 text-[13px] font-semibold tabular-nums">{doc.file_name}</td>
+      <td className="px-2 py-2 text-[13px] font-semibold tabular-nums">
+        {doc.file_name}
+        {reissue && (
+          <span
+            className="doc-reissue-badge ml-1.5 inline-flex h-5 items-center whitespace-nowrap rounded bg-[#FBF0DF] px-1.5 align-middle text-[11px] font-semibold text-[#9A5B00]"
+            title={reissue === 'conflict' ? '같은 로트의 CoA가 여러 개입니다. 기준 버전을 선택해야 처분할 수 있습니다.' : '이미 처분된 로트에 재발행본이 들어왔습니다. 재검토가 필요합니다.'}
+          >
+            {reissue === 'conflict' ? '재발행 확인 필요' : '재검토 필요'}
+          </span>
+        )}
+      </td>
       <td className="px-2 py-2 text-[13px]">{doc.supplier}</td>
       <td className="px-2 py-2 text-[12px] tabular-nums text-[#5B616A]">{formatDateTime(doc.uploaded_at)}</td>
       <td className="px-2 py-2">

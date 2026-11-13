@@ -34,6 +34,10 @@ import type {
   PatchSpecBody,
   PatchSpecResult,
   PreviewSpecBody,
+  ReissueAttentionGroup,
+  ReissueBaseBody,
+  ReissueInfo,
+  ReissueStatus,
   RevertSpecBody,
   SpecPreview,
   RejudgedDocument,
@@ -80,6 +84,20 @@ function wait(ms: number): Promise<void> {
 
 // 목업 시계: 시안과 같은 시각(수정 14:32, 확인 14:35, 처분 15:02 …)이 나오도록 이력 종류마다 시작 시각을 고정하고,
 // 같은 종류가 또 생기면 1분씩 늦춥니다.
+/** 목업에서 담당자가 고른 재발행 기준 버전 1건(서버 reissue_decisions) */
+interface MockReissueDecision {
+  material_code: string;
+  lot_key: string;
+  base_document_id: string;
+  reason: string;
+  created_at: string;
+}
+
+/** 같은 로트인지 볼 때 대소문자, 공백, 구분 기호 차이를 무시합니다(서버 document_checks.normalize_lot). */
+function normalizeLot(lot: string | null): string {
+  return (lot ?? '').toUpperCase().replace(/[\s\-_./]/g, '');
+}
+
 /** 변경 이력 문자열("lsl: 1, usl: 없음")을 값으로 되돌립니다(서버 spec_service._parse_log_values와 같은 규칙). 값이 없으면 null입니다. */
 function parseChangeLogValues(text: string): { lsl?: number | null; usl?: number | null; unit?: string | null } {
   const out: { lsl?: number | null; usl?: number | null; unit?: string | null } = {};
@@ -92,7 +110,7 @@ function parseChangeLogValues(text: string): { lsl?: number | null; usl?: number
   return out;
 }
 
-type ClockKind = 'edit' | 'confirm' | 'rename' | 'approve' | 'hold' | 'cancel' | 'spec' | 'respec';
+type ClockKind = 'edit' | 'confirm' | 'rename' | 'approve' | 'hold' | 'cancel' | 'spec' | 'respec' | 'reissue';
 
 const CLOCK_ANCHORS: Record<ClockKind, string> = {
   edit: '2026-10-05T14:32:00+09:00',
@@ -103,6 +121,8 @@ const CLOCK_ANCHORS: Record<ClockKind, string> = {
   cancel: '2026-10-05T16:10:00+09:00',
   spec: '2026-10-05T11:20:00+09:00',
   respec: '2026-10-05T11:50:00+09:00',
+  // 목업 문서의 가장 늦은 업로드 시각(2026-10-06) 뒤여야 "기준 버전 선택 뒤에 새 문서가 없음"이 됩니다.
+  reissue: '2026-10-07T09:00:00+09:00',
 };
 let clockCounts: Partial<Record<ClockKind, number>> = {};
 
@@ -189,6 +209,8 @@ function toReviewedItem(item: ExtractionItem): ReviewedItem {
  */
 export class MockApi implements Api {
   private state: MockState;
+  /** 재발행 충돌에서 담당자가 고른 기준 버전(서버 reissue_decisions). 문서와 달리 시나리오를 바꾸면 비웁니다. */
+  private reissueDecisions: MockReissueDecision[] = [];
   private readonly local = new LocalOnlyStore();
 
   constructor(state: MockState = createMockState()) {
@@ -198,6 +220,7 @@ export class MockApi implements Api {
   /** 목업 데이터를 통째로 바꿉니다. 개발용 화면(src/dev)이 시안 비교용 시작 상태를 만들 때만 씁니다. */
   resetState(state: MockState): void {
     this.state = state;
+    this.reissueDecisions = [];
   }
 
   // --- 인증 -----------------------------------------------------------------
@@ -311,7 +334,103 @@ export class MockApi implements Api {
 
   async getDocument(documentId: string): Promise<DocumentDetail> {
     this.requireUser();
-    return delay({ ...this.findDoc(documentId).detail });
+    const doc = this.findDoc(documentId);
+    const reissue = this.reissueStateOf(doc).status;
+    return delay({ ...doc.detail, ...(reissue === 'none' ? {} : { reissue_status: reissue }) });
+  }
+
+  // --- 재발행 충돌 (백엔드 #61 reissue_service) ---------------------------------
+
+  /**
+   * 같은 원자재·같은 로트(대소문자, 공백, 구분 기호 무시)의 CoA 묶음과 충돌 상태를 서버와 같은 규칙으로 계산합니다.
+   * none: 같은 로트가 하나뿐 / conflict: 2건 이상이고 기준 버전을 아직 안 골랐음 / review_needed: conflict인데 이미 처분된 문서가 있음 /
+   * resolved: 기준 버전을 골랐고 그 뒤에 새로 들어온 문서가 없음.
+   */
+  private reissueStateOf(doc: MockDoc): { status: ReissueStatus; group: MockDoc[]; decision: MockReissueDecision | null; key: string } {
+    const key = normalizeLot(doc.detail.lot_no);
+    if (!key) return { status: 'none', group: [doc], decision: null, key };
+    const group = this.state.docs
+      .filter((entry) => entry.detail.material_code === doc.detail.material_code && normalizeLot(entry.detail.lot_no) === key)
+      .sort((a, b) => a.detail.uploaded_at.localeCompare(b.detail.uploaded_at));
+    if (group.length < 2) return { status: 'none', group, decision: null, key };
+    const ids = new Set(group.map((entry) => entry.detail.document_id));
+    const decision =
+      [...this.reissueDecisions].reverse().find((entry) => entry.material_code === doc.detail.material_code && entry.lot_key === key && ids.has(entry.base_document_id)) ?? null;
+    const newest = Math.max(...group.map((entry) => Date.parse(entry.detail.uploaded_at)));
+    if (decision && Date.parse(decision.created_at) >= newest) return { status: 'resolved', group, decision, key };
+    const approvedExists = group.some((entry) => entry.detail.status === 'approved');
+    return { status: approvedExists ? 'review_needed' : 'conflict', group, decision, key };
+  }
+
+  private reissueInfoOf(doc: MockDoc): ReissueInfo {
+    const { status, group, decision } = this.reissueStateOf(doc);
+    const baseId = status === 'resolved' && decision ? decision.base_document_id : null;
+    return {
+      status,
+      material_code: doc.detail.material_code,
+      lot_no: doc.detail.lot_no,
+      base_document_id: baseId,
+      decided_reason: status === 'resolved' && decision ? decision.reason : null,
+      versions:
+        status === 'none'
+          ? []
+          : group.map((entry) => ({
+              document_id: entry.detail.document_id,
+              file_name: entry.detail.file_name,
+              supplier: entry.detail.supplier,
+              lot_no: entry.detail.lot_no,
+              status: entry.detail.status,
+              lot_recommendation: entry.detail.lot_recommendation,
+              final_decision: entry.detail.final_decision,
+              uploaded_at: entry.detail.uploaded_at,
+              approved_at: entry.detail.approved_at,
+              is_base: entry.detail.document_id === baseId,
+            })),
+    };
+  }
+
+  async getReissue(documentId: string): Promise<ReissueInfo> {
+    this.requireUser();
+    return delay(this.reissueInfoOf(this.findDoc(documentId)));
+  }
+
+  /** 서버 choose_base와 같은 검사 순서: 문서 없음 404 → 같은 로트 없음 400 → 사유 없음 400 REASON_REQUIRED → 묶음 밖 문서 400. */
+  async setReissueBase(documentId: string, body: ReissueBaseBody): Promise<ReissueInfo> {
+    this.requireUser();
+    const doc = this.findDoc(documentId);
+    const state = this.reissueStateOf(doc);
+    if (state.status === 'none') throw new ApiError(400, 'VALIDATION_ERROR', '같은 로트의 다른 CoA 가 없어 기준 버전을 고를 수 없습니다');
+    if (!body.reason?.trim()) throw new ApiError(400, 'REASON_REQUIRED', '기준 버전을 고른 사유를 입력해야 합니다');
+    if (!state.group.some((entry) => entry.detail.document_id === body.base_document_id)) {
+      throw new ApiError(400, 'VALIDATION_ERROR', '같은 로트 묶음에 없는 문서는 기준 버전으로 고를 수 없습니다');
+    }
+    this.reissueDecisions.push({
+      material_code: doc.detail.material_code,
+      lot_key: state.key,
+      base_document_id: body.base_document_id,
+      reason: body.reason.trim(),
+      created_at: now('reissue'),
+    });
+    return delay(this.reissueInfoOf(doc));
+  }
+
+  async getReissueConflicts(): Promise<ReissueAttentionGroup[]> {
+    this.requireUser();
+    const seen = new Set<string>();
+    const out: ReissueAttentionGroup[] = [];
+    for (const doc of this.state.docs) {
+      const { status, group, key } = this.reissueStateOf(doc);
+      const mapKey = `${doc.detail.material_code}|${key}`;
+      if (!key || seen.has(mapKey) || (status !== 'conflict' && status !== 'review_needed')) continue;
+      seen.add(mapKey);
+      out.push({
+        material_code: doc.detail.material_code,
+        lot_no: group[group.length - 1].detail.lot_no,
+        status,
+        document_ids: group.map((entry) => entry.detail.document_id),
+      });
+    }
+    return delay(out);
   }
 
   async getDocumentFile(documentId: string): Promise<Blob> {
@@ -484,6 +603,16 @@ export class MockApi implements Api {
     const user = this.requireUser();
     const doc = this.findDoc(documentId);
     const extraction = doc.extraction;
+    // 같은 로트의 CoA가 여러 개면 기준 버전을 먼저 골라야 하고, 고른 뒤에는 기준 버전 문서만 처분할 수 있습니다(서버와 같은 순서: 상태 검사 뒤, 신뢰도 검사 앞).
+    if (doc.detail.status === 'extracted' || doc.detail.status === 'in_review' || doc.detail.status === 'on_hold') {
+      const { status, decision } = this.reissueStateOf(doc);
+      if (status === 'conflict' || status === 'review_needed') {
+        throw new ApiError(409, 'REISSUE_UNRESOLVED', '같은 로트의 CoA 가 여러 개입니다. 기준 버전을 먼저 선택해야 합니다');
+      }
+      if (status === 'resolved' && decision?.base_document_id !== doc.detail.document_id) {
+        throw new ApiError(409, 'NOT_BASE_VERSION', '기준 버전으로 선택되지 않은 문서는 처분할 수 없습니다');
+      }
+    }
     const code = checkApprove({
       status: doc.detail.status,
       recommendation: extraction?.lot_recommendation ?? 'hold',

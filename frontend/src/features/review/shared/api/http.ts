@@ -33,6 +33,9 @@ import type {
   PatchSpecBody,
   PatchSpecResult,
   PreviewSpecBody,
+  ReissueAttentionGroup,
+  ReissueBaseBody,
+  ReissueInfo,
   RevertSpecBody,
   ReviewLog,
   SpecChangeLog,
@@ -127,6 +130,24 @@ async function requestRejudge(documentId: string, req: RejudgeRequest): Promise<
 }
 
 /**
+ * 재발행 충돌 API(백엔드 #61). 주소, 요청 본문, 응답 해석은 아래 세 함수 한 곳에서만 정합니다.
+ *   GET  /reissue/{document_id}        → ReissueInfo(같은 로트 CoA 목록 versions와 충돌 상태)
+ *   POST /reissue/{document_id}/base   본문 { base_document_id, reason } → ReissueInfo
+ *   GET  /reissue/conflicts            → ReissueAttentionGroup[](conflict, review_needed인 로트 묶음)
+ */
+async function requestReissueInfo(documentId: string): Promise<ReissueInfo> {
+  return request<ReissueInfo>(`/reissue/${encodeURIComponent(documentId)}`);
+}
+
+async function requestReissueBase(documentId: string, body: ReissueBaseBody): Promise<ReissueInfo> {
+  return request<ReissueInfo>(`/reissue/${encodeURIComponent(documentId)}/base`, jsonBody({ base_document_id: body.base_document_id, reason: body.reason }));
+}
+
+async function requestReissueConflicts(): Promise<ReissueAttentionGroup[]> {
+  return request<ReissueAttentionGroup[]>('/reissue/conflicts');
+}
+
+/**
  * 규격 수정 영향 미리보기와 되돌리기 API(백엔드 #61). 주소, 요청 본문, 응답 해석은 아래 두 함수 한 곳에서만 정합니다.
  *   POST /specs/{id}/preview  본문은 PATCH /specs/{id}와 같음(lsl, usl, unit, reason, rejudge) → SpecPreview
  *   POST /specs/{id}/revert   본문 { reason, rejudge } → PATCH와 같은 응답(rejudged_documents 포함)
@@ -168,6 +189,18 @@ export class HttpApi implements Api {
 
   rejudgeDocument(documentId: string, request: RejudgeRequest): Promise<RejudgeResult> {
     return requestRejudge(documentId, request);
+  }
+
+  getReissue(documentId: string): Promise<ReissueInfo> {
+    return requestReissueInfo(documentId);
+  }
+
+  setReissueBase(documentId: string, body: ReissueBaseBody): Promise<ReissueInfo> {
+    return requestReissueBase(documentId, body);
+  }
+
+  getReissueConflicts(): Promise<ReissueAttentionGroup[]> {
+    return requestReissueConflicts();
   }
 
   async getDocumentFile(documentId: string): Promise<Blob> {

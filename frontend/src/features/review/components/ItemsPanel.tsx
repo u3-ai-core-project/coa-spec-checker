@@ -30,6 +30,8 @@ interface ItemsPanelProps {
   approvalSummary?: ReactNode;
   /** 문서 정보의 "적용 규격" 줄에 들어가는 규격 세트 선택 */
   specSetControl?: ReactNode;
+  /** 헤더 아래, 항목 목록 위에 고정으로 보이는 안내(재발행 충돌 배너 등) */
+  banner?: ReactNode;
   /** 하단 액션 바 */
   actionBar: ReactNode;
 }
@@ -195,6 +197,7 @@ export function ItemsPanel({
   getRowExtras,
   approvalSummary,
   specSetControl,
+  banner,
   actionBar,
 }: ItemsPanelProps) {
   const { doc, extraction, reviewLogs, specs, anomalies } = data;
@@ -241,6 +244,7 @@ export function ItemsPanel({
         </div>
       </div>
       {approvalSummary}
+      {banner}
       <div className="item-scroll min-h-0 flex-1 overflow-y-auto">
         {docFlags.map(({ message, code }) => {
           const open = code !== null && onSelectIssue ? () => onSelectIssue(code) : undefined;
