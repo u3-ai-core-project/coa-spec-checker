@@ -249,13 +249,42 @@ def _write_lot_sheet(db: Session, ws: Worksheet, doc: Document, result: Extracti
 
     # 6. 최종 처분 (미처분이면 빈칸)
     row = _section(ws, row + 1, "6. 최종 처분")
-    _pairs(ws, row, [
+    row = _pairs(ws, row, [
         ("AI 권고", RECOMMENDATION_KO.get(result.lot_recommendation)),
         ("최종 처분", DECISION_KO.get(doc.final_decision) if doc.final_decision else None),
         ("처분자", people.user(doc.approver)),
         ("처분 일시", _fmt_dt(doc.approved_at) if doc.approved_at else None),
         ("처분 사유", people.text(doc.decision_reason)),
     ])
+
+    # 7. 판정 근거 버전 (운영 정책 6장). 이 기능 전에 만든 결과는 "기록 없음"
+    row = _section(ws, row + 1, "7. 판정 근거 버전")
+    _pairs(ws, row, version_rows(doc.extraction.versions if doc.extraction else None))
+
+
+def version_rows(versions: dict | None) -> list[tuple[str, str | None]]:
+    """리포트에 넣을 '판정 근거 버전' 행 (항목명, 값)."""
+    if not versions:
+        return [("기록", "기록 없음 (버전 기록 기능 전에 처리된 문서)")]
+    e, j = versions.get("extraction") or {}, versions.get("judgement") or {}
+    ai = e.get("ai_package") or {}
+    llm = e.get("llm") or {}
+    mapping = e.get("mapping_dictionary") or {}
+    spec = j.get("spec_set") or {}
+    return [
+        ("추출 일시", _fmt_iso(e.get("read_at"))),
+        ("추출기", _join(e.get("extractor"), f"{ai.get('name')} {ai.get('version')}" if ai else None)),
+        ("LLM", f"{llm.get('host')} (모델: {llm.get('model') or '미기록'})" if llm.get("configured") else "사용 안 함"),
+        ("매핑 사전", f"{mapping.get('count', 0)}건, 지문 {mapping.get('hash')}" if mapping else None),
+        ("판정 일시", _fmt_iso(j.get("judged_at"))),
+        ("판정 규격", _join(spec.get("code"), spec.get("version")) if spec else None),
+        ("규격·정책 지문", f"규격 {spec.get('rules_hash')} / 정책 {j.get('policy_hash')}" if j else None),
+        ("프로그램 버전", f"백엔드 {j.get('backend_version') or e.get('backend_version')}"),
+    ]
+
+
+def _fmt_iso(text: str | None) -> str | None:
+    return _fmt_dt(datetime.fromisoformat(text)) if text else None
 
 
 # ---------------------------------------------------------------------------

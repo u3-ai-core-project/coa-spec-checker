@@ -88,4 +88,6 @@ class DocumentDetail(BaseModel):
     stale_notified_at: datetime | None = None  # 방치(정리 후보)로 표시된 시각. 활동하면 비워진다
     is_stale: bool = False                     # 방치 표시 여부 (stale_notified_at 이 있으면 true)
     file_sha256: str | None = None             # 운영 정책 1장: 파일 고유값 (같은 파일 확인용)
+    # 운영 정책 6장: 추출·판정 근거 버전 (읽기 전용). 생김새는 app/services/version_service.py. 이 기능 전 결과는 null
+    versions: dict | None = None
     duplicate_of: str | None = None            # 같은 파일이 있었는데 확인하고 새로 접수한 경우, 그때 있던 문서 ID

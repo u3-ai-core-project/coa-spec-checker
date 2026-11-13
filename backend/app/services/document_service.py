@@ -351,6 +351,7 @@ def to_detail(db: Session, doc: Document) -> DocumentDetail:
         stale_notified_at=doc.stale_notified_at,
         is_stale=doc.stale_notified_at is not None,
         file_sha256=doc.file_sha256,
+        versions=doc.extraction.versions if doc.extraction else None,
         duplicate_of=doc.duplicate_of,
     )
 
