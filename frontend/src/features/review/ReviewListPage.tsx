@@ -307,6 +307,14 @@ function DocRow({ doc, reissue, index, highlighted, onOpen, deletable, onDelete 
       <td className="w-10 px-5 py-2 text-[12px] tabular-nums text-[#8A9099]">{index + 1}</td>
       <td className="px-2 py-2 text-[13px] font-semibold tabular-nums">
         {doc.file_name}
+        {doc.is_stale === true && (
+          <span
+            className="doc-stale-badge ml-1.5 inline-flex h-5 items-center whitespace-nowrap rounded bg-[#FBEAE9] px-1.5 align-middle text-[11px] font-semibold text-[#C0342E]"
+            title="30일 넘게 처리되지 않아 정리 대상으로 표시되었습니다"
+          >
+            곧 정리 대상
+          </span>
+        )}
         {reissue && (
           <span
             className="doc-reissue-badge ml-1.5 inline-flex h-5 items-center whitespace-nowrap rounded bg-[#FBF0DF] px-1.5 align-middle text-[11px] font-semibold text-[#9A5B00]"

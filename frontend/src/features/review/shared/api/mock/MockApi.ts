@@ -299,6 +299,7 @@ export class MockApi implements Api {
       ...(detail.attempt_count === undefined ? {} : { attempt_count: detail.attempt_count }),
       ...(detail.failed_stage === undefined ? {} : { failed_stage: detail.failed_stage }),
       ...(detail.error_kind === undefined ? {} : { error_kind: detail.error_kind }),
+      ...(detail.is_stale === undefined ? {} : { is_stale: detail.is_stale, stale_notified_at: detail.stale_notified_at, last_activity_at: detail.last_activity_at }),
     };
   }
 
