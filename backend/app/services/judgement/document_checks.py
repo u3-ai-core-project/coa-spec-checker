@@ -9,6 +9,9 @@
                         예) CoA "YS/T 582-2023", 사내 세트 "YS/T 582-2013" → 어느 버전으로 판정할지 확인 필요
                         (이전 이름 SPEC_VERSION_UNKNOWN 은 "모름"이라는 뜻이라 실제 상황과 달라 바꿨다. 10.25 회의 결정)
 
+  MULTI_LOT      한 문서에서 로트번호가 2개 이상 확인됨 (운영 정책 8.1). 문서 하나에 로트 하나를 전제할 수 없어 담당자 확인으로 넘긴다.
+                 첫 로트만 채택하면 나머지 로트가 대조·판정에서 빠져 조용히 통과하므로 lot_no 는 비우고 lot_nos 에 전체를 담는다
+
   PRODUCT_MISMATCH CoA 제품명이 접수한 원자재가 아닌 다른 원자재를 가리킴 (UC07)
                    예) 탄산리튬으로 접수했는데 CoA 제품명이 "Lithium Hydroxide Monohydrate"
                    표기가 협력사마다 달라 문자열 비교는 하지 않고, 원자재 키워드가 서로 충돌할 때만 경고한다
@@ -28,6 +31,28 @@ _LOT_SEPARATORS = re.compile(r"[\s\-_/.]+")
 
 def normalize_lot(lot: str | None) -> str:
     return _LOT_SEPARATORS.sub("", lot or "").upper()
+
+
+def distinct_lots(extraction: ExtractionInput) -> list[str]:
+    """문서에서 읽은 로트번호 (lot_no + lot_nos). 정규화했을 때 같은 로트는 한 번만, 처음 쓴 표기로 남긴다."""
+    seen: dict[str, str] = {}
+    for lot in [extraction.lot_no, *extraction.lot_nos]:
+        key = normalize_lot(lot)
+        if key and key not in seen:
+            seen[key] = lot.strip()
+    return list(seen.values())
+
+
+def check_multi_lot(lots: list[str], received_lot_no: str | None) -> list[DocumentIssue]:
+    """복수 로트 문서 표시. 입고 로트를 입력했는데 CoA 의 로트들 중에 없으면 LOT_MISMATCH 도 낸다."""
+    shown = ", ".join(lots[:5]) + (f" 외 {len(lots) - 5}개" if len(lots) > 5 else "")
+    issues = [DocumentIssue(code=D.MULTI_LOT,
+                            message=f"한 문서에서 로트 {len(lots)}개가 확인됨 ({shown}). 로트별로 입고 로트와 대조하고 판정해야 함")]
+    received = normalize_lot(received_lot_no)
+    if received and received not in {normalize_lot(lot) for lot in lots}:
+        issues.append(DocumentIssue(code=D.LOT_MISMATCH,
+                                    message=f"입고 로트 {received_lot_no.strip()} 가 CoA 로트 {shown} 에 없음"))
+    return issues
 
 
 def check_lot(received_lot_no: str | None, coa_lot_no: str | None) -> DocumentIssue | None:
@@ -109,8 +134,10 @@ def check_document(extraction: ExtractionInput, *, received_lot_no: str | None =
     received_date   : 입고일 (일괄 접수에서 입고 행과 연결된 경우만)
     material_code   : 접수한 원자재 (CoA 제품명 비교용)
     """
+    lots = distinct_lots(extraction)
+    lot_issues = check_multi_lot(lots, received_lot_no) if len(lots) >= 2 else [check_lot(received_lot_no, extraction.lot_no)]
     checks = (
-        check_lot(received_lot_no, extraction.lot_no),
+        *lot_issues,
         check_dates(extraction, received_date),
         check_spec_version(extraction.applied_standard, spec_version),
         check_product(extraction.product_name, material_code),

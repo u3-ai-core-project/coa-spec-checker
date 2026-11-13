@@ -64,6 +64,21 @@ class RejudgedDocument(BaseModel):
     changed_items: list[str] = Field(description="판정이 바뀐 항목명")
 
 
+class SpecPreviewOut(BaseModel):
+    """POST /specs/{id}/preview 응답 (운영 정책 5장). 저장하지 않고, 적용했을 때 다시 판정될 문서에 생길 변화만 계산한다."""
+    changed_fields: list[str] = Field(description="실제로 바뀌는 필드 (lsl, usl, unit). 비어 있으면 바뀌는 값이 없음")
+    target_documents: int = Field(description="이 규격 세트로 판정한 처분 전 문서 수 (rejudge=true 로 적용하면 다시 판정되는 문서)")
+    affected_documents: int = Field(description="그중 항목 판정이나 로트 권고가 바뀌는 문서 수")
+    recommendation_changed_documents: int = Field(description="그중 로트 권고가 바뀌는 문서 수")
+    documents: list[RejudgedDocument] = Field(description="영향받는 문서 목록")
+
+
+class SpecRevertRequest(BaseModel):
+    """POST /specs/{id}/revert. 가장 최근 변경을 되돌린다. 사유는 필수 (검사는 spec_service 에서 한다)."""
+    reason: str | None = Field(None, description="되돌리는 사유 (필수)")
+    rejudge: bool = Field(False, description="true 이면 처분 전 문서도 되돌린 규격으로 다시 판정")
+
+
 class SpecUpdateOut(SpecItemOut):
     """PATCH /specs/{id} 응답. rejudge=true 로 요청했을 때만 rejudged_documents 가 채워진다."""
     rejudged_documents: list[RejudgedDocument] = []

@@ -12,7 +12,14 @@ from app.schemas.extraction import ExtractionInput
 
 
 class ExtractionError(Exception):
-    """추출 실패. 메시지는 documents.error_message 에 그대로 저장되어 화면에 표시된다."""
+    """추출 실패. 메시지는 documents.error_message 에 그대로 저장되어 화면에 표시된다.
+
+    transient=True 는 다시 하면 성공할 수 있는 일시 오류(AI 서버 연결 끊김 등)이다. 기본은 영구 오류.
+    """
+
+    def __init__(self, message: str = "", *, transient: bool = False):
+        super().__init__(message)
+        self.transient = transient
 
 
 class Extractor(Protocol):

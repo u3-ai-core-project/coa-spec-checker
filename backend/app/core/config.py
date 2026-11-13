@@ -26,6 +26,13 @@ class Settings(BaseSettings):
     MAX_UPLOAD_MB: int = 20
     MAX_BATCH_FILES: int = 20   # 일괄 접수 한 번에 올릴 수 있는 CoA 수 (멘토님 UC01 "CoA 1~20개")
 
+    # 처리 실패·재시도 (운영 정책 4장)
+    EXTRACTION_TIMEOUT_SEC: int = 300        # 추출 1회가 이 시간을 넘으면 실패로 처리한다 (5분)
+    EXTRACTION_AUTO_RETRIES: int = 1         # 일시 오류일 때 자동으로 다시 시도하는 횟수 (정책: 1~2회)
+    MAX_EXTRACTION_ATTEMPTS: int = 2         # 서버 시작 때 자동으로 다시 시작할 수 있는 시도 상한
+    # 서버 시작 때 멈춘 문서를 실패로만 정리할지(False, 1단계), 상한 안이면 다시 시작할지(True, 2단계)
+    RESUME_STUCK_ON_START: bool = False
+
     # AI 추출기. "mock" 이면 app/pipeline/mock_data 의 JSON 을 결과로 사용 (AI 파트 연결 전)
     EXTRACTOR: str = "mock"
     MOCK_EXTRACTION_DIR: str = "app/pipeline/mock_data"

@@ -23,7 +23,7 @@ from app.core.errors import AppException, ErrorCode
 from app.models import ApprovalLog, Document, User
 from app.schemas.approval import ApprovalLogOut
 from app.schemas.extraction import ExtractionItem
-from app.services import extraction_service
+from app.services import extraction_service, reissue_service
 from app.services.judgement.item_judge import REASON_NO_SPEC
 from app.services.judgement.policy import default_policy
 
@@ -41,6 +41,8 @@ def approve(db: Session, document_id: str, decision: FinalDecision, reason: str 
     doc = _lock(db, document_id)
     _ensure_open(doc)
     reason = _clean(reason)
+    # 같은 로트의 CoA 가 여러 개면 기준 버전을 먼저 골라야 한다 (운영 정책 8.2)
+    reissue_service.ensure_can_approve(db, doc)
 
     # 신뢰도 낮음 항목을 확인·수정하지 않았으면 처분 불가
     pending = pending_low_confidence_items(doc)

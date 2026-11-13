@@ -5,7 +5,8 @@ from zoneinfo import ZoneInfo
 import pytest
 
 from app.core.enums import DocumentStatus as S, FinalDecision as D, LotRecommendation as R
-from app.models import Document, ExtractionResult
+from app.core.enums import ReviewAction
+from app.models import Document, ExtractionResult, ReviewLog
 
 KST = ZoneInfo("Asia/Seoul")
 URL = "/api/v1/dashboard/summary"
@@ -60,6 +61,16 @@ def test_user_default_is_mine(auth_client, docs):
         "on_hold_count": 1,
         "pass_rate": 66.7,
         "avg_processing_time_sec": 1200.0,
+        "avg_time_to_decision_sec": 1200.0,   # 운영 정책 7장: 처분까지 걸린 시간 (avg_processing_time_sec 와 같은 값)
+        "avg_system_processing_sec": None,     # 추출 작동 시간 기록이 없는 문서뿐이면 null
+        "human_edit_rate": 0.0,
+        "edit_rate_by_supplier": [{"supplier": "(미상)", "documents": 3, "edited_documents": 0, "edit_rate": 0.0,
+                                   "success_rate": 100.0}],
+        "edit_rate_by_item": [
+            {"item_name": "수분", "items": 2, "edited_items": 0, "edit_rate": 0.0},
+            {"item_name": "Na", "items": 1, "edited_items": 0, "edit_rate": 0.0},
+            {"item_name": "순도", "items": 1, "edited_items": 0, "edit_rate": 0.0},
+        ],
         "recommendation_match_rate": 100.0,  # 승인→승인, 불합격→불합격 일치. 보류 권고 문서는 계산에서 제외
         "auto_approve_rate": 50.0,           # 정상(승인) 2건 중 승인 권고 + 사람 확인 없음 1건
         "reviewed_item_ratio": 0.0,
@@ -170,3 +181,56 @@ def test_reviewed_ratio_counts_all_items(auth_client, db, user):
         item("외관", judgement_reason="정성 항목, 판정 제외"),
     ])
     assert auth_client.get(URL).json()["data"]["reviewed_item_ratio"] == 40.0   # 5개 중 2개 (참고 2개 포함)
+
+
+# ---- 운영 정책 7장: 실제 작동 시간, 사람 수정률 ----------------------------------
+def log(db, doc, item_id, action, user):
+    db.add(ReviewLog(document_id=doc.id, item_id=item_id, action=action, reviewer_id=user.id))
+    db.commit()
+
+
+def test_system_processing_time_is_separate_from_time_to_decision(auth_client, db, user):
+    a = make_doc(db, user, S.APPROVED, R.APPROVE, D.ACCEPT, [item("Na")], minutes=60)
+    b = make_doc(db, user, S.APPROVED, R.APPROVE, D.ACCEPT, [item("Na")], minutes=120)
+    make_doc(db, user, S.APPROVED, R.APPROVE, D.ACCEPT, [item("Na")], minutes=30)       # 작동 시간 기록 없음 → 평균에서 제외
+    start = datetime(2026, 10, 5, 9, 0, tzinfo=KST)
+    a.processing_started_at, a.processing_finished_at = start, start + timedelta(seconds=40)
+    b.processing_started_at, b.processing_finished_at = start, start + timedelta(seconds=20)
+    db.commit()
+    data = auth_client.get(URL).json()["data"]
+    assert data["avg_system_processing_sec"] == 30.0                 # 사람 대기 없이 시스템이 일한 시간
+    assert data["avg_time_to_decision_sec"] == data["avg_processing_time_sec"] == 4200.0   # (60 + 120 + 30)분 / 3 = 70분
+
+
+def test_human_edit_rate_by_supplier_and_item(auth_client, db, user):
+    def doc(supplier, items):
+        d = make_doc(db, user, S.APPROVED, R.APPROVE, D.ACCEPT, items)
+        d.supplier = supplier
+        db.commit()
+        return d
+    a1 = doc("알파", [item("Na") | {"item_id": "item-001"}, item("Fe") | {"item_id": "item-002"}])
+    a2 = doc("알파", [item("Na") | {"item_id": "item-001"}])
+    b1 = doc("베타", [item("Na") | {"item_id": "item-001"}])
+    doc(None, [item("Na") | {"item_id": "item-001"}])
+    log(db, a1, "item-001", ReviewAction.EDIT, user)                  # Na 값 수정
+    log(db, a1, "item-001", ReviewAction.EDIT, user)                  # 같은 항목을 또 고쳐도 한 번으로 센다
+    log(db, a2, "item-001", ReviewAction.CONFIRM, user)               # 확인만 한 것은 수정이 아니다
+    log(db, b1, "item-001", ReviewAction.RENAME, user)                # 항목명 수정은 수정이다
+    log(db, b1, "document", ReviewAction.RESPEC, user)                # 규격 세트 변경은 수정이 아니다
+
+    data = auth_client.get(URL).json()["data"]
+    assert data["human_edit_rate"] == 50.0                            # 4건 중 a1, b1
+    assert data["edit_rate_by_supplier"] == [
+        {"supplier": "베타", "documents": 1, "edited_documents": 1, "edit_rate": 100.0, "success_rate": 0.0},
+        {"supplier": "알파", "documents": 2, "edited_documents": 1, "edit_rate": 50.0, "success_rate": 50.0},
+        {"supplier": "(미상)", "documents": 1, "edited_documents": 0, "edit_rate": 0.0, "success_rate": 100.0},
+    ]
+    assert data["edit_rate_by_item"] == [
+        {"item_name": "Na", "items": 4, "edited_items": 2, "edit_rate": 50.0},
+        {"item_name": "Fe", "items": 1, "edited_items": 0, "edit_rate": 0.0},
+    ]
+
+
+def test_edit_rates_empty_without_documents(auth_client, db):
+    data = auth_client.get(URL).json()["data"]
+    assert (data["human_edit_rate"], data["edit_rate_by_supplier"], data["edit_rate_by_item"]) == (0.0, [], [])

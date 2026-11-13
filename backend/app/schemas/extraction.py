@@ -55,6 +55,8 @@ class ExtractionInput(BaseModel):
     document_id: str | None = None
     supplier: str | None = None
     lot_no: str | None = None
+    # 운영 정책 8.1: 한 문서에서 읽은 로트번호 전체. 로트가 1개면 비워 둬도 된다. lot_no 와 합쳐 2개 이상이면 복수 로트 문서
+    lot_nos: list[str] = []
     test_date: date | None = None
     origin: str | None = None
     applied_standard: str | None = None
@@ -127,7 +129,8 @@ class Summary(BaseModel):
 class ExtractionResult(BaseModel):
     document_id: str
     supplier: str | None = None
-    lot_no: str | None = None
+    lot_no: str | None = None        # 복수 로트 문서는 첫 로트만 고르지 않으려고 null 로 두고 lot_nos 에 전체를 담는다
+    lot_nos: list[str] = []          # 복수 로트 문서(운영 정책 8.1)일 때만 채운다
     test_date: date | None = None
     origin: str | None = None
     applied_standard: str | None = None

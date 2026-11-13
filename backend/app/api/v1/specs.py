@@ -1,4 +1,4 @@
-"""[담당: 장수민] GET /specs, GET /specs/sets, PATCH /specs/{id}, GET /specs/{id}/change-logs (명세 4.20, 4.21, v1.4)
+"""[담당: 장수민] GET /specs, GET /specs/sets, PATCH /specs/{id}, POST /specs/{id}/preview, POST /specs/{id}/revert, GET /specs/{id}/change-logs (명세 4.20, 4.21, v1.4)
 
 규칙은 spec_service 에 있다. 권한: 조회는 USER·ADMIN, 수정은 ADMIN (require_admin, 홍채령 구현).
 """
@@ -10,7 +10,9 @@ from app.core.response import ok
 from app.db.session import get_db
 from app.models import User
 from app.schemas.common import ApiResponse
-from app.schemas.spec import SpecChangeLogOut, SpecItemOut, SpecSetOut, SpecUpdateOut, SpecUpdateRequest
+from app.schemas.spec import (
+    SpecChangeLogOut, SpecItemOut, SpecPreviewOut, SpecRevertRequest, SpecSetOut, SpecUpdateOut, SpecUpdateRequest,
+)
 from app.services import spec_service
 
 router = APIRouter(prefix="/specs", tags=["specs"])
@@ -42,6 +44,20 @@ def update_spec(spec_id: int, body: SpecUpdateRequest, db: Session = Depends(get
                 user: User = Depends(require_admin)):
     """규격 항목 수정 (관리자). 변경 사유 필수. 기본은 이후 업로드되는 문서부터 적용, rejudge=true 면 처분 전 문서도 다시 판정."""
     return ok(spec_service.update_item(db, spec_id, body, user))
+
+
+@router.post("/{spec_id}/preview", response_model=ApiResponse[SpecPreviewOut])
+def preview_spec_update(spec_id: int, body: SpecUpdateRequest, db: Session = Depends(get_db),
+                        _: User = Depends(require_admin)):
+    """규격 수정 영향 미리보기 (관리자, 운영 정책 5장). 저장하지 않고 다시 판정될 문서 수와 로트 권고 변화를 보여 준다."""
+    return ok(spec_service.preview_update(db, spec_id, body))
+
+
+@router.post("/{spec_id}/revert", response_model=ApiResponse[SpecUpdateOut])
+def revert_spec(spec_id: int, body: SpecRevertRequest, db: Session = Depends(get_db),
+                user: User = Depends(require_admin)):
+    """가장 최근 규격 변경을 이전 값으로 되돌린다 (관리자, 운영 정책 5장). 사유 필수, 변경 이력이 새로 남는다."""
+    return ok(spec_service.revert_last_change(db, spec_id, body, user))
 
 
 @router.get("/{spec_id}/change-logs", response_model=ApiResponse[list[SpecChangeLogOut]])

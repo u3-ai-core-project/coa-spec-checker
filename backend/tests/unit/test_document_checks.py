@@ -152,3 +152,25 @@ def test_product_name_points_to_other_material(name, material):
 ])
 def test_product_name_no_issue(name, material):
     assert check_document(coa(product_name=name), material_code=material) == []
+
+
+# ---- 복수 로트 (운영 정책 8.1) ----------------------------------------------
+def test_multi_lot_document_is_flagged():
+    issues = check_document(coa(lot_no="L-1", lot_nos=["L-1", "L-2", "L-3"]))
+    assert codes(issues) == [D.MULTI_LOT]
+    assert "3개" in issues[0].message and "L-2" in issues[0].message
+
+
+def test_same_lot_written_differently_is_not_multi_lot():
+    assert check_document(coa(lot_no="L-001", lot_nos=["l001", "L 001"])) == []
+
+
+def test_multi_lot_checks_received_lot_against_all_lots():
+    assert codes(check_document(coa(lot_nos=["L-1", "L-2"]), received_lot_no="l2")) == [D.MULTI_LOT]
+    issues = check_document(coa(lot_nos=["L-1", "L-2"]), received_lot_no="L-9")
+    assert codes(issues) == [D.MULTI_LOT, D.LOT_MISMATCH]
+
+
+def test_multi_lot_message_is_shortened_for_many_lots():
+    issues = check_document(coa(lot_nos=[f"L-{n}" for n in range(27)]))
+    assert "27개" in issues[0].message and "외 22개" in issues[0].message
