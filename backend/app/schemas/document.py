@@ -38,6 +38,8 @@ class DocumentListItem(BaseModel):
     uploaded_at: datetime
     approved_by: str | None
     approved_at: datetime | None
+    retention_until: datetime | None = None  # 운영 정책 1장: 보관 기간 만료 시각 (처분 완료 문서만)
+    archived_at: datetime | None = None      # 원본을 보관용 폴더로 옮긴 시각
     error_message: str | None
     attempt_count: int = 0                 # 운영 정책 4장: 추출 시도 횟수
     failed_stage: str | None = None        # 실패 단계 (extract, judge, timeout, interrupted)
@@ -75,3 +77,5 @@ class DocumentDetail(BaseModel):
     uploaded_at: datetime
     approved_by: str | None
     approved_at: datetime | None
+    retention_until: datetime | None = None  # 운영 정책 1장: 보관 기간 만료 시각 (처분 완료 문서만)
+    archived_at: datetime | None = None      # 원본을 보관용 폴더로 옮긴 시각

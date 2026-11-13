@@ -16,6 +16,7 @@
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload
 
+from app.core.config import settings
 from app.core.enums import (
     ApprovalAction, DocumentStatus, FinalDecision, FollowUp, LotRecommendation, NOT_READY_STATUSES,
 )
@@ -63,6 +64,8 @@ def approve(db: Session, document_id: str, decision: FinalDecision, reason: str 
     doc.approved_by = user.id
     # DB 시각으로 기록하고 다시 읽는다. 다른 일시 값과 같이 DB 세션 시간대(+09:00)로 응답된다
     doc.approved_at = func.now()
+    # 보관 기간: 처분일(재처분이면 재처분일)부터 RETENTION_YEARS 년 (운영 정책 1장)
+    doc.retention_until = func.now() + func.make_interval(settings.RETENTION_YEARS)
     _finish(db, doc, ApprovalAction.APPROVE, user, reason=reason, decision=decision)
     db.refresh(doc)
     return doc
@@ -127,6 +130,7 @@ def cancel(db: Session, document_id: str, reason: str | None, user: User) -> Doc
     doc.decision_reason = None
     doc.approved_by = None
     doc.approved_at = None
+    doc.retention_until = None  # 다시 처분하면 그때부터 새로 센다
     _finish(db, doc, ApprovalAction.CANCEL, user, reason=reason)
     return doc
 

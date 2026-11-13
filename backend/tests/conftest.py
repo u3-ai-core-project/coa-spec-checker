@@ -56,8 +56,9 @@ def _schema():
 
 @pytest.fixture
 def db(_schema, tmp_path, monkeypatch):
-    """테스트마다 빈 테이블 + 임시 업로드 폴더."""
+    """테스트마다 빈 테이블 + 임시 업로드·보관용 폴더."""
     monkeypatch.setattr(settings, "UPLOAD_DIR", str(tmp_path / "uploads"))
+    monkeypatch.setattr(settings, "ARCHIVE_DIR", str(tmp_path / "archive"))
     tables = ", ".join(t.name for t in reversed(Base.metadata.sorted_tables))
     with engine.begin() as conn:
         conn.execute(text(f"TRUNCATE {tables} RESTART IDENTITY CASCADE"))

@@ -78,6 +78,11 @@ class Document(Base):
     uploaded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     approved_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
     approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # 보관 기간 만료 시각 (운영 정책 1장). 처분할 때 approved_at + RETENTION_YEARS 로 정하고, 처분 취소하면 비운다.
+    # 처분할 때 값을 박아 두므로 RETENTION_YEARS 를 바꿔도 이미 처분한 문서의 기간은 그대로다
+    retention_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # 보관 기간이 지나 원본을 보관용 폴더(ARCHIVE_DIR)로 옮긴 시각. 옮긴 뒤에도 원본 조회는 된다
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     uploader: Mapped[User] = relationship(foreign_keys=[uploaded_by])
     approver: Mapped[User | None] = relationship(foreign_keys=[approved_by])

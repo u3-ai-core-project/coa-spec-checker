@@ -9,7 +9,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, Query, Uplo
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, require_admin
 from app.core.config import settings
 from app.core.enums import LotRecommendation
 from app.core.errors import AppException, ErrorCode
@@ -20,7 +20,7 @@ from app.pipeline.worker import process_document
 from app.schemas.common import ApiResponse, Page
 from app.schemas.batch import BatchDetail, BatchUploadResponse
 from app.schemas.document import DocumentDeleteRequest, DocumentDeleted, DocumentDetail, DocumentListItem, DocumentUploadResponse
-from app.services import batch_service, document_service
+from app.services import batch_service, document_service, retention_service
 
 router = APIRouter(prefix="/documents", tags=["documents"])
 
@@ -141,6 +141,28 @@ def list_documents(
         size=size,
     )
     return ok(Page(total=total, items=[document_service.to_list_item(d) for d in docs]))
+
+
+@router.get("/retention-expired", response_model=ApiResponse[Page[DocumentListItem]])
+def list_retention_expired(
+    page: int = Query(1, ge=1),
+    size: int = Query(20, ge=1, le=100),
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    """보관 기간이 지났고 아직 보관용 폴더로 옮기지 않은 처분 완료 문서 (운영 정책 1장, ADMIN). 만료가 오래된 것부터."""
+    total, docs = retention_service.list_expired(db, page=page, size=size)
+    return ok(Page(total=total, items=[document_service.to_list_item(d) for d in docs]))
+
+
+@router.post("/{document_id}/archive", response_model=ApiResponse[DocumentDetail])
+def archive_document(document_id: str, db: Session = Depends(get_db), admin: User = Depends(require_admin)):
+    """보관 기간이 지난 처분 완료 문서의 원본을 보관용 폴더로 옮긴다 (운영 정책 1장, ADMIN). 지우지 않는다.
+
+    옮긴 뒤에도 GET /documents/{id}/file 로 원본을 볼 수 있다.
+    """
+    retention_service.archive_document(db, document_id, admin)
+    return ok(document_service.to_detail(db, document_service.get_document(db, document_id)))
 
 
 @router.get("/{document_id}", response_model=ApiResponse[DocumentDetail])

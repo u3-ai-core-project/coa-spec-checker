@@ -44,6 +44,8 @@ class ErrorCode(Enum):
     USERNAME_TAKEN = (409, "이미 사용 중인 아이디입니다")  # 운영 정책 2단계
     CANNOT_CHANGE_SELF = (409, "본인 계정은 비활성화하거나 권한을 낮출 수 없습니다")  # 운영 정책 2단계
     LAST_ADMIN = (409, "활성 관리자가 최소 1명은 있어야 합니다")  # 운영 정책 2단계
+    RETENTION_NOT_EXPIRED = (409, "보관 기간이 지나야 보관용 폴더로 옮길 수 있습니다")  # 운영 정책 1장
+    ALREADY_ARCHIVED = (409, "이미 보관용 폴더로 옮긴 문서입니다")  # 운영 정책 1장
     ALREADY_APPROVED = (409, "이미 처분된 문서입니다")
     NOT_APPROVED = (409, "처분되지 않은 문서입니다")
     NOT_READY = (409, "추출이 끝나지 않은 문서입니다")

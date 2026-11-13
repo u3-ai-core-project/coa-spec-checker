@@ -1,6 +1,8 @@
 """[담당: 장수민] 문서 업로드 검증·저장, 목록·상세 조회 (명세 4.4~4.7). 문서 삭제 (홍채령 추가), 재처리·멈춘 문서 정리."""
 import logging
+from datetime import datetime, timezone
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session, joinedload
@@ -109,6 +111,17 @@ def get_document(db: Session, document_id: str) -> Document:
 # ---------------------------------------------------------------------------
 # 삭제
 # ---------------------------------------------------------------------------
+def _approved_delete_message(doc: Document) -> str:
+    """처분 완료 문서 삭제 거절 메시지. 보관 기간 안이면 만료일을, 지났으면 원본은 보관용 폴더로만 옮길 수 있음을 알린다."""
+    until = doc.retention_until
+    if until is None:
+        return "처분 완료 문서는 삭제할 수 없습니다"
+    if until > datetime.now(timezone.utc):
+        local = until.astimezone(ZoneInfo(settings.DB_TIMEZONE)).date().isoformat()
+        return f"처분 완료 문서는 보관 기간({local}까지) 동안 삭제할 수 없습니다"
+    return "보관 기간이 지난 처분 완료 문서도 삭제하지 않습니다. 원본은 보관용 폴더로 옮기는 것만 할 수 있습니다 (관리자)"
+
+
 def delete_document(db: Session, document_id: str, user: User, reason: str | None) -> str:
     """DELETE /documents/{id}. 삭제 기록을 남기고 문서와 딸린 기록, 원본 파일을 지운다. commit 까지 한다.
 
@@ -124,7 +137,7 @@ def delete_document(db: Session, document_id: str, user: User, reason: str | Non
     if user.role != Role.ADMIN and doc.uploaded_by != user.id:
         raise AppException(ErrorCode.FORBIDDEN, "본인이 올린 문서만 삭제할 수 있습니다")
     if doc.status == DocumentStatus.APPROVED:
-        raise AppException(ErrorCode.ALREADY_APPROVED, "처분 완료 문서는 삭제할 수 없습니다")
+        raise AppException(ErrorCode.ALREADY_APPROVED, _approved_delete_message(doc))
     if doc.status == DocumentStatus.PROCESSING:
         raise AppException(ErrorCode.NOT_READY, "추출 중인 문서는 삭제할 수 없습니다")
     reason = deletion_service.clean_reason(reason)
@@ -238,6 +251,8 @@ def to_list_item(doc: Document) -> DocumentListItem:
         uploaded_at=doc.uploaded_at,
         approved_by=doc.approver.name if doc.approver else None,
         approved_at=doc.approved_at,
+        retention_until=doc.retention_until,
+        archived_at=doc.archived_at,
         error_message=doc.error_message,
         attempt_count=doc.attempt_count,
         failed_stage=doc.failed_stage,
@@ -280,6 +295,8 @@ def to_detail(db: Session, doc: Document) -> DocumentDetail:
         uploaded_at=doc.uploaded_at,
         approved_by=doc.approver.name if doc.approver else None,
         approved_at=doc.approved_at,
+        retention_until=doc.retention_until,
+        archived_at=doc.archived_at,
     )
 
 
