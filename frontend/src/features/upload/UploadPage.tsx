@@ -11,6 +11,7 @@ import { GRID, Mark, Spinner } from './components/cells'
 import BatchRows from './components/BatchRows'
 import { useBatchUpload } from './hooks/useBatchUpload'
 import { splitSelection } from './lib/selection'
+import { failureHint } from './lib/failure'
 
 function fileMeta(file: File) {
     const ext = file.name.split('.').pop()?.toLowerCase() ?? ''
@@ -63,7 +64,14 @@ function StatusCell({ item, onOpenDialog, onRetry, onReprocess }: { item: QueueI
         return (
             <span className="flex items-center gap-3 text-xs text-[#c0392b]">
                 <Mark color="bg-[#ff7875]">!</Mark>
-                <span className="min-w-0 flex-1">{item.message ?? STATUS_LABEL.failed}</span>
+                <span className="min-w-0 flex-1">
+                    {item.message ?? STATUS_LABEL.failed}
+                    {failureHint(item.failedStage, item.errorKind, item.attemptCount) && (
+                        <span className="block text-[11px] text-ink-sub">
+                            {failureHint(item.failedStage, item.errorKind, item.attemptCount)}
+                        </span>
+                    )}
+                </span>
                 {item.phase !== 'error' && item.documentId && (
                     <button
                         type="button"

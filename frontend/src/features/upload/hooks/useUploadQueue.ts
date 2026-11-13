@@ -19,6 +19,9 @@ export interface QueueItem {
     status: DocumentStatus | null
     finalDecision: FinalDecision | null
     message: string | null
+    failedStage?: string | null
+    errorKind?: 'permanent' | 'transient' | null
+    attemptCount?: number
 }
 
 const POLL_MS = 3000
@@ -134,7 +137,7 @@ export function useUploadQueue() {
             if (!item?.documentId) return
             try {
                 const res = await retryDocument(item.documentId)
-                patch(localId, { status: res.status, message: null })
+                patch(localId, { status: res.status, message: null, failedStage: null, errorKind: null, attemptCount: 0 })
             } catch (e) {
                 patch(localId, {
                     message: e instanceof ApiError ? e.message : '다시 처리하지 못했습니다. 잠시 후 다시 시도해 주세요.',
@@ -158,6 +161,9 @@ export function useUploadQueue() {
                     status: r.value.status,
                     finalDecision: r.value.final_decision,
                     message: r.value.error_message,
+                    failedStage: r.value.failed_stage ?? null,
+                    errorKind: r.value.error_kind ?? null,
+                    attemptCount: r.value.attempt_count ?? 0,
                 })
             })
         }, POLL_MS)

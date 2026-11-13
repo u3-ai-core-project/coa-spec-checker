@@ -25,4 +25,7 @@ export interface DocumentDetail {
     status: DocumentStatus
     final_decision: FinalDecision | null
     error_message: string | null
+    failed_stage?: string | null
+    error_kind?: 'permanent' | 'transient' | null
+    attempt_count?: number
 }
