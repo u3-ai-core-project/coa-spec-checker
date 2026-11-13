@@ -126,6 +126,7 @@ def list_documents(
     lot_recommendation: LotRecommendation | None = Query(None),
     uploaded_by: int | None = Query(None, description="업로드한 사용자 id"),
     batch_id: str | None = Query(None, description="일괄 접수 묶음 ID (v1.4)"),
+    stale: bool | None = Query(None, description="운영 정책 1장: true 면 방치(정리 후보) 표시된 문서만"),
     page: int = Query(1, ge=1),
     size: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -137,6 +138,7 @@ def list_documents(
         lot_recommendation=lot_recommendation,
         uploaded_by=uploaded_by,
         batch_id=batch_id,
+        stale=stale,
         page=page,
         size=size,
     )
@@ -152,6 +154,19 @@ def list_retention_expired(
 ):
     """보관 기간이 지났고 아직 보관용 폴더로 옮기지 않은 처분 완료 문서 (운영 정책 1장, ADMIN). 만료가 오래된 것부터."""
     total, docs = retention_service.list_expired(db, page=page, size=size)
+    return ok(Page(total=total, items=[document_service.to_list_item(d) for d in docs]))
+
+
+@router.get("/stale-overdue", response_model=ApiResponse[Page[DocumentListItem]])
+def list_stale_overdue(
+    page: int = Query(1, ge=1),
+    size: int = Query(20, ge=1, le=100),
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),
+):
+    """관리자 목록 (운영 정책 1장, ADMIN): 방치로 표시된 뒤 STALE_GRACE_DAYS 일이 지나도 그대로인 처분 전 문서.
+    오래 방치된 것부터. 삭제는 DELETE /documents/{id} 로 사유를 넣어 직접 한다."""
+    total, docs = document_service.list_stale_overdue(db, page=page, size=size)
     return ok(Page(total=total, items=[document_service.to_list_item(d) for d in docs]))
 
 

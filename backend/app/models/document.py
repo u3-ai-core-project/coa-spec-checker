@@ -83,6 +83,11 @@ class Document(Base):
     retention_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # 보관 기간이 지나 원본을 보관용 폴더(ARCHIVE_DIR)로 옮긴 시각. 옮긴 뒤에도 원본 조회는 된다
     archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # 방치 문서 (운영 정책 1장). 마지막 활동 = 업로드, 값·항목명 수정, 항목 확인, 규격 세트 변경, 처분·보류·취소 (조회는 제외)
+    last_activity_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(),
+                                                       nullable=False)
+    # 처분 전인데 STALE_DAYS 동안 활동이 없어 방치로 표시한 시각. 활동하면 비운다
+    stale_notified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     uploader: Mapped[User] = relationship(foreign_keys=[uploaded_by])
     approver: Mapped[User | None] = relationship(foreign_keys=[approved_by])

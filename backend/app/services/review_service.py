@@ -39,7 +39,7 @@ from app.schemas.extraction import DocumentIssue, ExtractionItem, ExtractionResu
 from app.schemas.review import (
     ItemUpdateRequest, RejudgeItemChange, RejudgeRequest, RejudgeResponse, ReviewedItem, ReviewLogOut, SpecSetRef,
 )
-from app.services import extraction_service, mapping_service, spec_service
+from app.services import activity_service, extraction_service, mapping_service, spec_service
 from app.services.judgement.document_checks import check_spec_version
 from app.services.judgement.engine import refresh_summary
 from app.services.judgement.item_judge import current_override, evaluate_item, rejudge_item
@@ -388,6 +388,7 @@ def _save(db: Session, doc: Document, result: ExtractionResult, logs: list[Revie
     doc.lot_recommendation = result.lot_recommendation
     doc.extraction.result = result.to_json()
     doc.extraction.updated_at = datetime.now(timezone.utc)
+    activity_service.touch(doc)  # 운영 정책 1장: 수정·확인·규격 변경은 방치 기간을 다시 센다
     db.add_all(logs)
     db.commit()
     for log in logs:

@@ -253,6 +253,9 @@ def to_list_item(doc: Document) -> DocumentListItem:
         approved_at=doc.approved_at,
         retention_until=doc.retention_until,
         archived_at=doc.archived_at,
+        last_activity_at=doc.last_activity_at,
+        stale_notified_at=doc.stale_notified_at,
+        is_stale=doc.stale_notified_at is not None,
         error_message=doc.error_message,
         attempt_count=doc.attempt_count,
         failed_stage=doc.failed_stage,
@@ -297,7 +300,26 @@ def to_detail(db: Session, doc: Document) -> DocumentDetail:
         approved_at=doc.approved_at,
         retention_until=doc.retention_until,
         archived_at=doc.archived_at,
+        last_activity_at=doc.last_activity_at,
+        stale_notified_at=doc.stale_notified_at,
+        is_stale=doc.stale_notified_at is not None,
     )
+
+
+def list_stale_overdue(db: Session, *, page: int, size: int) -> tuple[int, list[Document]]:
+    """GET /documents/stale-overdue (ADMIN). 방치 표시가 오래된 것부터."""
+    from app.services.cleanup_service import _now, stale_overdue_conditions
+    conditions = stale_overdue_conditions(_now())
+    total = db.scalar(select(func.count()).select_from(Document).where(*conditions))
+    rows = db.scalars(
+        select(Document)
+        .where(*conditions)
+        .options(joinedload(Document.uploader), joinedload(Document.approver), joinedload(Document.extraction))
+        .order_by(Document.stale_notified_at, Document.id)
+        .offset((page - 1) * size)
+        .limit(size)
+    ).unique()
+    return total, list(rows)
 
 
 def parse_status_filter(value: str | None) -> list[DocumentStatus] | None:
@@ -320,6 +342,7 @@ def list_documents(
     page: int,
     size: int,
     batch_id: str | None = None,
+    stale: bool | None = None,
 ) -> tuple[int, list[Document]]:
     """최근 업로드 순. 검수 화면의 이전/다음 이동도 이 순서를 따른다 (명세 4.5)."""
     conditions = []
@@ -331,6 +354,8 @@ def list_documents(
         conditions.append(Document.uploaded_by == uploaded_by)
     if batch_id:
         conditions.append(Document.batch_id == batch_id)
+    if stale is not None:  # 운영 정책 1장: 방치(정리 후보) 표시된 문서만 / 표시 안 된 문서만
+        conditions.append(Document.stale_notified_at.is_not(None) if stale else Document.stale_notified_at.is_(None))
 
     total = db.scalar(select(func.count()).select_from(Document).where(*conditions))
     rows = db.scalars(

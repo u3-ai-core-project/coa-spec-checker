@@ -39,6 +39,14 @@ class Settings(BaseSettings):
     # 고객사 계약·법규가 더 길게 요구하면 품질팀이 늘린다. 처분할 때 만료일을 문서에 저장하므로, 바꾼 값은 이후 처분 문서부터 적용된다
     RETENTION_YEARS: int = Field(3, ge=1)
 
+    # 자동 정리·방치 문서 (운영 정책 1장). 서버 1대 운영 전제: 서버 안의 스레드가 CLEANUP_INTERVAL_HOURS 마다 돈다
+    CLEANUP_ENABLED: bool = True
+    CLEANUP_INTERVAL_HOURS: float = Field(24, gt=0)
+    FAILED_RETENTION_DAYS: int = Field(7, ge=1)   # 추출 실패 후 이 기간이 지나면 자동 삭제
+    ORPHAN_FILE_HOURS: int = Field(24, ge=1)      # 어떤 문서와도 연결되지 않은 업로드 파일을 이 시간이 지나면 자동 삭제
+    STALE_DAYS: int = Field(30, ge=1)             # 처분 전 문서가 이 기간 동안 활동이 없으면 방치(정리 후보)로 표시
+    STALE_GRACE_DAYS: int = Field(7, ge=1)        # 방치 표시 후 이 기간이 지나도 그대로면 관리자 목록에 올린다
+
     # 파일
     UPLOAD_DIR: str = "storage/uploads"
     # 보관 기간이 지난 처분 완료 원본을 옮겨 두는 폴더 (운영 정책 1장: 지우지 않고 옮기기만 한다)

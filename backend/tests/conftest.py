@@ -9,6 +9,8 @@ import os
 # app 을 import 하기 전에 DB 주소를 테스트 DB 로 바꾼다 (.env 보다 환경변수가 우선)
 TEST_DATABASE_URL = os.environ.get("TEST_DATABASE_URL", "postgresql+psycopg://coa:coa@localhost:5432/coa_test")
 os.environ["DATABASE_URL"] = TEST_DATABASE_URL
+# 테스트 중에는 자동 정리 스레드를 띄우지 않는다 (cleanup_service.run_cleanup 을 직접 부른다)
+os.environ["CLEANUP_ENABLED"] = "false"
 
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402

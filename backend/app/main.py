@@ -16,7 +16,7 @@ from sqlalchemy import text
 
 from app.db.session import SessionLocal
 from app.pipeline.worker import process_document
-from app.services import document_service
+from app.services import cleanup_service, document_service
 from app.services.judgement.cross_rules import validate_rule_names
 from app.services.judgement.policy import default_policy
 
@@ -24,6 +24,23 @@ logger = logging.getLogger(__name__)
 
 # 판정 정책 설정(.env)이 잘못됐으면 요청을 받기 전에 앱 시작 단계에서 바로 알린다 (ValueError)
 validate_rule_names(default_policy().cross_rules)
+
+
+def _cleanup_loop(stop: threading.Event) -> None:
+    """자동 정리 (운영 정책 1장). 시작 1분 뒤 한 번, 그 뒤 CLEANUP_INTERVAL_HOURS 마다. 서버 1대 운영 전제.
+
+    서버를 여러 대로 늘리면 같은 정리가 동시에 돌 수 있으므로, 그 전에 별도 작업(스케줄러)으로 옮긴다 (운영 정책 4장과 같은 전제).
+    """
+    if stop.wait(60):
+        return
+    while True:
+        try:
+            with SessionLocal() as db:
+                cleanup_service.run_cleanup(db)
+        except Exception:
+            logger.exception("자동 정리 실패")
+        if stop.wait(settings.CLEANUP_INTERVAL_HOURS * 3600):
+            return
 
 
 def _resume(document_ids: list[str]) -> None:
@@ -52,7 +69,11 @@ async def lifespan(_: FastAPI):
         resume_ids = []
     if resume_ids:
         threading.Thread(target=_resume, args=(resume_ids,), daemon=True).start()
+    stop_cleanup = threading.Event()
+    if settings.CLEANUP_ENABLED:
+        threading.Thread(target=_cleanup_loop, args=(stop_cleanup,), daemon=True, name="cleanup").start()
     yield
+    stop_cleanup.set()
 
 
 app = FastAPI(title="CoA 검수 시스템 API", version=__version__, lifespan=lifespan)

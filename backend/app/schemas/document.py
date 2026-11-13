@@ -40,6 +40,9 @@ class DocumentListItem(BaseModel):
     approved_at: datetime | None
     retention_until: datetime | None = None  # 운영 정책 1장: 보관 기간 만료 시각 (처분 완료 문서만)
     archived_at: datetime | None = None      # 원본을 보관용 폴더로 옮긴 시각
+    last_activity_at: datetime | None = None  # 운영 정책 1장: 마지막 활동(수정·확인·처분·보류 등, 조회 제외)
+    stale_notified_at: datetime | None = None  # 방치(정리 후보)로 표시된 시각. 활동하면 비워진다
+    is_stale: bool = False                     # 방치 표시 여부 (stale_notified_at 이 있으면 true)
     error_message: str | None
     attempt_count: int = 0                 # 운영 정책 4장: 추출 시도 횟수
     failed_stage: str | None = None        # 실패 단계 (extract, judge, timeout, interrupted)
@@ -79,3 +82,6 @@ class DocumentDetail(BaseModel):
     approved_at: datetime | None
     retention_until: datetime | None = None  # 운영 정책 1장: 보관 기간 만료 시각 (처분 완료 문서만)
     archived_at: datetime | None = None      # 원본을 보관용 폴더로 옮긴 시각
+    last_activity_at: datetime | None = None  # 운영 정책 1장: 마지막 활동(수정·확인·처분·보류 등, 조회 제외)
+    stale_notified_at: datetime | None = None  # 방치(정리 후보)로 표시된 시각. 활동하면 비워진다
+    is_stale: bool = False                     # 방치 표시 여부 (stale_notified_at 이 있으면 true)

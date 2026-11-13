@@ -24,7 +24,7 @@ from app.core.errors import AppException, ErrorCode
 from app.models import ApprovalLog, Document, User
 from app.schemas.approval import ApprovalLogOut
 from app.schemas.extraction import ExtractionItem
-from app.services import extraction_service, reissue_service
+from app.services import activity_service, extraction_service, reissue_service
 from app.services.judgement.item_judge import REASON_NO_SPEC
 from app.services.judgement.policy import default_policy
 
@@ -179,6 +179,7 @@ def _finish(db: Session, doc: Document, action: ApprovalAction, user: User, *, r
             decision: FinalDecision | None = None, follow_up: FollowUp | None = None) -> None:
     """이력 기록, JSON review_status 동기화, 저장."""
     extraction_service.sync_review_status(doc)
+    activity_service.touch(doc)  # 운영 정책 1장: 처분·보류·취소는 방치 기간을 다시 센다
     db.add(ApprovalLog(document_id=doc.id, action=action, decision=decision, follow_up=follow_up,
                        user_id=user.id, reason=reason))
     db.commit()
