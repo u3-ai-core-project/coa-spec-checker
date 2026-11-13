@@ -130,6 +130,15 @@ async function requestRejudge(documentId: string, req: RejudgeRequest): Promise<
 }
 
 /**
+ * 문서 삭제 API. 주소와 요청 본문은 이 함수 한 곳에서만 정합니다.
+ *   DELETE /documents/{id}  본문 { reason }(백엔드 #65: 필수, 앞뒤 공백을 뺀 2~500자, 아니면 400 REASON_REQUIRED)
+ * #65 이전 서버는 본문을 읽지 않고 무시하므로 사유를 보내도 그대로 동작합니다.
+ */
+async function requestDocumentDelete(documentId: string, reason: string): Promise<DocumentDeleted> {
+  return request<DocumentDeleted>(`/documents/${encodeURIComponent(documentId)}`, { method: 'DELETE', body: JSON.stringify({ reason }) });
+}
+
+/**
  * 재발행 충돌 API(백엔드 #61). 주소, 요청 본문, 응답 해석은 아래 세 함수 한 곳에서만 정합니다.
  *   GET  /reissue/{document_id}        → ReissueInfo(같은 로트 CoA 목록 versions와 충돌 상태)
  *   POST /reissue/{document_id}/base   본문 { base_document_id, reason } → ReissueInfo
@@ -183,8 +192,8 @@ export class HttpApi implements Api {
     return request<DocumentDetail>(`/documents/${encodeURIComponent(documentId)}`);
   }
 
-  deleteDocument(documentId: string): Promise<DocumentDeleted> {
-    return request<DocumentDeleted>(`/documents/${encodeURIComponent(documentId)}`, { method: 'DELETE' });
+  deleteDocument(documentId: string, reason: string): Promise<DocumentDeleted> {
+    return requestDocumentDelete(documentId, reason);
   }
 
   rejudgeDocument(documentId: string, request: RejudgeRequest): Promise<RejudgeResult> {
