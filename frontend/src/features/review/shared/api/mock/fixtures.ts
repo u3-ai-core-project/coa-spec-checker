@@ -520,6 +520,8 @@ interface DocMeta {
   approvedBy?: string;
   approvedAt?: string;
   errorMessage?: string;
+  /** 백엔드 #61의 실패 정보(실패 문서 시나리오에서만 채웁니다) */
+  failure?: Pick<DocumentDetail, 'attempt_count' | 'failed_stage' | 'error_kind'>;
   fileSize: number;
 }
 
@@ -550,6 +552,8 @@ function buildDetail(meta: DocMeta, id: string, recommendation: ExtractionResult
     uploaded_at: meta.uploadedAt,
     approved_by: meta.approvedBy ?? null,
     approved_at: meta.approvedAt ?? null,
+    // 새 필드는 시나리오에서만 채워, 지정하지 않으면 예전 서버 응답처럼 필드가 없습니다.
+    ...meta.failure,
   };
 }
 
@@ -611,7 +615,14 @@ export interface MockOptions {
    * 'issues': [v1.4] 모든 항목이 적합한 A0390221에 문서 수준 문제(로트 불일치, 날짜 충돌)가 있어 로트 권고가 보류인 상태
    */
   /** 'sets': 탄산리튬에 규격 세트가 둘(D1, D3)인 상태. 규격 관리 화면의 세트 선택을 볼 때 씁니다. */
-  scenario?: 'anomaly' | 'issues' | 'sets';
+  scenario?: 'anomaly' | 'issues' | 'sets' | 'failed-transient' | 'failed-permanent' | 'multilot' | 'reissue-conflict' | 'reissue-review';
+  /**
+   * 'failed-transient': 실패 문서가 일시 오류(처리 시간 초과, 서버 재시작으로 중단)인 상태
+   * 'failed-permanent': 실패 문서가 영구 오류(추출 실패, 판정 실패: 파일을 고쳐 다시 올려야 함)인 상태
+   * 'reissue-conflict': A0266047과 같은 로트의 CoA가 2건 더 있어(총 3개 버전, 모두 처분 전) 기준 버전을 골라야 하는 상태
+   * 'reissue-review': 이미 처분된 A0355190에 같은 로트의 재발행본이 들어온 상태(총 2개 버전, 기존 처분은 그대로)
+   * 'multilot': A0266047이 한 문서에서 로트 2개가 읽힌 복수 로트 상태(lot_no는 null, lot_nos와 is_multi_lot, 문서 수준 문제 MULTI_LOT)
+   */
 }
 
 /** [v1.4] 시나리오 'issues'에 쓰는 문서 수준 문제 예시 문구(목업) */
@@ -693,6 +704,65 @@ export function createMockState(options: MockOptions = {}): MockState {
     buildDoc({ lot: 'A0340850', supplier: '대흥리튬', po: 'PO-2026-1074', testDate: '2026-09-24', uploadedAt: '2026-10-01T15:12:00+09:00', status: 'failed', errorMessage: '문서에서 시험 항목을 찾을 수 없습니다.', fileSize: 120_000 }, null),
   ];
 
+  // 실패 문서 시나리오: 기본 오류 문서에 실패 단계와 종류를 채우고, 같은 종류의 실패 문서를 하나 더 둡니다.
+  if (options.scenario === 'failed-transient' || options.scenario === 'failed-permanent') {
+    const transient = options.scenario === 'failed-transient';
+    const first = docs.find((entry) => entry.detail.document_id === 'A0340850');
+    if (first) {
+      Object.assign(first.detail, {
+        error_message: transient ? '추출 서버가 제한 시간 안에 응답하지 않았습니다.' : '파일이 손상되어 읽을 수 없습니다.',
+        attempt_count: transient ? 3 : 1,
+        failed_stage: transient ? 'timeout' : 'extract',
+        error_kind: transient ? 'transient' : 'permanent',
+      } satisfies Partial<DocumentDetail>);
+    }
+    docs.push(
+      buildDoc(
+        {
+          lot: 'A0340851', supplier: '대흥리튬', po: 'PO-2026-1076', testDate: '2026-09-24', uploadedAt: '2026-10-01T15:30:00+09:00', status: 'failed', fileSize: 98_000,
+          errorMessage: transient ? '서버가 재시작되어 처리가 중단되었습니다.' : '판정에 필요한 규격 항목을 찾지 못했습니다.',
+          failure: transient
+            ? { attempt_count: 1, failed_stage: 'interrupted', error_kind: 'transient' }
+            : { attempt_count: 2, failed_stage: 'judge', error_kind: 'permanent' },
+        },
+        null,
+      ),
+    );
+  }
+  // 재발행 시나리오: 같은 로트(대소문자와 구분 기호만 다른 로트번호 포함)의 CoA를 더해 서버가 conflict, review_needed로 판정하게 합니다.
+  if (options.scenario === 'reissue-conflict' || options.scenario === 'reissue-review') {
+    const conflict = options.scenario === 'reissue-conflict';
+    const baseId = conflict ? 'A0266047' : 'A0355190';
+    const base = docs.find((entry) => entry.detail.document_id === baseId);
+    if (base) {
+      const lotVariants = conflict ? ['a0266047', 'A0266-047'] : ['A0355-190'];
+      lotVariants.forEach((lot, index) => {
+        const copy = buildDoc(
+          {
+            lot: baseId, supplier: base.detail.supplier, po: base.detail.po_no ?? '', testDate: base.detail.test_date ?? '2026-09-28',
+            uploadedAt: `2026-10-06T1${index}:30:00+09:00`, status: conflict && index === 1 ? 'in_review' : 'extracted', fileSize: 505_000 + index * 11_000,
+          },
+          itemsStandard(specs, 'allpass'),
+          { id: `${baseId}-R${index + 1}` },
+        );
+        copy.detail.file_name = `coa_${baseId}_${base.detail.supplier}_재발행${index + 1}.pdf`;
+        copy.detail.lot_no = lot;
+        copy.detail.received_lot_no = lot;
+        if (copy.extraction) copy.extraction.lot_no = lot;
+        docs.push(copy);
+      });
+    }
+  }
+  // 시나리오 'multilot': 한 문서에서 로트가 2개 읽혀 lot_no가 null이고, 서버가 문서 수준 문제 MULTI_LOT을 내려 준 상태입니다.
+  if (options.scenario === 'multilot') {
+    const target = docs.find((entry) => entry.detail.document_id === 'A0266047');
+    if (target?.extraction) {
+      Object.assign(target.detail, { lot_no: null, received_lot_no: null, lot_nos: ['A0266047', 'A0266048'], is_multi_lot: true } satisfies Partial<DocumentDetail>);
+      target.extraction.document_issues = [{ code: 'MULTI_LOT', message: '한 문서에서 로트번호가 2개 읽혔습니다: A0266047, A0266048' }];
+      target.extraction.lot_recommendation = recommendLot(target.extraction.summary, target.extraction.document_issues.length);
+      target.detail.lot_recommendation = target.extraction.lot_recommendation;
+    }
+  }
   // 시나리오 'issues'의 경고 문구(로트 불일치, 날짜 충돌)와 문서 데이터가 맞도록 입고 로트번호와 발행일을 같이 바꿉니다.
   if (options.scenario === 'issues') {
     const target = docs.find((entry) => entry.detail.document_id === 'A0390221');

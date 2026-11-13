@@ -1,10 +1,11 @@
 import type { ReactNode } from 'react';
 import type { ExtractionItem } from '../shared/api/types';
 import { Icon } from '../shared/components/Icon';
-import { DispositionBadge, RecommendationBadge } from '../shared/components/badges';
+import { DispositionBadge, MultiLotBadge, RecommendationBadge } from '../shared/components/badges';
 import { formatDate } from '../shared/domain/format';
 import { splitItems } from '../shared/domain/items';
 import { JUDGEMENT_META, JUDGEMENT_ORDER } from '../shared/domain/judgement';
+import { lotDisplay } from '../shared/domain/lots';
 import { DOCUMENT_ISSUE_LABEL } from '../shared/domain/exceptions';
 import { dispositionOf } from '../shared/domain/recommendation';
 import type { ReviewData } from '../hooks/useReviewData';
@@ -29,6 +30,8 @@ interface ItemsPanelProps {
   approvalSummary?: ReactNode;
   /** 문서 정보의 "적용 규격" 줄에 들어가는 규격 세트 선택 */
   specSetControl?: ReactNode;
+  /** 헤더 아래, 항목 목록 위에 고정으로 보이는 안내(재발행 충돌 배너 등) */
+  banner?: ReactNode;
   /** 하단 액션 바 */
   actionBar: ReactNode;
 }
@@ -103,6 +106,7 @@ function DocInfo({
   specSetControl?: ReactNode;
 }) {
   const { doc } = data;
+  const lot = lotDisplay(doc);
   const grade = `협력사 ${doc.applied_standard ?? '-'} · 사내 ${doc.spec_grade ?? '-'}`;
   // 협력사 적용 규격과 사내 등급이 다르면 안내합니다(명세 4.6).
   // 업로드할 때 입력한 입고 로트번호가 CoA의 로트번호와 다르면 "발주 정보와 일치" 대신 안내합니다(문서 수준 문제 LOT_MISMATCH와 같은 기준).
@@ -117,7 +121,14 @@ function DocInfo({
         className="docinfo-collapsed flex w-full items-center justify-between border-b border-[#E3E5E8] px-5 py-2.5 text-left text-[12px] text-[#5B616A]"
       >
         <span>
-          <b className="font-semibold text-[#1F2328]">문서 정보</b> · {doc.lot_no ?? '-'} · {formatDate(doc.test_date)} ·{' '}
+          <b className="font-semibold text-[#1F2328]">문서 정보</b> · {lot.text}
+          {lot.multi && (
+            <>
+              {' '}
+              <MultiLotBadge />
+            </>
+          )}{' '}
+          · {formatDate(doc.test_date)} ·{' '}
           {doc.origin ?? '-'} · {grade}
         </span>
         <Icon name="chev_dn" size={14} />
@@ -145,7 +156,8 @@ function DocInfo({
             ) : undefined
           }
         >
-          {doc.lot_no ?? '-'}
+          {lot.text}
+          {lot.multi && <MultiLotBadge />}
         </InfoLine>
         <InfoLine label="시험일자" extra={doc.test_date ? <Check>유효</Check> : undefined}>
           {formatDate(doc.test_date)}
@@ -185,6 +197,7 @@ export function ItemsPanel({
   getRowExtras,
   approvalSummary,
   specSetControl,
+  banner,
   actionBar,
 }: ItemsPanelProps) {
   const { doc, extraction, reviewLogs, specs, anomalies } = data;
@@ -231,6 +244,7 @@ export function ItemsPanel({
         </div>
       </div>
       {approvalSummary}
+      {banner}
       <div className="item-scroll min-h-0 flex-1 overflow-y-auto">
         {docFlags.map(({ message, code }) => {
           const open = code !== null && onSelectIssue ? () => onSelectIssue(code) : undefined;

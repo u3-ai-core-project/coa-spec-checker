@@ -33,6 +33,13 @@ import type {
   PatchItemResult,
   PatchSpecBody,
   PatchSpecResult,
+  PreviewSpecBody,
+  ReissueAttentionGroup,
+  ReissueBaseBody,
+  ReissueInfo,
+  ReissueStatus,
+  RevertSpecBody,
+  SpecPreview,
   RejudgedDocument,
   RejudgeItemChange,
   RejudgeRequest,
@@ -77,7 +84,33 @@ function wait(ms: number): Promise<void> {
 
 // 목업 시계: 시안과 같은 시각(수정 14:32, 확인 14:35, 처분 15:02 …)이 나오도록 이력 종류마다 시작 시각을 고정하고,
 // 같은 종류가 또 생기면 1분씩 늦춥니다.
-type ClockKind = 'edit' | 'confirm' | 'rename' | 'approve' | 'hold' | 'cancel' | 'spec' | 'respec';
+/** 목업에서 담당자가 고른 재발행 기준 버전 1건(서버 reissue_decisions) */
+interface MockReissueDecision {
+  material_code: string;
+  lot_key: string;
+  base_document_id: string;
+  reason: string;
+  created_at: string;
+}
+
+/** 같은 로트인지 볼 때 대소문자, 공백, 구분 기호 차이를 무시합니다(서버 document_checks.normalize_lot). */
+function normalizeLot(lot: string | null): string {
+  return (lot ?? '').toUpperCase().replace(/[\s\-_./]/g, '');
+}
+
+/** 변경 이력 문자열("lsl: 1, usl: 없음")을 값으로 되돌립니다(서버 spec_service._parse_log_values와 같은 규칙). 값이 없으면 null입니다. */
+function parseChangeLogValues(text: string): { lsl?: number | null; usl?: number | null; unit?: string | null } {
+  const out: { lsl?: number | null; usl?: number | null; unit?: string | null } = {};
+  for (const match of text.matchAll(/(lsl|usl|unit): (.*?)(?=, (?:lsl|usl|unit): |$)/g)) {
+    const name = match[1] as 'lsl' | 'usl' | 'unit';
+    const raw = match[2];
+    if (name === 'unit') out.unit = raw === '없음' ? null : raw;
+    else out[name] = raw === '없음' ? null : Number(raw);
+  }
+  return out;
+}
+
+type ClockKind = 'edit' | 'confirm' | 'rename' | 'approve' | 'hold' | 'cancel' | 'spec' | 'respec' | 'reissue';
 
 const CLOCK_ANCHORS: Record<ClockKind, string> = {
   edit: '2026-10-05T14:32:00+09:00',
@@ -88,6 +121,8 @@ const CLOCK_ANCHORS: Record<ClockKind, string> = {
   cancel: '2026-10-05T16:10:00+09:00',
   spec: '2026-10-05T11:20:00+09:00',
   respec: '2026-10-05T11:50:00+09:00',
+  // 목업 문서의 가장 늦은 업로드 시각(2026-10-06) 뒤여야 "기준 버전 선택 뒤에 새 문서가 없음"이 됩니다.
+  reissue: '2026-10-07T09:00:00+09:00',
 };
 let clockCounts: Partial<Record<ClockKind, number>> = {};
 
@@ -174,6 +209,8 @@ function toReviewedItem(item: ExtractionItem): ReviewedItem {
  */
 export class MockApi implements Api {
   private state: MockState;
+  /** 재발행 충돌에서 담당자가 고른 기준 버전(서버 reissue_decisions). 문서와 달리 시나리오를 바꾸면 비웁니다. */
+  private reissueDecisions: MockReissueDecision[] = [];
   private readonly local = new LocalOnlyStore();
 
   constructor(state: MockState = createMockState()) {
@@ -183,6 +220,7 @@ export class MockApi implements Api {
   /** 목업 데이터를 통째로 바꿉니다. 개발용 화면(src/dev)이 시안 비교용 시작 상태를 만들 때만 씁니다. */
   resetState(state: MockState): void {
     this.state = state;
+    this.reissueDecisions = [];
   }
 
   // --- 인증 -----------------------------------------------------------------
@@ -256,6 +294,10 @@ export class MockApi implements Api {
       approved_by: detail.approved_by,
       approved_at: detail.approved_at,
       error_message: detail.error_message,
+      // 새 필드는 값이 있을 때만 내려 줍니다(예전 서버 응답처럼).
+      ...(detail.attempt_count === undefined ? {} : { attempt_count: detail.attempt_count }),
+      ...(detail.failed_stage === undefined ? {} : { failed_stage: detail.failed_stage }),
+      ...(detail.error_kind === undefined ? {} : { error_kind: detail.error_kind }),
     };
   }
 
@@ -292,7 +334,103 @@ export class MockApi implements Api {
 
   async getDocument(documentId: string): Promise<DocumentDetail> {
     this.requireUser();
-    return delay({ ...this.findDoc(documentId).detail });
+    const doc = this.findDoc(documentId);
+    const reissue = this.reissueStateOf(doc).status;
+    return delay({ ...doc.detail, ...(reissue === 'none' ? {} : { reissue_status: reissue }) });
+  }
+
+  // --- 재발행 충돌 (백엔드 #61 reissue_service) ---------------------------------
+
+  /**
+   * 같은 원자재·같은 로트(대소문자, 공백, 구분 기호 무시)의 CoA 묶음과 충돌 상태를 서버와 같은 규칙으로 계산합니다.
+   * none: 같은 로트가 하나뿐 / conflict: 2건 이상이고 기준 버전을 아직 안 골랐음 / review_needed: conflict인데 이미 처분된 문서가 있음 /
+   * resolved: 기준 버전을 골랐고 그 뒤에 새로 들어온 문서가 없음.
+   */
+  private reissueStateOf(doc: MockDoc): { status: ReissueStatus; group: MockDoc[]; decision: MockReissueDecision | null; key: string } {
+    const key = normalizeLot(doc.detail.lot_no);
+    if (!key) return { status: 'none', group: [doc], decision: null, key };
+    const group = this.state.docs
+      .filter((entry) => entry.detail.material_code === doc.detail.material_code && normalizeLot(entry.detail.lot_no) === key)
+      .sort((a, b) => a.detail.uploaded_at.localeCompare(b.detail.uploaded_at));
+    if (group.length < 2) return { status: 'none', group, decision: null, key };
+    const ids = new Set(group.map((entry) => entry.detail.document_id));
+    const decision =
+      [...this.reissueDecisions].reverse().find((entry) => entry.material_code === doc.detail.material_code && entry.lot_key === key && ids.has(entry.base_document_id)) ?? null;
+    const newest = Math.max(...group.map((entry) => Date.parse(entry.detail.uploaded_at)));
+    if (decision && Date.parse(decision.created_at) >= newest) return { status: 'resolved', group, decision, key };
+    const approvedExists = group.some((entry) => entry.detail.status === 'approved');
+    return { status: approvedExists ? 'review_needed' : 'conflict', group, decision, key };
+  }
+
+  private reissueInfoOf(doc: MockDoc): ReissueInfo {
+    const { status, group, decision } = this.reissueStateOf(doc);
+    const baseId = status === 'resolved' && decision ? decision.base_document_id : null;
+    return {
+      status,
+      material_code: doc.detail.material_code,
+      lot_no: doc.detail.lot_no,
+      base_document_id: baseId,
+      decided_reason: status === 'resolved' && decision ? decision.reason : null,
+      versions:
+        status === 'none'
+          ? []
+          : group.map((entry) => ({
+              document_id: entry.detail.document_id,
+              file_name: entry.detail.file_name,
+              supplier: entry.detail.supplier,
+              lot_no: entry.detail.lot_no,
+              status: entry.detail.status,
+              lot_recommendation: entry.detail.lot_recommendation,
+              final_decision: entry.detail.final_decision,
+              uploaded_at: entry.detail.uploaded_at,
+              approved_at: entry.detail.approved_at,
+              is_base: entry.detail.document_id === baseId,
+            })),
+    };
+  }
+
+  async getReissue(documentId: string): Promise<ReissueInfo> {
+    this.requireUser();
+    return delay(this.reissueInfoOf(this.findDoc(documentId)));
+  }
+
+  /** 서버 choose_base와 같은 검사 순서: 문서 없음 404 → 같은 로트 없음 400 → 사유 없음 400 REASON_REQUIRED → 묶음 밖 문서 400. */
+  async setReissueBase(documentId: string, body: ReissueBaseBody): Promise<ReissueInfo> {
+    this.requireUser();
+    const doc = this.findDoc(documentId);
+    const state = this.reissueStateOf(doc);
+    if (state.status === 'none') throw new ApiError(400, 'VALIDATION_ERROR', '같은 로트의 다른 CoA 가 없어 기준 버전을 고를 수 없습니다');
+    if (!body.reason?.trim()) throw new ApiError(400, 'REASON_REQUIRED', '기준 버전을 고른 사유를 입력해야 합니다');
+    if (!state.group.some((entry) => entry.detail.document_id === body.base_document_id)) {
+      throw new ApiError(400, 'VALIDATION_ERROR', '같은 로트 묶음에 없는 문서는 기준 버전으로 고를 수 없습니다');
+    }
+    this.reissueDecisions.push({
+      material_code: doc.detail.material_code,
+      lot_key: state.key,
+      base_document_id: body.base_document_id,
+      reason: body.reason.trim(),
+      created_at: now('reissue'),
+    });
+    return delay(this.reissueInfoOf(doc));
+  }
+
+  async getReissueConflicts(): Promise<ReissueAttentionGroup[]> {
+    this.requireUser();
+    const seen = new Set<string>();
+    const out: ReissueAttentionGroup[] = [];
+    for (const doc of this.state.docs) {
+      const { status, group, key } = this.reissueStateOf(doc);
+      const mapKey = `${doc.detail.material_code}|${key}`;
+      if (!key || seen.has(mapKey) || (status !== 'conflict' && status !== 'review_needed')) continue;
+      seen.add(mapKey);
+      out.push({
+        material_code: doc.detail.material_code,
+        lot_no: group[group.length - 1].detail.lot_no,
+        status,
+        document_ids: group.map((entry) => entry.detail.document_id),
+      });
+    }
+    return delay(out);
   }
 
   async getDocumentFile(documentId: string): Promise<Blob> {
@@ -465,6 +603,16 @@ export class MockApi implements Api {
     const user = this.requireUser();
     const doc = this.findDoc(documentId);
     const extraction = doc.extraction;
+    // 같은 로트의 CoA가 여러 개면 기준 버전을 먼저 골라야 하고, 고른 뒤에는 기준 버전 문서만 처분할 수 있습니다(서버와 같은 순서: 상태 검사 뒤, 신뢰도 검사 앞).
+    if (doc.detail.status === 'extracted' || doc.detail.status === 'in_review' || doc.detail.status === 'on_hold') {
+      const { status, decision } = this.reissueStateOf(doc);
+      if (status === 'conflict' || status === 'review_needed') {
+        throw new ApiError(409, 'REISSUE_UNRESOLVED', '같은 로트의 CoA 가 여러 개입니다. 기준 버전을 먼저 선택해야 합니다');
+      }
+      if (status === 'resolved' && decision?.base_document_id !== doc.detail.document_id) {
+        throw new ApiError(409, 'NOT_BASE_VERSION', '기준 버전으로 선택되지 않은 문서는 처분할 수 없습니다');
+      }
+    }
     const code = checkApprove({
       status: doc.detail.status,
       recommendation: extraction?.lot_recommendation ?? 'hold',
@@ -677,37 +825,103 @@ export class MockApi implements Api {
     // 변경 사유는 필수입니다(백엔드 PR #12). 검사 순서는 서버와 같게 사유 누락, 범위 오류 순입니다.
     const reason = body.reason?.trim();
     if (!reason) throw new ApiError(400, 'REASON_REQUIRED', '변경 사유가 필요합니다');
-    // 이미 추출된 문서의 판정은 바꾸지 않고, 이후 업로드 건부터 적용됩니다(규격 재판정은 서버에 없습니다).
-    // 서버처럼 실제로 바뀐 값만 "필드: 값" 문자열로 이력에 남기고, 바뀐 값이 없으면 이력은 남기지 않습니다(수정자와 일시는 갱신).
-    const next = { lsl: body.lsl, usl: body.usl, unit: body.unit };
+    return delay(this.applySpecChange(target, { lsl: body.lsl, usl: body.usl, unit: body.unit }, reason, user.name, body.rejudge === true));
+  }
+
+  /**
+   * 규격 값을 바꾸고 변경 이력을 남깁니다(patchSpec과 revertSpec이 같이 씁니다).
+   * 이미 추출된 문서의 판정은 바꾸지 않고 이후 업로드 건부터 적용되며, rejudge=true일 때만 이 세트의 처분 전 문서를 다시 판정합니다.
+   * 서버처럼 실제로 바뀐 값만 "필드: 값" 문자열로 이력에 남기고, 바뀐 값이 없으면 이력은 남기지 않습니다(수정자와 일시는 갱신).
+   */
+  private applySpecChange(
+    target: SpecItem,
+    next: { lsl: number | null; usl: number | null; unit: string | null },
+    reason: string,
+    userName: string,
+    rejudge: boolean,
+  ): PatchSpecResult {
     const changed = (['lsl', 'usl', 'unit'] as const).filter((field) => next[field] !== target[field]);
     const fmt = (value: number | string | null) => (value === null ? '없음' : String(value));
     const beforeValue = changed.map((field) => `${field}: ${fmt(target[field])}`).join(', ');
     const afterValue = changed.map((field) => `${field}: ${fmt(next[field])}`).join(', ');
-    target.lsl = body.lsl;
-    target.usl = body.usl;
-    target.unit = body.unit;
-    target.updated_by = user.name;
+    target.lsl = next.lsl;
+    target.usl = next.usl;
+    target.unit = next.unit;
+    target.updated_by = userName;
     target.updated_at = now('spec');
     // rejudge=true면 이 규격 세트로 판정한 처분 전 문서를 새 규격으로 다시 판정합니다(서버 spec_service.rejudge_open_documents).
-    const rejudged = body.rejudge ? this.rejudgeOpenDocuments(target.spec_set_code) : [];
+    const rejudged = rejudge ? this.rejudgeOpenDocuments(target.spec_set_code) : [];
     if (changed.length > 0) {
       this.local.addSpecChangeLog(target.id, {
         before_value: beforeValue,
         after_value: afterValue,
         reason,
-        user_name: user.name,
+        user_name: userName,
         created_at: target.updated_at,
       });
     }
-    return delay({ ...target, rejudged_documents: rejudged });
+    return { ...target, rejudged_documents: rejudged };
+  }
+
+  /**
+   * 규격 수정 영향 미리보기 흉내(POST /specs/{id}/preview). 저장하지 않고, 값을 잠시 바꿔 처분 전 문서를 다시 판정한 결과만 셉니다.
+   * 서버처럼 보낸 필드 중 실제로 값이 달라지는 것만 changed_fields에 넣고, 사유는 필요 없으며, 범위가 틀리면 400입니다.
+   */
+  async previewSpec(specId: number, body: PreviewSpecBody): Promise<SpecPreview> {
+    const user = this.requireUser();
+    if (user.role !== 'ADMIN') throw new ApiError(403, 'FORBIDDEN', '권한 없음');
+    const target = this.state.specs.find((entry) => entry.id === specId);
+    if (!target) throw new ApiError(404, 'SPEC_NOT_FOUND', '존재하지 않는 규격 항목');
+    if (checkSpecRange(body.lsl, body.usl)) throw new ApiError(400, 'INVALID_SPEC_RANGE', '규격 하한이 상한보다 큼');
+    const next = { lsl: body.lsl, usl: body.usl, unit: body.unit };
+    const changedFields = (['lsl', 'usl', 'unit'] as const).filter((field) => next[field] !== target[field]);
+    const saved = { lsl: target.lsl, usl: target.usl, unit: target.unit };
+    let documents: RejudgedDocument[];
+    try {
+      Object.assign(target, next);
+      documents = this.rejudgeOpenDocuments(target.spec_set_code, false);
+    } finally {
+      Object.assign(target, saved);
+    }
+    const affected = documents.filter((doc) => doc.changed_items.length > 0 || doc.lot_recommendation_before !== doc.lot_recommendation_after);
+    return delay({
+      changed_fields: changedFields,
+      target_documents: documents.length,
+      affected_documents: affected.length,
+      recommendation_changed_documents: affected.filter((doc) => doc.lot_recommendation_before !== doc.lot_recommendation_after).length,
+      documents: affected,
+    });
+  }
+
+  /**
+   * 가장 최근 변경을 되돌리는 흉내(POST /specs/{id}/revert). 검사 순서는 서버와 같습니다: 항목 없음 404 → 사유 없음 400 REASON_REQUIRED
+   * → 변경 이력 없음 409 NOTHING_TO_REVERT. 되돌리기도 변경 이력으로 남고(사유 앞에 "되돌리기: "), 다시 되돌리면 되돌리기 전 값으로 돌아갑니다.
+   */
+  async revertSpec(specId: number, body: RevertSpecBody): Promise<PatchSpecResult> {
+    const user = this.requireUser();
+    if (user.role !== 'ADMIN') throw new ApiError(403, 'FORBIDDEN', '권한 없음');
+    const target = this.state.specs.find((entry) => entry.id === specId);
+    if (!target) throw new ApiError(404, 'SPEC_NOT_FOUND', '존재하지 않는 규격 항목');
+    const reason = body.reason?.trim();
+    if (!reason) throw new ApiError(400, 'REASON_REQUIRED', '되돌리는 사유를 입력해야 합니다');
+    const logs = this.local.listSpecChangeLogs(specId);
+    const last = logs[logs.length - 1];
+    if (!last) throw new ApiError(409, 'NOTHING_TO_REVERT', '되돌릴 규격 변경 이력이 없습니다');
+    const restored = parseChangeLogValues(last.before_value);
+    const next = {
+      lsl: restored.lsl !== undefined ? restored.lsl : target.lsl,
+      usl: restored.usl !== undefined ? restored.usl : target.usl,
+      unit: restored.unit !== undefined ? restored.unit : target.unit,
+    };
+    return delay(this.applySpecChange(target, next, `되돌리기: ${reason}`, user.name, body.rejudge === true));
   }
 
   /**
    * 규격 세트를 쓰는 처분 전 문서(추출됨, 검수 중, 보류)를 다시 판정합니다. 처분 완료, 처리 중, 실패 문서는 건드리지 않습니다.
+   * commit이 false이면 문서를 바꾸지 않고 결과만 돌려줍니다(미리보기).
    * 서버가 만든 누락 항목을 새 규격으로 다시 만드는 일은 목업에서 하지 않습니다.
    */
-  private rejudgeOpenDocuments(specSetCode: string): RejudgedDocument[] {
+  private rejudgeOpenDocuments(specSetCode: string, commit = true): RejudgedDocument[] {
     const out: RejudgedDocument[] = [];
     for (const doc of this.state.docs) {
       const { extraction } = doc;
@@ -716,20 +930,25 @@ export class MockApi implements Api {
       const specs = this.specsOf(doc);
       const before = doc.detail.lot_recommendation;
       const changed: string[] = [];
-      extraction.items = extraction.items.map((item) => {
+      const items = extraction.items.map((item) => {
         const spec = specs.find((entry) => entry.item_name === item.normalized_name);
         if (!spec) return item; // 규격이 바뀐 것과 상관없는 항목(규격에 없는 항목)은 그대로 둡니다.
         const next = rejudgeItem(item, spec);
         if (next.judgement !== item.judgement) changed.push(item.normalized_name);
         return next;
       });
-      extraction.summary = summarize(extraction.items);
-      extraction.lot_recommendation = recommendLot(extraction.summary, extraction.document_issues.length);
-      doc.detail.lot_recommendation = extraction.lot_recommendation;
+      const summary = summarize(items);
+      const recommendation = recommendLot(summary, extraction.document_issues.length);
+      if (commit) {
+        extraction.items = items;
+        extraction.summary = summary;
+        extraction.lot_recommendation = recommendation;
+        doc.detail.lot_recommendation = recommendation;
+      }
       out.push({
         document_id: doc.detail.document_id,
         lot_recommendation_before: before,
-        lot_recommendation_after: extraction.lot_recommendation,
+        lot_recommendation_after: recommendation,
         changed_items: changed,
       });
     }

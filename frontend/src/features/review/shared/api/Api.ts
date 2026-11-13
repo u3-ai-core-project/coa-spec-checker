@@ -26,6 +26,12 @@ import type {
   RejudgeResult,
   PatchSpecBody,
   PatchSpecResult,
+  PreviewSpecBody,
+  ReissueAttentionGroup,
+  ReissueBaseBody,
+  ReissueInfo,
+  RevertSpecBody,
+  SpecPreview,
   ReviewLog,
   SpecChangeLog,
   SpecItem,
@@ -50,6 +56,17 @@ export interface Api {
    * 처분 완료 문서는 409 ALREADY_APPROVED, 추출 중 문서는 409 NOT_READY, 권한이 없으면 403 FORBIDDEN입니다.
    */
   deleteDocument(documentId: string): Promise<DocumentDeleted>;
+  /**
+   * 문서의 같은 로트 CoA 목록과 재발행 충돌 상태(GET /reissue/{document_id}, 백엔드 #61). 같은 로트가 없으면 status는 none, versions는 빈 배열입니다.
+   */
+  getReissue(documentId: string): Promise<ReissueInfo>;
+  /**
+   * 기준 버전 선택(POST /reissue/{document_id}/base). 사유는 필수(없으면 400 REASON_REQUIRED)이고, 같은 로트 묶음 안의 문서만 고를 수 있습니다(400).
+   * 고르기 전에는 확정 처분이 409 REISSUE_UNRESOLVED로 막히고, 기준이 아닌 문서의 처분은 409 NOT_BASE_VERSION입니다(보류는 가능).
+   */
+  setReissueBase(documentId: string, body: ReissueBaseBody): Promise<ReissueInfo>;
+  /** 기준 버전을 골라야 하거나(conflict) 재검토가 필요한(review_needed) 로트 묶음 목록(GET /reissue/conflicts) */
+  getReissueConflicts(): Promise<ReissueAttentionGroup[]>;
   /**
    * 적용 규격(규격 세트)을 바꿔 서버가 문서를 다시 판정합니다(POST /documents/{id}/rejudge, 백엔드 PR #59).
    * apply가 false(기본)이면 미리보기로 문서를 바꾸지 않고 처분 완료 문서도 됩니다. true이면 저장하고 reason(변경 사유)이 필수이며
@@ -87,6 +104,16 @@ export interface Api {
   listSpecSets(materialCode?: string): Promise<SpecSet[]>;
   /** 규격 항목 수정(ADMIN). body.rejudge가 true이면 처분 전 문서를 새 규격으로 다시 판정하고 그 결과를 rejudged_documents로 돌려줍니다. */
   patchSpec(specId: number, body: PatchSpecBody): Promise<PatchSpecResult>;
+  /**
+   * 규격 수정 영향 미리보기(POST /specs/{id}/preview, ADMIN). 저장하지 않고, 이 값으로 저장하면 다시 판정될 처분 전 문서에
+   * 생길 변화(영향 문서 수, 로트 권고가 바뀌는 문서 수, 문서별 변화)를 서버가 계산해 돌려줍니다. 범위 오류는 400 INVALID_SPEC_RANGE입니다.
+   */
+  previewSpec(specId: number, body: PreviewSpecBody): Promise<SpecPreview>;
+  /**
+   * 규격 항목의 가장 최근 변경을 되돌립니다(POST /specs/{id}/revert, ADMIN). 사유 필수(없으면 400 REASON_REQUIRED),
+   * 변경 이력이 없으면 409 NOTHING_TO_REVERT입니다. 되돌리기도 변경 이력으로 남고, 응답은 patchSpec과 같습니다.
+   */
+  revertSpec(specId: number, body: RevertSpecBody): Promise<PatchSpecResult>;
 
   /** 규격 항목 하나의 변경 이력(GET /specs/{id}/change-logs). 서버는 오래된 순으로 줍니다. */
   listSpecChangeLogs(specId: number): Promise<SpecChangeLog[]>;

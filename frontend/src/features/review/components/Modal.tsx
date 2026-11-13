@@ -2,8 +2,8 @@ import { useEffect, type ReactNode } from 'react';
 import '../shell/fonts';
 
 interface ModalProps {
-  /** 상자 너비(px). 시안의 다이얼로그는 500 또는 560입니다. */
-  width: 500 | 560;
+  /** 상자 너비(px). 시안의 다이얼로그는 500 또는 560이고, 버전 비교처럼 여러 열을 나란히 놓는 것은 760입니다. */
+  width: 500 | 560 | 760;
   /** 상자 안쪽 세로 간격 */
   gap?: 'gap-3.5' | 'gap-4';
   labelledBy?: string;

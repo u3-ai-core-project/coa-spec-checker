@@ -5,18 +5,21 @@ import { ApprovalCancelDialog } from './components/ApprovalCancelDialog';
 import { ApprovalSummary } from './components/ApprovalSummary';
 import { CompleteDialog } from './components/CompleteDialog';
 import { ExceptionPanel } from './components/ExceptionPanel';
+import { FailedDocumentPanel } from './components/FailedDocumentPanel';
 import { FollowUpRow } from './components/FollowUpRow';
 import { HistoryCard } from './components/HistoryCard';
 import { ItemEditor, type ItemEditSubmit } from './components/ItemEditor';
 import { ItemsPanel } from './components/ItemsPanel';
 import { MappingDialog } from './components/MappingDialog';
 import { PdfPanel } from './components/PdfPanel';
+import { ReissueBanner } from './components/ReissueBanner';
+import { ReissueCompareDialog } from './components/ReissueCompareDialog';
 import { SpecSetSelect } from './components/SpecSetSelect';
 import type { PdfHighlight } from './components/PdfViewer';
 import { ReplyResultStrip, ResolvedNote } from './components/ReplyResultStrip';
 import { type QueuePosition, ReviewHeader } from './components/ReviewHeader';
 import { useAiDraft } from './hooks/useAiDraft';
-import { useReviewData } from './hooks/useReviewData';
+import { FailedDocumentError, useReviewData } from './hooks/useReviewData';
 import { hasFollowUp } from './lib/followUp';
 import { buildHistory } from './lib/history';
 import { writeLastViewed } from './lib/lastViewed';
@@ -77,6 +80,8 @@ function ReviewScreen({ documentId }: { documentId: string }) {
   /** 항목 매핑 수정 다이얼로그. 'auto'는 AI가 추정한 첫 항목(시안 비교용 ?dialog=mapping)입니다. */
   const [mappingId, setMappingId] = useState<string | 'auto' | null>(searchParams.get('dialog') === 'mapping' ? 'auto' : null);
   const [cancelOpen, setCancelOpen] = useState(searchParams.get('dialog') === 'cancel');
+  /** 재발행 버전 비교 다이얼로그 */
+  const [reissueOpen, setReissueOpen] = useState(false);
 
   // 이전/다음 이동은 GET /documents?status=extracted,in_review,on_hold 목록 순서 기준입니다.
   const status = data?.doc.status;
@@ -136,7 +141,9 @@ function ReviewScreen({ documentId }: { documentId: string }) {
       <>
         <PageIntro title="검수" />
         <main className="body flex min-h-0 flex-1 flex-col items-center justify-center gap-4">
-          {error ? (
+          {error instanceof FailedDocumentError ? (
+            <FailedDocumentPanel doc={error.doc} />
+          ) : error ? (
             <>
               <ErrorNotice message={errorMessage(error)} onRetry={reload} />
               <Link to={REVIEW_PATH} className="text-[13px] font-semibold text-[#2B4FCB]">
@@ -361,6 +368,7 @@ function ReviewScreen({ documentId }: { documentId: string }) {
               <ReplyResultStrip result={replyResult} onClose={() => setReplyResult(null)} />
             ) : undefined
           }
+          banner={<ReissueBanner status={data.doc.reissue_status ?? 'none'} onCompare={() => setReissueOpen(true)} />}
           specSetControl={<SpecSetSelect doc={data.doc} locked={busy} onDone={handleRejudged} onStale={() => void reload()} />}
           getRowExtras={(item) => ({
             onEdit: canEdit && !busy ? () => openEditor(item) : undefined,
@@ -420,6 +428,17 @@ function ReviewScreen({ documentId }: { documentId: string }) {
             void reload();
           }}
           onStale={() => void reload()}
+        />
+      )}
+      {reissueOpen && (
+        <ReissueCompareDialog
+          doc={data.doc}
+          onClose={() => setReissueOpen(false)}
+          onDone={() => {
+            // 기준 버전을 골랐으면 문서 상세를 다시 불러와 배너가 서버 상태로 바뀌게 합니다.
+            setReissueOpen(false);
+            void reload();
+          }}
         />
       )}
       {cancelOpen && canCancelApproval && (

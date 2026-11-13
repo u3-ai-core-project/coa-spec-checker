@@ -90,3 +90,12 @@ export function AiMappingBadge() {
     </span>
   );
 }
+
+/** 한 문서에서 로트가 2개 이상 읽힌 문서에 붙는 배지. 복수 로트 여부는 서버(is_multi_lot)가 정하고 화면은 표시만 합니다. */
+export function MultiLotBadge() {
+  return (
+    <span className="multi-lot-badge inline-flex h-5 shrink-0 items-center whitespace-nowrap rounded bg-[#FBF0DF] px-1.5 text-[11px] font-semibold text-[#9A5B00]">
+      복수 로트
+    </span>
+  );
+}

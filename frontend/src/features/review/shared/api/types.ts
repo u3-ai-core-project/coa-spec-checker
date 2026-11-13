@@ -84,7 +84,9 @@ export type DocumentIssueCode =
   | 'DATE_CONFLICT'
   | 'SUPPLIER_CONFLICT'
   | 'SPEC_VERSION_UNKNOWN'
-  | 'SPEC_VERSION_MISMATCH';
+  | 'SPEC_VERSION_MISMATCH'
+  /** 한 문서에서 로트번호가 2개 이상 읽힘(백엔드 #61). 담당자가 로트별로 확인합니다. */
+  | 'MULTI_LOT';
 
 export interface DocumentIssue {
   code: DocumentIssueCode;
@@ -183,6 +185,12 @@ export interface DocumentListQuery {
   size?: number;
 }
 
+/** 실패한 단계(백엔드 #61). extract 추출, judge 판정, timeout 처리 시간 초과, interrupted 서버 재시작으로 중단 */
+export type FailedStage = 'extract' | 'judge' | 'timeout' | 'interrupted';
+
+/** 실패 종류(백엔드 #61). transient 일시 오류(다시 처리하면 될 수 있음), permanent 영구 오류(파일을 고쳐야 함) */
+export type ErrorKind = 'permanent' | 'transient';
+
 export interface DocumentListItem {
   document_id: string;
   file_name: string;
@@ -199,6 +207,10 @@ export interface DocumentListItem {
   approved_by: string | null;
   approved_at: string | null;
   error_message: string | null;
+  /** 백엔드 #61에서 더해진 실패 정보. 서버가 보내지 않으면 없습니다. */
+  attempt_count?: number | null;
+  failed_stage?: FailedStage | null;
+  error_kind?: ErrorKind | null;
 }
 
 export interface DocumentListResult {
@@ -231,6 +243,19 @@ export interface DocumentDetail {
   uploaded_at: string;
   approved_by: string | null;
   approved_at: string | null;
+  /** 백엔드 #61에서 더해진 실패 정보. 서버가 보내지 않으면 없습니다. */
+  attempt_count?: number | null;
+  failed_stage?: FailedStage | null;
+  error_kind?: ErrorKind | null;
+  /** 한 문서에서 읽힌 로트번호 전체와 복수 로트 여부(백엔드 #61). 복수 로트이면 lot_no는 null입니다. 판정은 서버가 하고 화면은 표시만 합니다. */
+  lot_nos?: string[] | null;
+  is_multi_lot?: boolean | null;
+  /**
+   * 같은 원자재·같은 로트의 CoA가 여러 개일 때의 재발행 충돌 상태(백엔드 #61). 서버가 보내지 않으면 none으로 취급합니다.
+   * conflict: 기준 버전을 골라야 확정 처분할 수 있음(보류는 가능), review_needed: 이미 처분된 로트에 재발행본이 들어옴(기존 처분은 그대로),
+   * resolved: 기준 버전 선택됨, none: 해당 없음
+   */
+  reissue_status?: ReissueStatus | null;
 }
 
 export interface PatchItemBody {
@@ -445,6 +470,36 @@ export interface PatchSpecBody {
   rejudge?: boolean;
 }
 
+/**
+ * POST /specs/{id}/preview 요청(백엔드 #61). 본문은 PATCH와 같고, 저장하지 않고 영향만 계산합니다.
+ * 변경 사유(reason)는 미리보기에서 필수가 아니고, rejudge는 서버가 무시합니다(미리보기는 항상 다시 판정했을 때의 변화를 계산).
+ */
+export type PreviewSpecBody = Omit<PatchSpecBody, 'reason'> & { reason?: string };
+
+/**
+ * POST /specs/{id}/preview 응답. 서버가 계산한 숫자 그대로입니다(화면에서 다시 세거나 합치지 않습니다).
+ * 영향 범위는 이 규격 세트로 판정한 처분 전 문서(rejudge=true로 저장하면 다시 판정되는 문서)입니다.
+ */
+export interface SpecPreview {
+  /** 실제로 바뀌는 필드(lsl, usl, unit). 비어 있으면 바뀌는 값이 없습니다. */
+  changed_fields: string[];
+  /** 이 규격 세트로 판정한 처분 전 문서 수 */
+  target_documents: number;
+  /** 그중 항목 판정이나 로트 권고가 바뀌는 문서 수 */
+  affected_documents: number;
+  /** 그중 로트 권고가 바뀌는 문서 수 */
+  recommendation_changed_documents: number;
+  /** 영향받는 문서 목록 */
+  documents: RejudgedDocument[];
+}
+
+/** POST /specs/{id}/revert 요청(백엔드 #61). 가장 최근 변경을 되돌리며 사유는 필수입니다. 응답은 PATCH와 같은 PatchSpecResult입니다. */
+export interface RevertSpecBody {
+  reason: string;
+  /** true이면 처분 전 문서도 되돌린 규격으로 다시 판정합니다. 서버 기본값은 false입니다. */
+  rejudge?: boolean;
+}
+
 /** 규격 변경 때 서버가 다시 판정한 문서 1건. 응답을 그대로 보여 주고 화면에서 다시 판단하지 않습니다. */
 export interface RejudgedDocument {
   document_id: string;
@@ -494,6 +549,48 @@ export interface MappingRecord {
 }
 
 /** DELETE /documents/{id} 응답 */
+/** 재발행 충돌 상태(백엔드 #61 reissue_status) */
+export type ReissueStatus = 'none' | 'conflict' | 'review_needed' | 'resolved';
+
+/** 같은 로트의 CoA 1건(GET /reissue/{id}의 versions). 두 문서를 나란히 보여 줄 때 서버가 주는 필드입니다. */
+export interface ReissueVersion {
+  document_id: string;
+  file_name: string;
+  supplier: string | null;
+  lot_no: string | null;
+  status: DocumentStatus;
+  lot_recommendation: LotRecommendation | null;
+  final_decision: FinalDecision | null;
+  uploaded_at: string;
+  approved_at: string | null;
+  /** 기준 버전으로 선택된 문서인지 */
+  is_base: boolean;
+}
+
+/** GET /reissue/{document_id}, POST /reissue/{document_id}/base 응답. 같은 로트가 없으면 versions는 비어 있습니다. */
+export interface ReissueInfo {
+  status: ReissueStatus;
+  material_code: string;
+  lot_no: string | null;
+  base_document_id: string | null;
+  decided_reason: string | null;
+  versions: ReissueVersion[];
+}
+
+/** POST /reissue/{document_id}/base 요청. 기준 버전으로 정할 문서(같은 로트 묶음 안)와 사유(필수)입니다. */
+export interface ReissueBaseBody {
+  base_document_id: string;
+  reason: string;
+}
+
+/** GET /reissue/conflicts 의 로트 묶음 1개(기준 버전을 골라야 하거나 재검토가 필요한 묶음) */
+export interface ReissueAttentionGroup {
+  material_code: string;
+  lot_no: string | null;
+  status: ReissueStatus;
+  document_ids: string[];
+}
+
 export interface DocumentDeleted {
   document_id: string;
 }
