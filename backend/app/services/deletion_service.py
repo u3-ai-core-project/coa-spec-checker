@@ -18,6 +18,7 @@ from app.core.enums import DeletionRule, ReviewAction
 from app.core.errors import AppException, ErrorCode
 from app.models import ApprovalLog, DeletionLog, Document, ReviewLog
 from app.models.reissue_decision import ReissueDecision
+from app.services import storage_service
 
 logger = logging.getLogger(__name__)
 
@@ -131,6 +132,7 @@ def remove_file(path: Path | None) -> None:
         path.unlink(missing_ok=True)
     except OSError:
         logger.warning("원본 파일 삭제 실패: %s", path)
+    storage_service.invalidate()  # 저장 공간 기억값을 버려 다음에 새로 잰다
 
 
 def list_logs(db: Session, *, document_id: str | None, lot_no: str | None, page: int, size: int):

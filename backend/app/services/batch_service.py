@@ -35,7 +35,7 @@ from app.schemas.batch import (
     BatchDetail, BatchQueueItem, BatchSummary, BatchUploadResponse, ReceiptOut, RejectedFile, UploadedDocument,
 )
 from app.schemas.extraction import DocumentIssue, ExtractionInput, Summary
-from app.services import document_service, spec_service
+from app.services import document_service, spec_service, storage_service
 from app.services.judgement.document_checks import normalize_lot
 
 REQUIRED_COLUMNS = ("receipt_id", "received_lot")
@@ -161,6 +161,8 @@ def create_batch(
         raise AppException(ErrorCode.VALIDATION_ERROR, "CoA 파일을 1개 이상 올려야 합니다")
     if len(files) > settings.MAX_BATCH_FILES:
         raise AppException(ErrorCode.VALIDATION_ERROR, f"한 번에 {settings.MAX_BATCH_FILES}개까지 올릴 수 있습니다")
+    # 운영 정책 1장: 묶음 전체를 받아도 차단 기준(95%)을 넘지 않는지 먼저 본다. 넘으면 묶음을 만들지 않고 507
+    storage_service.ensure_capacity(sum(len(f.content) for f in files))
     material_code = material_code.strip()
     spec_set_code = (spec_set_code or "").strip() or None
     spec_service.resolve_spec_set(db, material_code, spec_set_code)  # 기본값부터 검사 (UNKNOWN_MATERIAL 등)

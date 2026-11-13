@@ -11,6 +11,8 @@ TEST_DATABASE_URL = os.environ.get("TEST_DATABASE_URL", "postgresql+psycopg://co
 os.environ["DATABASE_URL"] = TEST_DATABASE_URL
 # 테스트 중에는 자동 정리 스레드를 띄우지 않는다 (cleanup_service.run_cleanup 을 직접 부른다)
 os.environ["CLEANUP_ENABLED"] = "false"
+# 디스크 남은 공간 안전장치는 끈다 (테스트하는 컴퓨터의 실제 디스크 상태와 상관없게). test_storage.py 에서만 가짜 디스크로 켠다
+os.environ["MIN_FREE_DISK_GB"] = "0"
 
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402

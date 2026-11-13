@@ -54,6 +54,7 @@ class ErrorCode(Enum):
     NOT_FAILED = (409, "추출에 실패한 문서만 다시 처리할 수 있습니다")  # 명세 외 추가 (POST /documents/{id}/retry)
     PENDING_LOW_CONFIDENCE_ITEMS = (422, "신뢰도 낮음 항목을 먼저 확인해야 합니다")
     INVALID_DECISION = (422, "부적합 항목이 있는 로트는 승인할 수 없습니다")
+    STORAGE_FULL = (507, "저장 공간이 부족해 새 업로드를 받을 수 없습니다. 관리자에게 문의하세요")  # 운영 정책 1장
     EXTRACTION_FAILED = (500, "AI 추출 처리에 실패했습니다")
     REPORT_GENERATION_FAILED = (500, "리포트 생성에 실패했습니다")
     INTERNAL_ERROR = (500, "서버 오류가 발생했습니다")  # 명세 외 추가 (예상 못 한 예외)

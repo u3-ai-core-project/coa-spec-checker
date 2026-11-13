@@ -13,7 +13,7 @@ from app.core.errors import AppException, ErrorCode
 from app.models import Document, User
 from app.schemas.document import DocumentDetail, DocumentListItem
 from app.schemas.extraction import Summary
-from app.services import deletion_service, reissue_service, spec_service
+from app.services import deletion_service, reissue_service, spec_service, storage_service
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +57,7 @@ def create_document(
     if len(content) > settings.MAX_UPLOAD_MB * 1024 * 1024:
         raise AppException(ErrorCode.INVALID_FILE, f"{settings.MAX_UPLOAD_MB}MB 이하 파일만 업로드할 수 있습니다")
     content_type = detect_content_type(file_name, content[:16])
+    storage_service.ensure_capacity(len(content))  # 운영 정책 1장: 95% 넘으면 507 STORAGE_FULL
 
     material_code = material_code.strip()
     # 판정에 쓸 규격 세트를 업로드 시점에 정해 문서에 남긴다 (지정 없으면 원자재 기본 세트)
@@ -91,6 +92,7 @@ def create_document(
     except Exception:
         path.unlink(missing_ok=True)
         raise
+    storage_service.note_added(len(content))
     return doc
 
 

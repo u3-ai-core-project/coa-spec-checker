@@ -17,6 +17,7 @@ from app.core.config import settings
 from app.core.enums import DocumentStatus
 from app.core.errors import AppException, ErrorCode
 from app.models import Document, User
+from app.services import storage_service
 
 logger = logging.getLogger(__name__)
 
@@ -95,5 +96,6 @@ def archive_document(db: Session, document_id: str, actor: User) -> Document:
         shutil.move(str(target), str(source))
         raise
     db.refresh(doc)
+    storage_service.invalidate()  # 업로드 폴더에서 빠졌으므로 저장 공간을 다시 잰다
     logger.info("보관용 폴더로 이동: document_id=%s actor_id=%s", doc.id, actor.id)
     return doc

@@ -52,6 +52,15 @@ class Settings(BaseSettings):
     # 보관 기간이 지난 처분 완료 원본을 옮겨 두는 폴더 (운영 정책 1장: 지우지 않고 옮기기만 한다)
     ARCHIVE_DIR: str = "storage/archive"
     MAX_UPLOAD_MB: int = 20
+    # 저장 공간 (운영 정책 1장): 업로드 폴더(UPLOAD_DIR)만 센다. 보관용 폴더(ARCHIVE_DIR)는 빼서, 옮기면 자리가 생기게 한다.
+    # 한도의 STORAGE_WARN_PERCENT% 에서 관리자 경고, STORAGE_BLOCK_PERCENT% 에서 새 업로드를 막는다. 그 사이에도 자동 삭제는 하지 않는다
+    # 기본 100GB: CoA 1건을 1MB 로 잡으면 하루 100건 기준 약 2.5년치. 실제 서버에 배정한 디스크 크기에 맞춰 바꾼다
+    STORAGE_LIMIT_GB: float = Field(100, gt=0)
+    STORAGE_WARN_PERCENT: int = Field(80, ge=1, le=100)
+    STORAGE_BLOCK_PERCENT: int = Field(95, ge=1, le=100)
+    # 안전장치: 업로드 폴더가 있는 디스크의 실제 남은 공간이 이보다 적어지면, 한도와 상관없이 새 업로드를 막는다.
+    # 한도(STORAGE_LIMIT_GB)를 디스크보다 크게 잡았거나 DB·로그가 디스크를 먼저 채우는 경우를 막는다
+    MIN_FREE_DISK_GB: float = Field(2, ge=0)
     MAX_BATCH_FILES: int = 20   # 일괄 접수 한 번에 올릴 수 있는 CoA 수 (멘토님 UC01 "CoA 1~20개")
 
     # 처리 실패·재시도 (운영 정책 4장)
