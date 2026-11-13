@@ -49,7 +49,8 @@ export function ReissueCompareDialog({ doc, onClose, onDone }: ReissueCompareDia
     }
   }
 
-  const columns = `88px repeat(${Math.max(versions.length, 1)}, minmax(0, 1fr))`;
+  // 같은 로트의 CoA가 많아도(예: 10개) 열이 좁아지지 않게 열마다 최소 폭을 주고, 넘치면 가로로 스크롤합니다.
+  const columns = `88px repeat(${Math.max(versions.length, 1)}, minmax(150px, 1fr))`;
   const rows: Array<{ label: string; render(version: ReissueVersion): React.ReactNode }> = [
     {
       label: '파일명',
@@ -90,9 +91,11 @@ export function ReissueCompareDialog({ doc, onClose, onDone }: ReissueCompareDia
       {info && versions.length > 0 && (
         <div className="reissue-compare max-h-[360px] overflow-auto rounded-lg border border-[#E3E5E8]" role="radiogroup" aria-label="기준 버전 선택">
           <div className="grid" style={{ gridTemplateColumns: columns }}>
-            <Cell head>
-              <span className="text-[#8A9099]">로트 {info.lot_no ?? '-'}</span>
-            </Cell>
+            <div className="sticky left-0 z-[1] bg-white">
+              <Cell head>
+                <span className="text-[#8A9099]">로트 {info.lot_no ?? '-'}</span>
+              </Cell>
+            </div>
             {versions.map((version) => (
               <label
                 key={version.document_id}
@@ -106,7 +109,7 @@ export function ReissueCompareDialog({ doc, onClose, onDone }: ReissueCompareDia
             ))}
             {rows.map((row) => (
               <div key={row.label} className="contents">
-                <div className="reissue-label border-t border-[#E3E5E8] bg-[#F9FAFB] px-2 py-1.5 text-[12px] text-[#8A9099]">{row.label}</div>
+                <div className="reissue-label sticky left-0 z-[1] border-t border-[#E3E5E8] bg-[#F9FAFB] px-2 py-1.5 text-[12px] text-[#8A9099]">{row.label}</div>
                 {versions.map((version) => (
                   <div key={version.document_id} className="reissue-version border-l border-t border-[#E3E5E8]">
                     <Cell>{row.render(version)}</Cell>
