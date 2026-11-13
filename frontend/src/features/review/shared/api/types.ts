@@ -84,7 +84,9 @@ export type DocumentIssueCode =
   | 'DATE_CONFLICT'
   | 'SUPPLIER_CONFLICT'
   | 'SPEC_VERSION_UNKNOWN'
-  | 'SPEC_VERSION_MISMATCH';
+  | 'SPEC_VERSION_MISMATCH'
+  /** 한 문서에서 로트번호가 2개 이상 읽힘(백엔드 #61). 담당자가 로트별로 확인합니다. */
+  | 'MULTI_LOT';
 
 export interface DocumentIssue {
   code: DocumentIssueCode;
