@@ -1,6 +1,7 @@
 """[담당: 홍채령] 문서 삭제 API 테스트 (DELETE /documents/{id}). 실제 DB 필요.
 
-삭제 결과(목록·상세·원본 파일·이력), 권한(본인·ADMIN·다른 USER), 처분 완료·추출 중·처분 기록 있는 문서 차단.
+삭제 결과(목록·상세·원본 파일·이력), 권한(본인·ADMIN·다른 USER), 처분 완료·추출 중 문서 차단, 삭제 사유 필수.
+삭제 기록(deletion_logs) 내용은 tests/api/test_deletion_logs.py 에서 본다.
 """
 import json
 from pathlib import Path
@@ -10,7 +11,7 @@ from sqlalchemy import func, select
 
 from app.core.config import settings
 from app.core.enums import DocumentStatus, Role, SpecType
-from app.models import ApprovalLog, Document, ExtractionResult, ReviewLog, SpecItem, SpecSet, User
+from app.models import ApprovalLog, DeletionLog, Document, ExtractionResult, ReviewLog, SpecItem, SpecSet, User
 
 PDF = b"%PDF-1.7\n%test\n" + b"0" * 100
 
@@ -37,8 +38,9 @@ def make_doc(auth_client, db, tmp_path, monkeypatch):
     return _make
 
 
-def delete(client, doc_id):
-    return client.delete(f"/api/v1/documents/{doc_id}")
+def delete(client, doc_id, reason="잘못 올린 문서"):
+    body = {"reason": reason} if reason is not None else None
+    return client.request("DELETE", f"/api/v1/documents/{doc_id}", json=body)
 
 
 def count(db, model, doc_id):
@@ -76,19 +78,27 @@ def test_delete_removes_extraction_and_review_logs(auth_client, make_doc, db):
     assert count(db, ReviewLog, doc_id) == 0
 
 
-def test_held_document_cannot_be_deleted(auth_client, make_doc, db):
-    """보류도 처분 기록(approval_logs)이 남으므로 지울 수 없다."""
+def test_held_document_can_be_deleted(auth_client, make_doc, db):
+    """보류 이력이 있어도 지울 수 있다. 이력 요약은 삭제 기록에 남는다."""
     doc_id = make_doc()
     assert auth_client.post(f"/api/v1/documents/{doc_id}/hold",
                             json={"follow_up": "request_detection_limit", "reason": "검출한계 요청"}).status_code == 200
 
-    r = delete(auth_client, doc_id)
+    assert delete(auth_client, doc_id).status_code == 200
+    db.expire_all()
+    assert count(db, ApprovalLog, doc_id) == 0
+    assert count(db, DeletionLog, doc_id) == 1
 
-    assert r.status_code == 409
-    assert r.json()["error"]["code"] == "HAS_APPROVAL_LOGS"
+
+@pytest.mark.parametrize("reason", [None, "", "   ", "x", "가" * 501])
+def test_reason_required(auth_client, make_doc, db, reason):
+    doc_id = make_doc()
+    r = delete(auth_client, doc_id, reason=reason)
+    assert r.status_code == 400
+    assert r.json()["error"]["code"] == "REASON_REQUIRED"
     db.expire_all()
     assert db.get(Document, doc_id) is not None
-    assert count(db, ApprovalLog, doc_id) == 1
+    assert count(db, DeletionLog, doc_id) == 0
 
 
 def test_admin_can_delete_others_document(auth_client, make_doc, admin):
@@ -113,7 +123,7 @@ def test_other_user_cannot_delete(auth_client, make_doc, db):
 
 
 def test_approved_document_cannot_be_deleted(auth_client, make_doc, admin, db):
-    """처분 완료 문서는 지울 수 없다. ADMIN 이 처분 취소해도 처분 기록이 남아 있으므로 지울 수 없다."""
+    """처분 완료 문서는 지울 수 없다. ADMIN 이 처분 취소하면 지울 수 있고, 처분 이력 요약이 삭제 기록에 남는다."""
     doc_id = make_doc()
     auth_client.post(f"/api/v1/documents/{doc_id}/approve", json={"decision": "accept", "reason": None})
 
@@ -124,13 +134,11 @@ def test_approved_document_cannot_be_deleted(auth_client, make_doc, admin, db):
 
     assert auth_client.post(f"/api/v1/documents/{doc_id}/cancel-approval",
                             json={"reason": "삭제하려고 취소"}).status_code == 200
-    r = delete(auth_client, doc_id)
-    assert r.status_code == 409
-    assert r.json()["error"]["code"] == "HAS_APPROVAL_LOGS"
-    assert r.json()["error"]["message"] == "처분 기록이 있는 문서는 삭제할 수 없습니다"
+    assert delete(auth_client, doc_id).status_code == 200
     db.expire_all()
-    assert db.get(Document, doc_id) is not None
-    assert count(db, ApprovalLog, doc_id) == 2  # 승인 + 취소 기록이 그대로 남는다
+    assert db.get(Document, doc_id) is None
+    log = db.scalar(select(DeletionLog).where(DeletionLog.document_id == doc_id))
+    assert [a["action"] for a in log.approval_summary] == ["approve", "cancel"]  # 승인 + 취소 기록이 요약으로 남는다
 
 
 def test_processing_document_cannot_be_deleted(auth_client, make_doc, db):

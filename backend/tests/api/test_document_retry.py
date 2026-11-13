@@ -197,7 +197,7 @@ def test_stuck_document_can_be_retried_or_deleted_after_recovery(auth_client, mo
 
     assert retry(auth_client, a).status_code == 200
     assert reload(db, a).status == DocumentStatus.EXTRACTED
-    assert auth_client.delete(f"/api/v1/documents/{b}").status_code == 200
+    assert auth_client.request("DELETE", f"/api/v1/documents/{b}", json={"reason": "실패 문서 정리"}).status_code == 200
 
 
 # ---- 서버 시작 ----------------------------------------------------------------

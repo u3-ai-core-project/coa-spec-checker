@@ -19,7 +19,7 @@ from app.models import User
 from app.pipeline.worker import process_document
 from app.schemas.common import ApiResponse, Page
 from app.schemas.batch import BatchDetail, BatchUploadResponse
-from app.schemas.document import DocumentDeleted, DocumentDetail, DocumentListItem, DocumentUploadResponse
+from app.schemas.document import DocumentDeleteRequest, DocumentDeleted, DocumentDetail, DocumentListItem, DocumentUploadResponse
 from app.services import batch_service, document_service
 
 router = APIRouter(prefix="/documents", tags=["documents"])
@@ -165,9 +165,13 @@ def get_document_file(document_id: str, db: Session = Depends(get_db), _: User =
 
 
 @router.delete("/{document_id}", response_model=ApiResponse[DocumentDeleted])
-def delete_document(document_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    """문서 삭제. 올린 사람 본인 또는 ADMIN. 처분 완료·추출 중 문서는 지울 수 없다."""
-    deleted_id = document_service.delete_document(db, document_id, user)
+def delete_document(document_id: str, body: DocumentDeleteRequest | None = None, db: Session = Depends(get_db),
+                    user: User = Depends(get_current_user)):
+    """문서 삭제. 올린 사람 본인 또는 ADMIN. 본문 {reason} 필수. 처분 완료·추출 중 문서는 지울 수 없다.
+
+    삭제 기록(누가, 언제, 무엇을, 왜 + 처분·검수 이력 요약)이 남는다 (운영 정책 1장, GET /deletion-logs).
+    """
+    deleted_id = document_service.delete_document(db, document_id, user, body.reason if body else None)
     return ok(DocumentDeleted(document_id=deleted_id))
 
 

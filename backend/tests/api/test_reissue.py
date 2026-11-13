@@ -154,7 +154,8 @@ def test_deleting_a_version_dissolves_the_conflict(auth_client, make_doc):
     first = make_doc("a", "L-001")
     second = make_doc("b", "L-001")
     assert info(auth_client, first)["status"] == "conflict"
-    assert auth_client.delete(f"/api/v1/documents/{second}").status_code == 200
+    assert auth_client.request("DELETE", f"/api/v1/documents/{second}",
+                               json={"reason": "잘못 올린 재발행본"}).status_code == 200
     assert info(auth_client, first)["status"] == "none"
     assert approve(auth_client, first).status_code == 200
 

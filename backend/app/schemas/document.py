@@ -1,7 +1,7 @@
 """[담당: 장수민] 문서 업로드·목록·상세 응답 (명세 4.4~4.6)."""
 from datetime import date, datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.core.enums import DocumentStatus, ErrorKind, FinalDecision, LotRecommendation
 from app.schemas.extraction import Summary
@@ -11,6 +11,11 @@ class DocumentUploadResponse(BaseModel):
     document_id: str
     file_name: str
     status: DocumentStatus
+
+
+class DocumentDeleteRequest(BaseModel):
+    """DELETE /documents/{id} 본문. 사유 필수 (검사는 deletion_service.clean_reason, 400 REASON_REQUIRED)."""
+    reason: str | None = Field(None, description="삭제 사유 (2~500자, 필수)")
 
 
 class DocumentDeleted(BaseModel):

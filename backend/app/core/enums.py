@@ -162,6 +162,14 @@ class ValueSource(StrEnum):
     INTERNAL_TEST = "internal_test"    # 자체 시험값 또는 별도 성적서 값
 
 
+class DeletionRule(StrEnum):
+    """삭제 기록의 삭제 근거 (운영 정책 1장). 지금은 MANUAL 만 쓰고, 나머지는 자동 정리·묶음 삭제가 생기면 쓴다."""
+    MANUAL = "manual"                    # 사람이 사유를 넣고 지움 (DELETE /documents/{id})
+    AUTO_FAILED_7D = "auto_failed_7d"    # 추출 실패 후 7일 지난 문서 자동 삭제
+    AUTO_ORPHAN_FILE = "auto_orphan_file"  # 어디에도 연결되지 않은 파일 (24시간 경과)
+    BATCH_DELETE = "batch_delete"        # 관리자의 일괄 접수 묶음 삭제
+
+
 class ApprovalAction(StrEnum):
     APPROVE = "approve"
     HOLD = "hold"
