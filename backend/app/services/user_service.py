@@ -18,6 +18,7 @@ from app.core.enums import Role
 from app.core.errors import AppException, ErrorCode
 from app.core.security import hash_password, validate_password, verify_password
 from app.models import User
+from app.services import login_guard
 
 logger = logging.getLogger(__name__)
 
@@ -28,16 +29,28 @@ def _audit(actor: User, action: str, target: User, detail: str = "") -> None:
                 actor.username, actor.id, action, target.username, target.id, f" {detail}" if detail else "")
 
 
-def authenticate(db: Session, username: str, password: str) -> User:
+# 없는 아이디일 때도 bcrypt 검사를 한 번 해서 응답 시간으로 아이디 존재 여부를 알 수 없게 한다
+_DUMMY_HASH = hash_password("dummy-password-0")
+
+
+def authenticate(db: Session, username: str, password: str, ip: str) -> User:
     """아이디·비밀번호가 맞으면 User, 아니면 401 INVALID_CREDENTIALS (어느 쪽이 틀렸는지 구분하지 않음).
 
-    비밀번호가 맞아도 비활성 계정이면 403 ACCOUNT_DISABLED. 비밀번호를 모르는 사람에게는 비활성 여부를 알려 주지 않는다.
+    - (아이디, IP) 가 잠겨 있으면 비밀번호를 보기 전에 429 ACCOUNT_LOCKED (운영 정책 3단계)
+    - 틀리면 실패 횟수 +1. LOGIN_MAX_FAILURES 번째 실패면 그 자리에서 429 ACCOUNT_LOCKED. 없는 아이디도 똑같이 센다
+    - 성공하면 그 (아이디, IP) 의 실패 기록을 지운다
+    - 비밀번호가 맞아도 비활성 계정이면 403 ACCOUNT_DISABLED. 비밀번호를 모르는 사람에게는 비활성 여부를 알려 주지 않는다
     """
+    login_guard.ensure_not_locked(db, username, ip)
     user = db.scalar(select(User).where(User.username == username))
-    if user is None or not verify_password(password, user.password_hash):
+    password_ok = verify_password(password, user.password_hash if user is not None else _DUMMY_HASH)
+    if user is None or not password_ok:
+        login_guard.record_failure(db, username, ip)
         raise AppException(ErrorCode.INVALID_CREDENTIALS)
     if not user.is_active:
         raise AppException(ErrorCode.ACCOUNT_DISABLED)
+    login_guard.clear(db, username, ip)
+    db.commit()
     return user
 
 
@@ -55,15 +68,22 @@ def get_user(db: Session, user_id: int) -> User:
 # ---------------------------------------------------------------------------
 # 본인 비밀번호 변경
 # ---------------------------------------------------------------------------
-def change_own_password(db: Session, user: User, current_password: str, new_password: str) -> User:
-    """POST /auth/password. 현재 비밀번호 확인 → 규칙 검사 → 이전과 달라야 함. must_change_password 를 끈다. commit 까지 한다."""
+def change_own_password(db: Session, user: User, current_password: str, new_password: str, ip: str) -> User:
+    """POST /auth/password. 현재 비밀번호 확인 → 규칙 검사 → 이전과 달라야 함. must_change_password 를 끈다. commit 까지 한다.
+
+    현재 비밀번호를 틀리는 것도 로그인 실패와 같이 센다 (토큰을 훔친 사람이 비밀번호를 맞혀 보지 못하게).
+    잠겨 있으면 429 ACCOUNT_LOCKED. 성공하면 그 (아이디, IP) 의 실패 기록을 지운다.
+    """
+    login_guard.ensure_not_locked(db, user.username, ip)
     if not verify_password(current_password, user.password_hash):
+        login_guard.record_failure(db, user.username, ip)
         raise AppException(ErrorCode.WRONG_PASSWORD)
     validate_password(new_password)
     if new_password == current_password:
         raise AppException(ErrorCode.INVALID_PASSWORD, "새 비밀번호는 현재 비밀번호와 달라야 합니다")
     user.password_hash = hash_password(new_password)
     user.must_change_password = False
+    login_guard.clear(db, user.username, ip)
     db.commit()
     _audit(user, "change_own_password", user)
     return user
@@ -137,6 +157,7 @@ def reset_password(db: Session, actor: User, user_id: int, new_password: str) ->
     validate_password(new_password)
     target.password_hash = hash_password(new_password)
     target.must_change_password = True
+    login_guard.clear(db, target.username)  # 모든 IP 의 잠금을 푼다 (관리자 잠금 해제 방법)
     db.commit()
     _audit(actor, "reset_password", target)
     return target

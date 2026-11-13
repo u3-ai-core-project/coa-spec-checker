@@ -105,4 +105,5 @@ def test_unhandled_exception_is_500(client):
 
 def test_every_error_code_has_valid_status():
     for code in ErrorCode:
-        assert code.status_code in {400, 401, 403, 404, 409, 422, 500}
+        # 429: 로그인 잠금 ACCOUNT_LOCKED (운영 정책 3단계)
+        assert code.status_code in {400, 401, 403, 404, 409, 422, 429, 500}

@@ -63,7 +63,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
-    expose_headers=["Content-Disposition"],  # 엑셀 리포트 파일명
+    expose_headers=["Content-Disposition", "Retry-After"],  # 엑셀 리포트 파일명, 로그인 잠금 남은 시간(초)
 )
 
 register_exception_handlers(app)

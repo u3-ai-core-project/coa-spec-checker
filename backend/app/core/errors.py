@@ -33,6 +33,7 @@ class ErrorCode(Enum):
     UNAUTHORIZED = (401, "인증이 필요합니다")
     FORBIDDEN = (403, "권한이 없습니다")
     ACCOUNT_DISABLED = (403, "비활성화된 계정입니다. 관리자에게 문의하세요")  # 운영 정책 2단계
+    ACCOUNT_LOCKED = (429, "로그인 시도가 너무 많아 계정이 잠겼습니다. 잠시 후 다시 시도하세요")  # 운영 정책 3단계
     PASSWORD_CHANGE_REQUIRED = (403, "비밀번호를 먼저 변경해야 합니다")  # 운영 정책 2단계 (첫 로그인·초기화 후)
     NOT_FOUND = (404, "요청한 경로를 찾을 수 없습니다")  # 명세 외 추가 (없는 URL)
     DOCUMENT_NOT_FOUND = (404, "존재하지 않는 문서입니다")
@@ -66,9 +67,10 @@ class ErrorCode(Enum):
 
 
 class AppException(Exception):
-    def __init__(self, code: ErrorCode, message: str | None = None):
+    def __init__(self, code: ErrorCode, message: str | None = None, headers: dict[str, str] | None = None):
         self.code = code
         self.message = message or code.default_message
+        self.headers = headers  # 응답 헤더 추가 (예: 429 의 Retry-After)
         super().__init__(self.message)
 
 
@@ -83,8 +85,9 @@ def _json(code: ErrorCode, message: str | None = None, headers: dict | None = No
 def register_exception_handlers(app: FastAPI) -> None:
     @app.exception_handler(AppException)
     async def _app_exc(_: Request, exc: AppException):
-        headers = {"WWW-Authenticate": "Bearer"} if exc.code.status_code == 401 else None
-        return _json(exc.code, exc.message, headers)
+        headers = {"WWW-Authenticate": "Bearer"} if exc.code.status_code == 401 else {}
+        headers.update(exc.headers or {})
+        return _json(exc.code, exc.message, headers or None)
 
     @app.exception_handler(RequestValidationError)
     async def _validation(_: Request, exc: RequestValidationError):

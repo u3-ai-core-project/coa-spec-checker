@@ -22,6 +22,12 @@ class Settings(BaseSettings):
     JWT_SECRET: str = DEFAULT_JWT_SECRET
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
+    # 로그인 잠금 (운영 정책 3단계): 비밀번호를 연속 LOGIN_MAX_FAILURES 번 틀리면 LOGIN_LOCK_MINUTES 분 동안 잠근다
+    LOGIN_MAX_FAILURES: int = 5
+    LOGIN_LOCK_MINUTES: int = 15
+    # 접속 IP 를 X-Forwarded-For 헤더에서 읽을지. 앞에 nginx 같은 프록시가 있을 때만 True 로 켠다.
+    # 프록시 없이 켜면 누구나 헤더를 꾸며 IP 를 바꿀 수 있어 잠금을 피할 수 있다
+    TRUST_PROXY_HEADERS: bool = False
 
     # 판정 (명세 1장: confidence < 0.8 이면 신뢰도 낮음)
     LOW_CONFIDENCE_THRESHOLD: float = 0.8
