@@ -33,6 +33,9 @@ import type {
   PatchItemResult,
   PatchSpecBody,
   PatchSpecResult,
+  PreviewSpecBody,
+  RevertSpecBody,
+  SpecPreview,
   RejudgedDocument,
   RejudgeItemChange,
   RejudgeRequest,
@@ -77,6 +80,18 @@ function wait(ms: number): Promise<void> {
 
 // 목업 시계: 시안과 같은 시각(수정 14:32, 확인 14:35, 처분 15:02 …)이 나오도록 이력 종류마다 시작 시각을 고정하고,
 // 같은 종류가 또 생기면 1분씩 늦춥니다.
+/** 변경 이력 문자열("lsl: 1, usl: 없음")을 값으로 되돌립니다(서버 spec_service._parse_log_values와 같은 규칙). 값이 없으면 null입니다. */
+function parseChangeLogValues(text: string): { lsl?: number | null; usl?: number | null; unit?: string | null } {
+  const out: { lsl?: number | null; usl?: number | null; unit?: string | null } = {};
+  for (const match of text.matchAll(/(lsl|usl|unit): (.*?)(?=, (?:lsl|usl|unit): |$)/g)) {
+    const name = match[1] as 'lsl' | 'usl' | 'unit';
+    const raw = match[2];
+    if (name === 'unit') out.unit = raw === '없음' ? null : raw;
+    else out[name] = raw === '없음' ? null : Number(raw);
+  }
+  return out;
+}
+
 type ClockKind = 'edit' | 'confirm' | 'rename' | 'approve' | 'hold' | 'cancel' | 'spec' | 'respec';
 
 const CLOCK_ANCHORS: Record<ClockKind, string> = {
@@ -681,37 +696,103 @@ export class MockApi implements Api {
     // 변경 사유는 필수입니다(백엔드 PR #12). 검사 순서는 서버와 같게 사유 누락, 범위 오류 순입니다.
     const reason = body.reason?.trim();
     if (!reason) throw new ApiError(400, 'REASON_REQUIRED', '변경 사유가 필요합니다');
-    // 이미 추출된 문서의 판정은 바꾸지 않고, 이후 업로드 건부터 적용됩니다(규격 재판정은 서버에 없습니다).
-    // 서버처럼 실제로 바뀐 값만 "필드: 값" 문자열로 이력에 남기고, 바뀐 값이 없으면 이력은 남기지 않습니다(수정자와 일시는 갱신).
-    const next = { lsl: body.lsl, usl: body.usl, unit: body.unit };
+    return delay(this.applySpecChange(target, { lsl: body.lsl, usl: body.usl, unit: body.unit }, reason, user.name, body.rejudge === true));
+  }
+
+  /**
+   * 규격 값을 바꾸고 변경 이력을 남깁니다(patchSpec과 revertSpec이 같이 씁니다).
+   * 이미 추출된 문서의 판정은 바꾸지 않고 이후 업로드 건부터 적용되며, rejudge=true일 때만 이 세트의 처분 전 문서를 다시 판정합니다.
+   * 서버처럼 실제로 바뀐 값만 "필드: 값" 문자열로 이력에 남기고, 바뀐 값이 없으면 이력은 남기지 않습니다(수정자와 일시는 갱신).
+   */
+  private applySpecChange(
+    target: SpecItem,
+    next: { lsl: number | null; usl: number | null; unit: string | null },
+    reason: string,
+    userName: string,
+    rejudge: boolean,
+  ): PatchSpecResult {
     const changed = (['lsl', 'usl', 'unit'] as const).filter((field) => next[field] !== target[field]);
     const fmt = (value: number | string | null) => (value === null ? '없음' : String(value));
     const beforeValue = changed.map((field) => `${field}: ${fmt(target[field])}`).join(', ');
     const afterValue = changed.map((field) => `${field}: ${fmt(next[field])}`).join(', ');
-    target.lsl = body.lsl;
-    target.usl = body.usl;
-    target.unit = body.unit;
-    target.updated_by = user.name;
+    target.lsl = next.lsl;
+    target.usl = next.usl;
+    target.unit = next.unit;
+    target.updated_by = userName;
     target.updated_at = now('spec');
     // rejudge=true면 이 규격 세트로 판정한 처분 전 문서를 새 규격으로 다시 판정합니다(서버 spec_service.rejudge_open_documents).
-    const rejudged = body.rejudge ? this.rejudgeOpenDocuments(target.spec_set_code) : [];
+    const rejudged = rejudge ? this.rejudgeOpenDocuments(target.spec_set_code) : [];
     if (changed.length > 0) {
       this.local.addSpecChangeLog(target.id, {
         before_value: beforeValue,
         after_value: afterValue,
         reason,
-        user_name: user.name,
+        user_name: userName,
         created_at: target.updated_at,
       });
     }
-    return delay({ ...target, rejudged_documents: rejudged });
+    return { ...target, rejudged_documents: rejudged };
+  }
+
+  /**
+   * 규격 수정 영향 미리보기 흉내(POST /specs/{id}/preview). 저장하지 않고, 값을 잠시 바꿔 처분 전 문서를 다시 판정한 결과만 셉니다.
+   * 서버처럼 보낸 필드 중 실제로 값이 달라지는 것만 changed_fields에 넣고, 사유는 필요 없으며, 범위가 틀리면 400입니다.
+   */
+  async previewSpec(specId: number, body: PreviewSpecBody): Promise<SpecPreview> {
+    const user = this.requireUser();
+    if (user.role !== 'ADMIN') throw new ApiError(403, 'FORBIDDEN', '권한 없음');
+    const target = this.state.specs.find((entry) => entry.id === specId);
+    if (!target) throw new ApiError(404, 'SPEC_NOT_FOUND', '존재하지 않는 규격 항목');
+    if (checkSpecRange(body.lsl, body.usl)) throw new ApiError(400, 'INVALID_SPEC_RANGE', '규격 하한이 상한보다 큼');
+    const next = { lsl: body.lsl, usl: body.usl, unit: body.unit };
+    const changedFields = (['lsl', 'usl', 'unit'] as const).filter((field) => next[field] !== target[field]);
+    const saved = { lsl: target.lsl, usl: target.usl, unit: target.unit };
+    let documents: RejudgedDocument[];
+    try {
+      Object.assign(target, next);
+      documents = this.rejudgeOpenDocuments(target.spec_set_code, false);
+    } finally {
+      Object.assign(target, saved);
+    }
+    const affected = documents.filter((doc) => doc.changed_items.length > 0 || doc.lot_recommendation_before !== doc.lot_recommendation_after);
+    return delay({
+      changed_fields: changedFields,
+      target_documents: documents.length,
+      affected_documents: affected.length,
+      recommendation_changed_documents: affected.filter((doc) => doc.lot_recommendation_before !== doc.lot_recommendation_after).length,
+      documents: affected,
+    });
+  }
+
+  /**
+   * 가장 최근 변경을 되돌리는 흉내(POST /specs/{id}/revert). 검사 순서는 서버와 같습니다: 항목 없음 404 → 사유 없음 400 REASON_REQUIRED
+   * → 변경 이력 없음 409 NOTHING_TO_REVERT. 되돌리기도 변경 이력으로 남고(사유 앞에 "되돌리기: "), 다시 되돌리면 되돌리기 전 값으로 돌아갑니다.
+   */
+  async revertSpec(specId: number, body: RevertSpecBody): Promise<PatchSpecResult> {
+    const user = this.requireUser();
+    if (user.role !== 'ADMIN') throw new ApiError(403, 'FORBIDDEN', '권한 없음');
+    const target = this.state.specs.find((entry) => entry.id === specId);
+    if (!target) throw new ApiError(404, 'SPEC_NOT_FOUND', '존재하지 않는 규격 항목');
+    const reason = body.reason?.trim();
+    if (!reason) throw new ApiError(400, 'REASON_REQUIRED', '되돌리는 사유를 입력해야 합니다');
+    const logs = this.local.listSpecChangeLogs(specId);
+    const last = logs[logs.length - 1];
+    if (!last) throw new ApiError(409, 'NOTHING_TO_REVERT', '되돌릴 규격 변경 이력이 없습니다');
+    const restored = parseChangeLogValues(last.before_value);
+    const next = {
+      lsl: restored.lsl !== undefined ? restored.lsl : target.lsl,
+      usl: restored.usl !== undefined ? restored.usl : target.usl,
+      unit: restored.unit !== undefined ? restored.unit : target.unit,
+    };
+    return delay(this.applySpecChange(target, next, `되돌리기: ${reason}`, user.name, body.rejudge === true));
   }
 
   /**
    * 규격 세트를 쓰는 처분 전 문서(추출됨, 검수 중, 보류)를 다시 판정합니다. 처분 완료, 처리 중, 실패 문서는 건드리지 않습니다.
+   * commit이 false이면 문서를 바꾸지 않고 결과만 돌려줍니다(미리보기).
    * 서버가 만든 누락 항목을 새 규격으로 다시 만드는 일은 목업에서 하지 않습니다.
    */
-  private rejudgeOpenDocuments(specSetCode: string): RejudgedDocument[] {
+  private rejudgeOpenDocuments(specSetCode: string, commit = true): RejudgedDocument[] {
     const out: RejudgedDocument[] = [];
     for (const doc of this.state.docs) {
       const { extraction } = doc;
@@ -720,20 +801,25 @@ export class MockApi implements Api {
       const specs = this.specsOf(doc);
       const before = doc.detail.lot_recommendation;
       const changed: string[] = [];
-      extraction.items = extraction.items.map((item) => {
+      const items = extraction.items.map((item) => {
         const spec = specs.find((entry) => entry.item_name === item.normalized_name);
         if (!spec) return item; // 규격이 바뀐 것과 상관없는 항목(규격에 없는 항목)은 그대로 둡니다.
         const next = rejudgeItem(item, spec);
         if (next.judgement !== item.judgement) changed.push(item.normalized_name);
         return next;
       });
-      extraction.summary = summarize(extraction.items);
-      extraction.lot_recommendation = recommendLot(extraction.summary, extraction.document_issues.length);
-      doc.detail.lot_recommendation = extraction.lot_recommendation;
+      const summary = summarize(items);
+      const recommendation = recommendLot(summary, extraction.document_issues.length);
+      if (commit) {
+        extraction.items = items;
+        extraction.summary = summary;
+        extraction.lot_recommendation = recommendation;
+        doc.detail.lot_recommendation = recommendation;
+      }
       out.push({
         document_id: doc.detail.document_id,
         lot_recommendation_before: before,
-        lot_recommendation_after: extraction.lot_recommendation,
+        lot_recommendation_after: recommendation,
         changed_items: changed,
       });
     }

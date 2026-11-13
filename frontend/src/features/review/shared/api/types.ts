@@ -464,6 +464,36 @@ export interface PatchSpecBody {
   rejudge?: boolean;
 }
 
+/**
+ * POST /specs/{id}/preview 요청(백엔드 #61). 본문은 PATCH와 같고, 저장하지 않고 영향만 계산합니다.
+ * 변경 사유(reason)는 미리보기에서 필수가 아니고, rejudge는 서버가 무시합니다(미리보기는 항상 다시 판정했을 때의 변화를 계산).
+ */
+export type PreviewSpecBody = Omit<PatchSpecBody, 'reason'> & { reason?: string };
+
+/**
+ * POST /specs/{id}/preview 응답. 서버가 계산한 숫자 그대로입니다(화면에서 다시 세거나 합치지 않습니다).
+ * 영향 범위는 이 규격 세트로 판정한 처분 전 문서(rejudge=true로 저장하면 다시 판정되는 문서)입니다.
+ */
+export interface SpecPreview {
+  /** 실제로 바뀌는 필드(lsl, usl, unit). 비어 있으면 바뀌는 값이 없습니다. */
+  changed_fields: string[];
+  /** 이 규격 세트로 판정한 처분 전 문서 수 */
+  target_documents: number;
+  /** 그중 항목 판정이나 로트 권고가 바뀌는 문서 수 */
+  affected_documents: number;
+  /** 그중 로트 권고가 바뀌는 문서 수 */
+  recommendation_changed_documents: number;
+  /** 영향받는 문서 목록 */
+  documents: RejudgedDocument[];
+}
+
+/** POST /specs/{id}/revert 요청(백엔드 #61). 가장 최근 변경을 되돌리며 사유는 필수입니다. 응답은 PATCH와 같은 PatchSpecResult입니다. */
+export interface RevertSpecBody {
+  reason: string;
+  /** true이면 처분 전 문서도 되돌린 규격으로 다시 판정합니다. 서버 기본값은 false입니다. */
+  rejudge?: boolean;
+}
+
 /** 규격 변경 때 서버가 다시 판정한 문서 1건. 응답을 그대로 보여 주고 화면에서 다시 판단하지 않습니다. */
 export interface RejudgedDocument {
   document_id: string;

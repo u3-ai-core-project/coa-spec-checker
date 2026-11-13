@@ -26,6 +26,9 @@ import type {
   RejudgeResult,
   PatchSpecBody,
   PatchSpecResult,
+  PreviewSpecBody,
+  RevertSpecBody,
+  SpecPreview,
   ReviewLog,
   SpecChangeLog,
   SpecItem,
@@ -87,6 +90,16 @@ export interface Api {
   listSpecSets(materialCode?: string): Promise<SpecSet[]>;
   /** 규격 항목 수정(ADMIN). body.rejudge가 true이면 처분 전 문서를 새 규격으로 다시 판정하고 그 결과를 rejudged_documents로 돌려줍니다. */
   patchSpec(specId: number, body: PatchSpecBody): Promise<PatchSpecResult>;
+  /**
+   * 규격 수정 영향 미리보기(POST /specs/{id}/preview, ADMIN). 저장하지 않고, 이 값으로 저장하면 다시 판정될 처분 전 문서에
+   * 생길 변화(영향 문서 수, 로트 권고가 바뀌는 문서 수, 문서별 변화)를 서버가 계산해 돌려줍니다. 범위 오류는 400 INVALID_SPEC_RANGE입니다.
+   */
+  previewSpec(specId: number, body: PreviewSpecBody): Promise<SpecPreview>;
+  /**
+   * 규격 항목의 가장 최근 변경을 되돌립니다(POST /specs/{id}/revert, ADMIN). 사유 필수(없으면 400 REASON_REQUIRED),
+   * 변경 이력이 없으면 409 NOTHING_TO_REVERT입니다. 되돌리기도 변경 이력으로 남고, 응답은 patchSpec과 같습니다.
+   */
+  revertSpec(specId: number, body: RevertSpecBody): Promise<PatchSpecResult>;
 
   /** 규격 항목 하나의 변경 이력(GET /specs/{id}/change-logs). 서버는 오래된 순으로 줍니다. */
   listSpecChangeLogs(specId: number): Promise<SpecChangeLog[]>;

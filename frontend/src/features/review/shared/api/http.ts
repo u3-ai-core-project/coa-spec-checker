@@ -32,10 +32,13 @@ import type {
   RejudgeResult,
   PatchSpecBody,
   PatchSpecResult,
+  PreviewSpecBody,
+  RevertSpecBody,
   ReviewLog,
   SpecChangeLog,
   SpecItem,
   SpecListQuery,
+  SpecPreview,
   SpecSet,
 } from './types';
 
@@ -121,6 +124,20 @@ async function requestRejudge(documentId: string, req: RejudgeRequest): Promise<
     ...(req.reason === undefined ? {} : { reason: req.reason }),
   };
   return request<RejudgeResult>(path, jsonBody(body));
+}
+
+/**
+ * 규격 수정 영향 미리보기와 되돌리기 API(백엔드 #61). 주소, 요청 본문, 응답 해석은 아래 두 함수 한 곳에서만 정합니다.
+ *   POST /specs/{id}/preview  본문은 PATCH /specs/{id}와 같음(lsl, usl, unit, reason, rejudge) → SpecPreview
+ *   POST /specs/{id}/revert   본문 { reason, rejudge } → PATCH와 같은 응답(rejudged_documents 포함)
+ */
+async function requestSpecPreview(specId: number, body: PreviewSpecBody): Promise<SpecPreview> {
+  return request<SpecPreview>(`/specs/${specId}/preview`, jsonBody(body));
+}
+
+async function requestSpecRevert(specId: number, body: RevertSpecBody): Promise<PatchSpecResult> {
+  const result = await request<PatchSpecResult>(`/specs/${specId}/revert`, jsonBody({ reason: body.reason, rejudge: body.rejudge ?? false }));
+  return { ...result, rejudged_documents: result.rejudged_documents ?? [] };
 }
 
 /**
@@ -232,6 +249,14 @@ export class HttpApi implements Api {
     const result = await request<PatchSpecResult>(`/specs/${specId}`, { method: 'PATCH', body: JSON.stringify(body) });
     // rejudge를 보내지 않은 요청(또는 이 필드가 없는 서버)의 응답에는 rejudged_documents가 비어 있습니다.
     return { ...result, rejudged_documents: result.rejudged_documents ?? [] };
+  }
+
+  previewSpec(specId: number, body: PreviewSpecBody): Promise<SpecPreview> {
+    return requestSpecPreview(specId, body);
+  }
+
+  revertSpec(specId: number, body: RevertSpecBody): Promise<PatchSpecResult> {
+    return requestSpecRevert(specId, body);
   }
 
   listSpecChangeLogs(specId: number): Promise<SpecChangeLog[]> {

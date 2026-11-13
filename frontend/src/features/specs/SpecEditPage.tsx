@@ -9,9 +9,11 @@ import {
   draftErrors,
   draftOf,
 } from './lib/specEdit';
+import { SpecRevertDialog } from './components/SpecRevertDialog';
+import { SpecSaveConfirmDialog, type SpecPreviewEntry } from './components/SpecSaveConfirmDialog';
 import { api } from '../review/shared/api';
 import { errorMessage } from '../review/shared/api/errors';
-import type { RejudgedDocument, SpecItem } from '../review/shared/api/types';
+import type { PatchSpecResult, RejudgedDocument, SpecItem } from '../review/shared/api/types';
 import { Chem } from '../review/shared/components/Chem';
 import { ErrorNotice } from '../review/shared/components/EmptyState';
 import { Icon } from '../review/shared/components/Icon';
@@ -42,6 +44,8 @@ function inputClass(changed: boolean, invalid: boolean, align: string, readOnly 
  * 백엔드 확정 답변: PATCH /specs/{id}에 변경 사유(reason)가 필수이고, 변경 이력은 GET /specs/{id}/change-logs로 봅니다.
  * "저장 후 재판정"을 켜면 마지막 PATCH에만 rejudge=true를 보내 이 규격 세트로 판정한 처분 전 문서를 서버가 다시 판정하고,
  * 응답의 rejudged_documents를 그대로 "서버 재판정 결과"로 보여 줍니다. 끄면 기존 저장과 같습니다.
+ * 저장을 누르면 먼저 POST /specs/{id}/preview로 서버가 영향 범위(영향 문서, 권고 변경)를 계산하고, 확인 다이얼로그에서 확인하면 위 저장을 합니다.
+ * 각 항목의 "되돌리기"는 POST /specs/{id}/revert로 가장 최근 변경을 사유와 함께 되돌립니다(되돌릴 이력이 없으면 서버가 409).
  * 항목 추가·삭제, 규격 근거(source) 수정은 서버에 없어 화면에서 숨겼습니다.
  */
 export function SpecEditPage() {
@@ -84,6 +88,12 @@ export function SpecEditPage() {
   const [rejudge, setRejudge] = useState(false);
   /** 재판정을 켜고 저장한 뒤 서버가 돌려준 결과. null이면 아직 재판정하지 않았습니다. */
   const [rejudgeResult, setRejudgeResult] = useState<RejudgedDocument[] | null>(null);
+  /** 저장 전 서버 미리보기 결과. 값이 있으면 확인 다이얼로그가 열려 있습니다. */
+  const [pendingPreview, setPendingPreview] = useState<SpecPreviewEntry[] | null>(null);
+  /** 되돌리기 다이얼로그를 연 규격 항목 */
+  const [revertTarget, setRevertTarget] = useState<SpecItem | null>(null);
+  /** 되돌리기를 마친 뒤 안내 */
+  const [notice, setNotice] = useState<string | null>(null);
 
   const header = (
     <PageIntro
@@ -133,6 +143,28 @@ export function SpecEditPage() {
   function update(spec: SpecItem, patch: Partial<SpecDraft>) {
     setEdits((current) => ({ ...current, [spec.id]: { ...current[spec.id], ...patch } }));
     setSaveError(null);
+    setNotice(null);
+  }
+
+  /** 저장 버튼: 바뀐 항목마다 서버 미리보기를 받아 확인 다이얼로그를 엽니다. 저장은 다이얼로그에서 확인한 뒤에 합니다. */
+  async function startSave() {
+    setSaving(true);
+    setSaveError(null);
+    setNotice(null);
+    try {
+      const entries = await Promise.all(
+        changes.map(async (change) => ({
+          spec: change.spec,
+          // 본문은 저장(PATCH)과 같습니다. 서버는 미리보기에서 rejudge를 무시하고 항상 다시 판정했을 때의 변화를 계산합니다.
+          preview: await api.previewSpec(change.spec.id, { ...change.body, reason: reason.trim(), ...(rejudge ? { rejudge: true } : {}) }),
+        })),
+      );
+      setPendingPreview(entries);
+    } catch (failure) {
+      setSaveError(errorMessage(failure));
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function save() {
@@ -202,6 +234,7 @@ export function SpecEditPage() {
                   <th className="px-2 py-2 font-semibold">단위</th>
                   <th className="px-2 py-2 font-semibold">LSL</th>
                   <th className="px-2 py-2 font-semibold">USL</th>
+                  <th className="px-2 py-2 pr-4 text-right font-semibold">이력</th>
                 </tr>
               </thead>
               <tbody>
@@ -256,6 +289,19 @@ export function SpecEditPage() {
                           aria-label={`${spec.item_name} USL`}
                           onChange={(event) => update(spec, { usl: event.target.value })}
                         />
+                      </td>
+                      <td className="px-2 py-2 pr-4 text-right">
+                        <button
+                          type="button"
+                          disabled={saving}
+                          onClick={() => setRevertTarget(spec)}
+                          aria-label={`${spec.item_name} 되돌리기`}
+                          title="가장 최근 변경을 이전 값으로 되돌립니다."
+                          className="btn-spec-revert inline-flex h-8 items-center gap-1 rounded-md border border-[#D0D4DA] bg-white px-2 text-[12px] font-semibold text-[#5B616A] disabled:cursor-not-allowed disabled:text-[#B6BBC4]"
+                        >
+                          <Icon name="undo" size={12} />
+                          되돌리기
+                        </button>
                       </td>
                     </tr>
                   );
@@ -332,8 +378,9 @@ export function SpecEditPage() {
             )}
           </div>
           <div className="spec-form-actions flex items-center justify-between border-t border-[#E3E5E8] px-5 py-3.5">
-            <span className={`spec-change-summary text-[12px] ${saveError ? 'text-[#C0342E]' : 'text-[#5B616A]'}`}>
+            <span className={`spec-change-summary text-[12px] ${saveError ? 'text-[#C0342E]' : notice ? 'text-[#177A46]' : 'text-[#5B616A]'}`}>
               {saveError ??
+                notice ??
                 (rejudge
                   ? `변경 ${changes.length}건 · 저장 후 처분 전 문서를 다시 판정합니다.`
                   : `변경 ${changes.length}건 · 이후 업로드 건부터 적용됩니다.`)}
@@ -349,7 +396,7 @@ export function SpecEditPage() {
               <button
                 type="button"
                 disabled={!canSave}
-                onClick={() => void save()}
+                onClick={() => void startSave()}
                 className={`btn-save h-10 rounded-lg px-5 text-[14px] font-semibold ${
                   canSave ? 'bg-[#2B4FCB] text-white' : 'cursor-not-allowed bg-[#E3E5E8] text-[#8A9099]'
                 }`}
@@ -393,6 +440,38 @@ export function SpecEditPage() {
           </ul>
         </aside>
       </main>
+      {pendingPreview && (
+        <SpecSaveConfirmDialog
+          entries={pendingPreview}
+          rejudge={rejudge}
+          busy={saving}
+          onCancel={() => setPendingPreview(null)}
+          onConfirm={() => {
+            setPendingPreview(null);
+            void save();
+          }}
+        />
+      )}
+      {revertTarget && (
+        <SpecRevertDialog
+          spec={revertTarget}
+          onClose={() => setRevertTarget(null)}
+          onDone={(result: PatchSpecResult, rejudged: boolean) => {
+            // 서버 결과를 보여 줍니다: 규격과 변경 이력을 다시 불러오고, 이 항목의 저장 전 입력은 비웁니다.
+            setEdits((current) => {
+              const next = { ...current };
+              delete next[revertTarget.id];
+              return next;
+            });
+            setRejudgeResult(rejudged ? result.rejudged_documents : null);
+            setSaveError(null);
+            setNotice(`${revertTarget.item_name} 항목을 이전 값으로 되돌렸습니다.`);
+            setRevertTarget(null);
+            specsQuery.reload();
+            changeLogs.reload();
+          }}
+        />
+      )}
     </>
   );
 }
