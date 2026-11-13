@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session, joinedload
 from app.core.config import settings
 from app.core.enums import DocumentStatus, ErrorKind, FailStage, LotRecommendation, Role
 from app.core.errors import AppException, ErrorCode
-from app.models import Document, User
+from app.models import ApprovalLog, Document, User
 from app.schemas.document import DocumentDetail, DocumentListItem
 from app.schemas.extraction import Summary
 from app.services import reissue_service, spec_service
@@ -113,18 +113,23 @@ def delete_document(db: Session, document_id: str, user: User) -> str:
     """DELETE /documents/{id}. 문서와 딸린 기록, 원본 파일을 지운다. commit 까지 한다.
 
     - 권한: 올린 사람 본인 또는 ADMIN. 아니면 403 FORBIDDEN
-    - 처분 완료(approved) 문서는 409 ALREADY_APPROVED. 처분 기록을 지키기 위해 ADMIN 이 처분 취소한 뒤에만 지울 수 있다
+    - 처분 완료(approved) 문서는 409 ALREADY_APPROVED
     - 추출 중(processing) 문서는 409 NOT_READY. 작업이 끝난 뒤(extracted 또는 failed) 지운다
-    - 추출 결과·검수 이력·처분 이력은 DB 의 ON DELETE CASCADE 로 함께 지워진다.
+    - 처분 기록(approval_logs)이 한 줄이라도 있으면 409 HAS_APPROVAL_LOGS.
+      처분 취소 뒤에도 승인·취소 기록은 남아야 하므로, 한 번이라도 처분된 문서는 지울 수 없다
+    - 추출 결과·검수 이력(·재발행 기준 버전 선택 기록)은 DB 의 ON DELETE CASCADE 로 함께 지워진다.
       일괄 접수 입고 건(receipts)은 남고 document_id 만 비워져 "CoA 미접수"로 돌아간다 (ON DELETE SET NULL)
     """
     doc = get_document(db, document_id)
     if user.role != Role.ADMIN and doc.uploaded_by != user.id:
         raise AppException(ErrorCode.FORBIDDEN, "본인이 올린 문서만 삭제할 수 있습니다")
     if doc.status == DocumentStatus.APPROVED:
-        raise AppException(ErrorCode.ALREADY_APPROVED, "처분 완료 문서는 삭제할 수 없습니다. 처분 취소 후 삭제하세요")
+        raise AppException(ErrorCode.ALREADY_APPROVED, "처분 완료 문서는 삭제할 수 없습니다")
     if doc.status == DocumentStatus.PROCESSING:
         raise AppException(ErrorCode.NOT_READY, "추출 중인 문서는 삭제할 수 없습니다")
+    has_logs = db.scalar(select(ApprovalLog.id).where(ApprovalLog.document_id == doc.id).limit(1))
+    if has_logs is not None:
+        raise AppException(ErrorCode.HAS_APPROVAL_LOGS, "처분 기록이 있는 문서는 삭제할 수 없습니다")
 
     path = Path(doc.file_path) if doc.file_path else None
     db.delete(doc)

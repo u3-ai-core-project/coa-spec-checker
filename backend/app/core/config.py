@@ -1,17 +1,25 @@
 """[담당: 공통(장수민 생성, 둘 다 수정)] 환경설정. 값은 .env 또는 환경변수에서 읽는다."""
 from functools import lru_cache
 
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+DEFAULT_JWT_SECRET = "change-me"
+MIN_JWT_SECRET_LENGTH = 32
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    # hide_input_in_errors: 설정 오류 메시지에 비밀키 같은 입력값이 찍히지 않게 한다
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore", hide_input_in_errors=True)
+
+    # 실행 환경. "production" 이면 시작할 때 보안 설정(JWT_SECRET 등)을 검사한다
+    APP_ENV: str = "development"
 
     # DB
     DATABASE_URL: str = "postgresql+psycopg://coa:coa@localhost:5432/coa"
 
     # 인증 (명세 1장: access token 60분, 리프레시 토큰 없음)
-    JWT_SECRET: str = "change-me"
+    JWT_SECRET: str = DEFAULT_JWT_SECRET
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
 
@@ -80,6 +88,18 @@ class Settings(BaseSettings):
     LLM_BASE_URL: str | None = None
 
     CORS_ORIGINS: list[str] = ["http://localhost:5173", "http://localhost:3000"]
+
+    @model_validator(mode="after")
+    def _check_production_secrets(self) -> "Settings":
+        # 운영(production)에서 기본 비밀키나 짧은 키로 뜨면 누구나 토큰을 위조할 수 있다. 서버를 띄우지 않는다
+        if self.APP_ENV.lower() == "production":
+            if self.JWT_SECRET == DEFAULT_JWT_SECRET or len(self.JWT_SECRET) < MIN_JWT_SECRET_LENGTH:
+                raise ValueError(
+                    f"APP_ENV=production 에서는 JWT_SECRET 을 기본값({DEFAULT_JWT_SECRET})이 아닌 "
+                    f"{MIN_JWT_SECRET_LENGTH}자 이상의 임의 문자열로 설정해야 합니다. "
+                    "예: python -c \"import secrets; print(secrets.token_urlsafe(48))\""
+                )
+        return self
 
 
 @lru_cache

@@ -40,6 +40,7 @@ class ErrorCode(Enum):
     NOT_READY = (409, "추출이 끝나지 않은 문서입니다")
     REISSUE_UNRESOLVED = (409, "같은 로트의 CoA 가 여러 개입니다. 기준 버전을 먼저 선택해야 합니다")  # 운영 정책 8.2
     NOT_BASE_VERSION = (409, "기준 버전으로 선택되지 않은 문서는 처분할 수 없습니다")  # 운영 정책 8.2
+    HAS_APPROVAL_LOGS = (409, "처분 기록이 있는 문서는 삭제할 수 없습니다")  # 운영 정책 (빠른 보안 수정): 처분 이력 보존
     NOT_FAILED = (409, "추출에 실패한 문서만 다시 처리할 수 있습니다")  # 명세 외 추가 (POST /documents/{id}/retry)
     PENDING_LOW_CONFIDENCE_ITEMS = (422, "신뢰도 낮음 항목을 먼저 확인해야 합니다")
     INVALID_DECISION = (422, "부적합 항목이 있는 로트는 승인할 수 없습니다")
