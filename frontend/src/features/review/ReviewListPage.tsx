@@ -7,6 +7,7 @@ import { useCurrentUser } from './shared/currentUser';
 import { DispositionBadge, RecommendationBadge, StatusBadge } from './shared/components/badges';
 import { EmptyState, ErrorNotice } from './shared/components/EmptyState';
 import { Icon } from './shared/components/Icon';
+import { failureInfo } from './shared/domain/failure';
 import { formatDateTime } from './shared/domain/format';
 import { dispositionOf } from './shared/domain/recommendation';
 import { STATUS_META, STATUS_ORDER, type StatusKey } from './shared/domain/status';
@@ -20,7 +21,8 @@ type Filter = 'all' | StatusKey;
 
 /** 추출이 끝나 검수 화면을 열 수 있는 상태 */
 function isOpenable(doc: DocumentListItem): boolean {
-  return ['extracted', 'in_review', 'on_hold', 'approved'].includes(doc.status);
+  // 처리에 실패한 문서도 열 수 있습니다. 검수 화면 대신 실패 단계와 안내를 보여 줍니다.
+  return ['extracted', 'in_review', 'on_hold', 'approved', 'failed'].includes(doc.status);
 }
 
 /** 삭제 버튼을 누를 수 없는 문서와 그 이유(툴팁). 서버가 같은 상태에서 409로 거절합니다. */
@@ -281,11 +283,16 @@ function DocRow({ doc, index, highlighted, onOpen, deletable, onDelete }: DocRow
   const openable = isOpenable(doc);
   const blockReason = deleteBlockReason(doc);
   const disposition = dispositionOf(doc);
+  const failure = failureInfo(doc);
   return (
     <tr
       className={`doc-row border-t border-[#E3E5E8]${highlighted ? ' bg-[#F3F6FE]' : ''} ${openable ? 'cursor-pointer hover:bg-[#F3F6FE]' : ''}`}
       onClick={openable ? onOpen : undefined}
-      title={doc.status === 'failed' ? (doc.error_message ?? undefined) : undefined}
+      title={
+        doc.status === 'failed'
+          ? [doc.error_message, doc.attempt_count != null ? `처리 시도 ${doc.attempt_count}회` : null].filter(Boolean).join(' · ') || undefined
+          : undefined
+      }
     >
       <td className="w-10 px-5 py-2 text-[12px] tabular-nums text-[#8A9099]">{index + 1}</td>
       <td className="px-2 py-2 text-[13px] font-semibold tabular-nums">{doc.file_name}</td>
@@ -293,6 +300,12 @@ function DocRow({ doc, index, highlighted, onOpen, deletable, onDelete }: DocRow
       <td className="px-2 py-2 text-[12px] tabular-nums text-[#5B616A]">{formatDateTime(doc.uploaded_at)}</td>
       <td className="px-2 py-2">
         <StatusBadge status={doc.status} />
+        {failure && (
+          <span className="doc-failure-note mt-1 flex flex-col text-[11px] leading-snug">
+            {failure.stage && <b className="font-semibold text-[#C0342E]">{failure.stage}</b>}
+            {failure.guide && <span className="text-[#5B616A]">{failure.guide}</span>}
+          </span>
+        )}
       </td>
       <td className="px-2 py-2">
         {doc.lot_recommendation ? (

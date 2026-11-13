@@ -185,6 +185,12 @@ export interface DocumentListQuery {
   size?: number;
 }
 
+/** 실패한 단계(백엔드 #61). extract 추출, judge 판정, timeout 처리 시간 초과, interrupted 서버 재시작으로 중단 */
+export type FailedStage = 'extract' | 'judge' | 'timeout' | 'interrupted';
+
+/** 실패 종류(백엔드 #61). transient 일시 오류(다시 처리하면 될 수 있음), permanent 영구 오류(파일을 고쳐야 함) */
+export type ErrorKind = 'permanent' | 'transient';
+
 export interface DocumentListItem {
   document_id: string;
   file_name: string;
@@ -201,6 +207,10 @@ export interface DocumentListItem {
   approved_by: string | null;
   approved_at: string | null;
   error_message: string | null;
+  /** 백엔드 #61에서 더해진 실패 정보. 서버가 보내지 않으면 없습니다. */
+  attempt_count?: number | null;
+  failed_stage?: FailedStage | null;
+  error_kind?: ErrorKind | null;
 }
 
 export interface DocumentListResult {
@@ -233,6 +243,13 @@ export interface DocumentDetail {
   uploaded_at: string;
   approved_by: string | null;
   approved_at: string | null;
+  /** 백엔드 #61에서 더해진 실패 정보. 서버가 보내지 않으면 없습니다. */
+  attempt_count?: number | null;
+  failed_stage?: FailedStage | null;
+  error_kind?: ErrorKind | null;
+  /** 한 문서에서 읽힌 로트번호 전체와 복수 로트 여부(백엔드 #61). 복수 로트이면 lot_no는 null입니다. 판정은 서버가 하고 화면은 표시만 합니다. */
+  lot_nos?: string[] | null;
+  is_multi_lot?: boolean | null;
 }
 
 export interface PatchItemBody {

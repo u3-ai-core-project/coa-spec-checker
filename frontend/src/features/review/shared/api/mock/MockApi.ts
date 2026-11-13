@@ -256,6 +256,10 @@ export class MockApi implements Api {
       approved_by: detail.approved_by,
       approved_at: detail.approved_at,
       error_message: detail.error_message,
+      // 새 필드는 값이 있을 때만 내려 줍니다(예전 서버 응답처럼).
+      ...(detail.attempt_count === undefined ? {} : { attempt_count: detail.attempt_count }),
+      ...(detail.failed_stage === undefined ? {} : { failed_stage: detail.failed_stage }),
+      ...(detail.error_kind === undefined ? {} : { error_kind: detail.error_kind }),
     };
   }
 

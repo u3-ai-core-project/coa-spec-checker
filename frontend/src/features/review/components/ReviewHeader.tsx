@@ -1,8 +1,10 @@
 import { Link } from 'react-router-dom';
 import type { DocumentDetail } from '../shared/api/types';
 import { Chem } from '../shared/components/Chem';
+import { MultiLotBadge } from '../shared/components/badges';
 import { Icon } from '../shared/components/Icon';
 import { REVIEW_PATH } from '../shared/domain/constants';
+import { lotDisplay } from '../shared/domain/lots';
 
 export interface QueuePosition {
   /** 0부터 시작하는 현재 위치 */
@@ -23,6 +25,7 @@ const Sep = () => <span className="text-[#D0D4DA]">|</span>;
 
 /** 검수 화면 헤더. 이전/다음 이동은 검수 대기 목록 순서 기준이고, 완료된 문서는 페이저 대신 "목록으로"만 둡니다. */
 export function ReviewHeader({ doc, queue, onMove }: ReviewHeaderProps) {
+  const lot = lotDisplay(doc);
   return (
     <header className="header flex h-[72px] shrink-0 items-center justify-between rounded-xl border border-[#E3E5E8] bg-white px-5">
       <div className="header-title flex flex-col gap-0.5">
@@ -31,7 +34,7 @@ export function ReviewHeader({ doc, queue, onMove }: ReviewHeaderProps) {
           검수 목록
         </Link>
         <span className="header-docname text-[14px] font-semibold tabular-nums">{doc.file_name}</span>
-        <div className="header-meta flex items-center gap-2.5 text-[12px] text-[#5B616A]">
+        <div className="header-meta flex items-center gap-2.5 whitespace-nowrap text-[12px] text-[#5B616A]">
           <span>
             협력사 <b className="font-semibold text-[#1F2328]">{doc.supplier}</b>
           </span>
@@ -47,8 +50,12 @@ export function ReviewHeader({ doc, queue, onMove }: ReviewHeaderProps) {
             발주번호 <b className="font-semibold text-[#1F2328] tabular-nums">{doc.po_no ?? '-'}</b>
           </span>
           <Sep />
-          <span>
-            Lot <b className="font-semibold text-[#1F2328] tabular-nums">{doc.lot_no ?? '-'}</b>
+          <span className="flex items-center gap-1.5">
+            Lot
+            <b className="max-w-[150px] truncate font-semibold text-[#1F2328] tabular-nums" title={lot.text}>
+              {lot.text}
+            </b>
+            {lot.multi && <MultiLotBadge />}
           </span>
         </div>
       </div>

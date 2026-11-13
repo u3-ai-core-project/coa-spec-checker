@@ -28,8 +28,20 @@ interface State {
   loading: boolean;
 }
 
+/** 처리에 실패한 문서(status failed)는 추출 결과가 없어 검수 데이터를 만들지 않습니다. 화면이 실패 안내를 보여 주도록 문서 정보를 담아 던집니다. */
+export class FailedDocumentError extends Error {
+  readonly doc: DocumentDetail;
+
+  constructor(doc: DocumentDetail) {
+    super('처리에 실패한 문서입니다');
+    this.name = 'FailedDocumentError';
+    this.doc = doc;
+  }
+}
+
 async function fetchReviewData(documentId: string): Promise<ReviewData> {
   const doc = await api.getDocument(documentId);
+  if (doc.status === 'failed') throw new FailedDocumentError(doc);
   const [extraction, reviewLogs, approvalLogs, specs, anomalies, followUps] = await Promise.all([
     api.getExtraction(documentId),
     api.getReviewLogs(documentId),

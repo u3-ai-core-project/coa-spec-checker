@@ -5,6 +5,7 @@ import { ApprovalCancelDialog } from './components/ApprovalCancelDialog';
 import { ApprovalSummary } from './components/ApprovalSummary';
 import { CompleteDialog } from './components/CompleteDialog';
 import { ExceptionPanel } from './components/ExceptionPanel';
+import { FailedDocumentPanel } from './components/FailedDocumentPanel';
 import { FollowUpRow } from './components/FollowUpRow';
 import { HistoryCard } from './components/HistoryCard';
 import { ItemEditor, type ItemEditSubmit } from './components/ItemEditor';
@@ -16,7 +17,7 @@ import type { PdfHighlight } from './components/PdfViewer';
 import { ReplyResultStrip, ResolvedNote } from './components/ReplyResultStrip';
 import { type QueuePosition, ReviewHeader } from './components/ReviewHeader';
 import { useAiDraft } from './hooks/useAiDraft';
-import { useReviewData } from './hooks/useReviewData';
+import { FailedDocumentError, useReviewData } from './hooks/useReviewData';
 import { hasFollowUp } from './lib/followUp';
 import { buildHistory } from './lib/history';
 import { writeLastViewed } from './lib/lastViewed';
@@ -136,7 +137,9 @@ function ReviewScreen({ documentId }: { documentId: string }) {
       <>
         <PageIntro title="검수" />
         <main className="body flex min-h-0 flex-1 flex-col items-center justify-center gap-4">
-          {error ? (
+          {error instanceof FailedDocumentError ? (
+            <FailedDocumentPanel doc={error.doc} />
+          ) : error ? (
             <>
               <ErrorNotice message={errorMessage(error)} onRetry={reload} />
               <Link to={REVIEW_PATH} className="text-[13px] font-semibold text-[#2B4FCB]">
