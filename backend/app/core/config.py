@@ -61,6 +61,8 @@ class Settings(BaseSettings):
     # 안전장치: 업로드 폴더가 있는 디스크의 실제 남은 공간이 이보다 적어지면, 한도와 상관없이 새 업로드를 막는다.
     # 한도(STORAGE_LIMIT_GB)를 디스크보다 크게 잡았거나 DB·로그가 디스크를 먼저 채우는 경우를 막는다
     MIN_FREE_DISK_GB: float = Field(2, ge=0)
+    # 같은 파일(SHA-256 이 같은 파일) 다시 올리기 경고 (운영 정책 1장). 끄면 해시는 저장하되 경고하지 않는다
+    DUPLICATE_FILE_CHECK: bool = True
     MAX_BATCH_FILES: int = 20   # 일괄 접수 한 번에 올릴 수 있는 CoA 수 (멘토님 UC01 "CoA 1~20개")
 
     # 처리 실패·재시도 (운영 정책 4장)

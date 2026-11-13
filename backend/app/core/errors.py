@@ -46,6 +46,8 @@ class ErrorCode(Enum):
     LAST_ADMIN = (409, "활성 관리자가 최소 1명은 있어야 합니다")  # 운영 정책 2단계
     RETENTION_NOT_EXPIRED = (409, "보관 기간이 지나야 보관용 폴더로 옮길 수 있습니다")  # 운영 정책 1장
     ALREADY_ARCHIVED = (409, "이미 보관용 폴더로 옮긴 문서입니다")  # 운영 정책 1장
+    DUPLICATE_FILE = (409, "같은 파일이 이미 접수되어 있습니다. 확인 후 다시 접수할 수 있습니다")  # 운영 정책 1장
+    BATCH_NOT_DELETABLE = (409, "처분 완료되었거나 추출 중인 문서가 있는 묶음은 삭제할 수 없습니다")  # 운영 정책 1장
     ALREADY_APPROVED = (409, "이미 처분된 문서입니다")
     NOT_APPROVED = (409, "처분되지 않은 문서입니다")
     NOT_READY = (409, "추출이 끝나지 않은 문서입니다")
@@ -69,19 +71,21 @@ class ErrorCode(Enum):
 
 
 class AppException(Exception):
-    def __init__(self, code: ErrorCode, message: str | None = None, headers: dict[str, str] | None = None):
+    def __init__(self, code: ErrorCode, message: str | None = None, headers: dict[str, str] | None = None,
+                 data: dict | None = None):
         self.code = code
         self.message = message or code.default_message
         self.headers = headers  # 응답 헤더 추가 (예: 429 의 Retry-After)
+        self.data = data        # 에러 응답의 data 에 넣을 추가 정보 (예: DUPLICATE_FILE 의 기존 문서 목록). 보통 None
         super().__init__(self.message)
 
 
-def _json(code: ErrorCode, message: str | None = None, headers: dict | None = None) -> JSONResponse:
-    return JSONResponse(
-        status_code=code.status_code,
-        content=error_body(code.name, message or code.default_message),
-        headers=headers,
-    )
+def _json(code: ErrorCode, message: str | None = None, headers: dict | None = None,
+          data: dict | None = None) -> JSONResponse:
+    body = error_body(code.name, message or code.default_message)
+    if data is not None:
+        body["data"] = data
+    return JSONResponse(status_code=code.status_code, content=body, headers=headers)
 
 
 def register_exception_handlers(app: FastAPI) -> None:
@@ -89,7 +93,7 @@ def register_exception_handlers(app: FastAPI) -> None:
     async def _app_exc(_: Request, exc: AppException):
         headers = {"WWW-Authenticate": "Bearer"} if exc.code.status_code == 401 else {}
         headers.update(exc.headers or {})
-        return _json(exc.code, exc.message, headers or None)
+        return _json(exc.code, exc.message, headers or None, exc.data)
 
     @app.exception_handler(RequestValidationError)
     async def _validation(_: Request, exc: RequestValidationError):

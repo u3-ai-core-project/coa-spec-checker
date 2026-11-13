@@ -155,6 +155,7 @@ def create_batch(
     material_code: str,
     spec_set_code: str | None = None,
     receipts_csv: bytes | None = None,
+    confirm_duplicate: bool = False,
 ) -> BatchCreated:
     """묶음을 만들고 파일을 한 건씩 접수한다. 파일 처리(추출)는 호출한 쪽이 백그라운드로 등록한다."""
     if not files:
@@ -190,10 +191,13 @@ def create_batch(
             doc = document_service.create_document(
                 db, user=user, file_name=f.name, content=f.content, material_code=material,
                 supplier=supplier, received_lot_no=lot, spec_set_code=spec, batch_id=batch.id,
+                confirm_duplicate=confirm_duplicate,
             )
         except AppException as e:
             db.rollback()
-            out.rejected.append(RejectedFile(file_name=f.name, code=e.code.name, message=e.message))
+            # 같은 파일(DUPLICATE_FILE)도 다른 거절과 같이 이 파일만 빼고, 기존 문서 정보를 붙여 알려 준다 (운영 정책 1장)
+            out.rejected.append(RejectedFile(file_name=f.name, code=e.code.name, message=e.message,
+                                             duplicates=(e.data or {}).get("duplicates")))
             continue
         if receipt:
             receipt.document_id = doc.id

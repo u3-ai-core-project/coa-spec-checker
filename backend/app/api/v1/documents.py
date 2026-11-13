@@ -20,7 +20,7 @@ from app.pipeline.worker import process_document
 from app.schemas.common import ApiResponse, Page
 from app.schemas.batch import BatchDetail, BatchUploadResponse
 from app.schemas.document import DocumentDeleteRequest, DocumentDeleted, DocumentDetail, DocumentListItem, DocumentUploadResponse
-from app.services import batch_service, document_service, retention_service
+from app.services import batch_service, deletion_service, document_service, retention_service
 
 router = APIRouter(prefix="/documents", tags=["documents"])
 
@@ -59,9 +59,11 @@ async def upload_document(
     supplier: str | None = Form(None, description="협력사명"),
     received_lot_no: str | None = Form(None, description="입고 로트번호 (확장)"),
     spec_set_code: str | None = Form(None, description="사내 규격 세트 (v1.4안, 예: LI2CO3-D1-2023). 없으면 원자재 기본 세트"),
+    confirm_duplicate: bool = Form(False, description="운영 정책 1장: 같은 파일이 이미 있어도 확인하고 새로 접수"),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
+    """같은 파일이 이미 접수돼 있으면 409 DUPLICATE_FILE (data.duplicates 에 기존 문서). 확인 후 confirm_duplicate=true 로 다시 보낸다."""
     content = await _read_limited(file, settings.MAX_UPLOAD_MB * 1024 * 1024, message=_too_large_message())
     doc = document_service.create_document(
         db,
@@ -72,6 +74,7 @@ async def upload_document(
         supplier=supplier,
         received_lot_no=received_lot_no,
         spec_set_code=spec_set_code,
+        confirm_duplicate=confirm_duplicate,
     )
     background_tasks.add_task(process_document, doc.id)
     return ok(DocumentUploadResponse(document_id=doc.id, file_name=doc.file_name, status=doc.status))
@@ -84,6 +87,7 @@ async def upload_batch(
     material_code: str = Form(..., description="원자재 구분 (입고 CSV 에 material 이 없는 행과 연결되지 않은 파일에 적용)"),
     spec_set_code: str | None = Form(None, description="기본 사내 규격 세트. 입고 CSV 의 spec_id 가 있으면 그것을 우선"),
     receipts: UploadFile | None = File(None, description="입고 정보 CSV (receipt_id, received_lot 필수)"),
+    confirm_duplicate: bool = Form(False, description="운영 정책 1장: 같은 파일이 이미 있어도 확인하고 새로 접수 (묶음 전체에 적용)"),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
@@ -108,11 +112,22 @@ async def upload_batch(
     )
     created = batch_service.create_batch(
         db, user=user, files=uploads, material_code=material_code, spec_set_code=spec_set_code,
-        receipts_csv=receipts_csv,
+        receipts_csv=receipts_csv, confirm_duplicate=confirm_duplicate,
     )
     for doc, _ in created.documents:
         background_tasks.add_task(process_document, doc.id)
     return ok(batch_service.to_upload_response(created))
+
+
+@router.delete("/batch/{batch_id}", response_model=ApiResponse[dict])
+def delete_batch(batch_id: str, body: DocumentDeleteRequest | None = None, db: Session = Depends(get_db),
+                 admin: User = Depends(require_admin)):
+    """잘못 올린 일괄 접수 묶음 삭제 (운영 정책 1장, ADMIN). 본문 {reason} 필수.
+
+    처분 완료·추출 중 문서가 있으면 409 BATCH_NOT_DELETABLE (data.blocking). 문서마다 삭제 기록이 남는다 (rule=batch_delete).
+    응답: {batch_id, deleted_documents: [문서 ID], deleted_receipts: 입고 건 수}
+    """
+    return ok(deletion_service.delete_batch(db, batch_id, admin.id, body.reason if body else None))
 
 
 @router.get("/batch/{batch_id}", response_model=ApiResponse[BatchDetail])

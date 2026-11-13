@@ -1,4 +1,5 @@
 """[담당: 장수민] 문서 업로드 검증·저장, 목록·상세 조회 (명세 4.4~4.7). 문서 삭제 (홍채령 추가), 재처리·멈춘 문서 정리."""
+import hashlib
 import logging
 from datetime import datetime, timezone
 from pathlib import Path
@@ -50,13 +51,28 @@ def create_document(
     received_lot_no: str | None,
     spec_set_code: str | None = None,
     batch_id: str | None = None,
+    confirm_duplicate: bool = False,
 ) -> Document:
-    """파일을 검증·저장하고 queued 상태로 등록한다. commit 까지 한다. batch_id 는 일괄 접수(UC01)일 때만."""
+    """파일을 검증·저장하고 queued 상태로 등록한다. commit 까지 한다. batch_id 는 일괄 접수(UC01)일 때만.
+
+    같은 파일(SHA-256 이 같은 파일)이 이미 접수돼 있으면 409 DUPLICATE_FILE (운영 정책 1장).
+    담당자가 확인하고 confirm_duplicate=True 로 다시 보내면 새로 접수하고 duplicate_of 에 기존 문서를 남긴다.
+    """
     if not content:
         raise AppException(ErrorCode.INVALID_FILE, "빈 파일입니다")
     if len(content) > settings.MAX_UPLOAD_MB * 1024 * 1024:
         raise AppException(ErrorCode.INVALID_FILE, f"{settings.MAX_UPLOAD_MB}MB 이하 파일만 업로드할 수 있습니다")
     content_type = detect_content_type(file_name, content[:16])
+    sha256 = hashlib.sha256(content).hexdigest()
+    existing = find_duplicates(db, [sha256]).get(sha256, []) if settings.DUPLICATE_FILE_CHECK else []
+    if existing and not confirm_duplicate:
+        first = existing[0]
+        raise AppException(
+            ErrorCode.DUPLICATE_FILE,
+            f"같은 파일이 이미 접수되어 있습니다 ({first.file_name}, {_fmt_date(first.uploaded_at)} 업로드"
+            f"{f' 외 {len(existing) - 1}건' if len(existing) > 1 else ''}). 확인 후 다시 접수할 수 있습니다",
+            data={"duplicates": [duplicate_info(d) for d in existing]},
+        )
     storage_service.ensure_capacity(len(content))  # 운영 정책 1장: 95% 넘으면 507 STORAGE_FULL
 
     material_code = material_code.strip()
@@ -67,6 +83,8 @@ def create_document(
         file_name=file_name,
         file_path="",
         file_size=len(content),
+        file_sha256=sha256,
+        duplicate_of=existing[0].id if existing else None,
         content_type=content_type,
         material_code=material_code,
         material_name=spec_set.material_name,
@@ -94,6 +112,30 @@ def create_document(
         raise
     storage_service.note_added(len(content))
     return doc
+
+
+def find_duplicates(db: Session, hashes: list[str]) -> dict[str, list[Document]]:
+    """해시마다 그 파일을 가진 문서들 (먼저 올린 것부터). 지운 문서는 없으므로 대상이 아니다."""
+    wanted = {h.lower() for h in hashes if h}
+    if not wanted:
+        return {}
+    out: dict[str, list[Document]] = {}
+    rows = db.scalars(select(Document).where(Document.file_sha256.in_(wanted))
+                      .options(joinedload(Document.uploader)).order_by(Document.uploaded_at, Document.id)).unique()
+    for doc in rows:
+        out.setdefault(doc.file_sha256, []).append(doc)
+    return out
+
+
+def duplicate_info(doc: Document) -> dict:
+    """같은 파일 경고에 보여 줄 기존 문서 정보 (DUPLICATE_FILE 응답의 data.duplicates, 일괄 접수 rejected[].duplicates)."""
+    return {"document_id": doc.id, "file_name": doc.file_name, "status": doc.status.value,
+            "uploaded_at": doc.uploaded_at.isoformat() if doc.uploaded_at else None,
+            "uploaded_by": doc.uploaded_by, "archived": doc.archived_at is not None}
+
+
+def _fmt_date(dt) -> str:
+    return dt.astimezone(ZoneInfo(settings.DB_TIMEZONE)).strftime("%Y-%m-%d %H:%M") if dt else "-"
 
 
 # ---------------------------------------------------------------------------
@@ -258,6 +300,8 @@ def to_list_item(doc: Document) -> DocumentListItem:
         last_activity_at=doc.last_activity_at,
         stale_notified_at=doc.stale_notified_at,
         is_stale=doc.stale_notified_at is not None,
+        file_sha256=doc.file_sha256,
+        duplicate_of=doc.duplicate_of,
         error_message=doc.error_message,
         attempt_count=doc.attempt_count,
         failed_stage=doc.failed_stage,
@@ -305,6 +349,8 @@ def to_detail(db: Session, doc: Document) -> DocumentDetail:
         last_activity_at=doc.last_activity_at,
         stale_notified_at=doc.stale_notified_at,
         is_stale=doc.stale_notified_at is not None,
+        file_sha256=doc.file_sha256,
+        duplicate_of=doc.duplicate_of,
     )
 
 

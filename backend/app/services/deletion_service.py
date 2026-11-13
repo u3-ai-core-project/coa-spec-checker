@@ -14,7 +14,7 @@ from pathlib import Path
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.core.enums import DeletionRule, ReviewAction
+from app.core.enums import DeletionRule, DocumentStatus, ReviewAction
 from app.core.errors import AppException, ErrorCode
 from app.models import ApprovalLog, DeletionLog, Document, ReviewLog
 from app.models.reissue_decision import ReissueDecision
@@ -146,3 +146,49 @@ def list_logs(db: Session, *, document_id: str | None, lot_no: str | None, page:
     items = list(db.scalars(query.order_by(DeletionLog.deleted_at.desc(), DeletionLog.id.desc())
                             .offset((page - 1) * size).limit(size)))
     return total, items
+
+
+def delete_batch(db: Session, batch_id: str, actor_id: int, reason: str | None) -> dict:
+    """DELETE /documents/batch/{batch_id} (ADMIN, 운영 정책 1장). 잘못 올린 일괄 접수 묶음을 통째로 지운다. commit 까지 한다.
+
+    - 묶음 없음: 404 NOT_FOUND
+    - 처분 완료(보관 기간) 또는 추출 중 문서가 하나라도 있으면 409 BATCH_NOT_DELETABLE (data.blocking 에 문서 목록). 아무것도 안 지운다
+    - 사유 필수 (2~500자, 400 REASON_REQUIRED)
+    - 한 트랜잭션: 문서마다 삭제 기록(rule=batch_delete) → 문서 삭제 → 묶음 단위 기록 1줄 → 입고 건·묶음 삭제. 파일은 commit 뒤에 지운다
+    """
+    from app.models import Batch  # 순환 import 방지
+    batch = db.scalar(select(Batch).where(Batch.id == batch_id).with_for_update())
+    if batch is None:
+        raise AppException(ErrorCode.NOT_FOUND, "존재하지 않는 일괄 접수입니다")
+    docs = list(db.scalars(select(Document).where(Document.batch_id == batch_id)
+                           .order_by(Document.uploaded_at, Document.id).with_for_update()))
+    blocking = [d for d in docs if d.status in (DocumentStatus.APPROVED, DocumentStatus.PROCESSING)]
+    if blocking:
+        raise AppException(
+            ErrorCode.BATCH_NOT_DELETABLE,
+            f"처분 완료되었거나 추출 중인 문서 {len(blocking)}건이 있어 묶음을 삭제할 수 없습니다",
+            data={"blocking": [{"document_id": d.id, "file_name": d.file_name, "status": d.status.value}
+                               for d in blocking]},
+        )
+    reason = clean_reason(reason)
+
+    paths = []
+    for doc in docs:
+        _, path = delete_with_log(db, doc, actor_id=actor_id, reason=reason, rule=DeletionRule.BATCH_DELETE)
+        paths.append(path)
+    receipt_count = len(batch.receipts)
+    # 묶음 단위 기록: 문서가 없는 줄 하나 (document_id 없음, batch_id 있음)
+    db.add(DeletionLog(
+        document_id=None, file_name="(일괄 접수 묶음)", batch_id=batch.id, material_code=batch.material_code,
+        uploaded_by=batch.created_by, uploaded_at=batch.created_at, deleted_by=actor_id, reason=reason,
+        rule=DeletionRule.BATCH_DELETE, approval_summary=[],
+        review_summary={"batch": {"documents": len(docs), "receipts": receipt_count,
+                                  "document_ids": [d.id for d in docs]}},
+    ))
+    db.delete(batch)  # 입고 건(receipts)도 함께 지워진다
+    db.commit()
+    for path in paths:
+        remove_file(path)
+    logger.info("일괄 접수 묶음 삭제: batch_id=%s actor_id=%s 문서 %d건 입고 %d건",
+                batch_id, actor_id, len(docs), receipt_count)
+    return {"batch_id": batch_id, "deleted_documents": [d.id for d in docs], "deleted_receipts": receipt_count}

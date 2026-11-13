@@ -34,6 +34,10 @@ class Document(Base):
     file_path: Mapped[str] = mapped_column(String(500), nullable=False)
     file_size: Mapped[int] = mapped_column(BigInteger, nullable=False)       # 명세 4.5 응답용 (2.5 표에는 없음)
     content_type: Mapped[str] = mapped_column(String(100), nullable=False)   # 4.7 원본 파일 응답용 (2.5 표에는 없음)
+    # 파일 고유값 (SHA-256). 같은 파일을 다시 올리면 경고하는 데 쓴다 (운영 정책 1장). 기존 파일을 못 읽으면 null
+    file_sha256: Mapped[str | None] = mapped_column(String(64), index=True)
+    # 같은 파일이 이미 있는데 담당자가 확인하고 다시 접수한 경우, 그때 있던 문서 (참고용, 그 문서가 지워지면 null)
+    duplicate_of: Mapped[str | None] = mapped_column(ForeignKey("documents.id", ondelete="SET NULL"))
 
     # 업로드 시 입력
     material_code: Mapped[str] = mapped_column(String(32), nullable=False, index=True)

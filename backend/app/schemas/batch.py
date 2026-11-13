@@ -16,8 +16,10 @@ class UploadedDocument(BaseModel):
 
 class RejectedFile(BaseModel):
     file_name: str
-    code: str = Field(description="에러 코드 (예: INVALID_FILE)")
+    code: str = Field(description="에러 코드 (예: INVALID_FILE, DUPLICATE_FILE)")
     message: str
+    duplicates: list[dict] | None = Field(
+        None, description="DUPLICATE_FILE 일 때 같은 파일의 기존 문서 [{document_id, file_name, status, uploaded_at, uploaded_by, archived}]")
 
 
 class BatchUploadResponse(BaseModel):

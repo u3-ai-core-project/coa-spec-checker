@@ -13,6 +13,8 @@ os.environ["DATABASE_URL"] = TEST_DATABASE_URL
 os.environ["CLEANUP_ENABLED"] = "false"
 # 디스크 남은 공간 안전장치는 끈다 (테스트하는 컴퓨터의 실제 디스크 상태와 상관없게). test_storage.py 에서만 가짜 디스크로 켠다
 os.environ["MIN_FREE_DISK_GB"] = "0"
+# 같은 파일 경고도 끈다. 많은 테스트가 같은 테스트 PDF 를 여러 번 올리기 때문. test_duplicates.py 에서만 켠다
+os.environ["DUPLICATE_FILE_CHECK"] = "false"
 
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402

@@ -43,6 +43,8 @@ class DocumentListItem(BaseModel):
     last_activity_at: datetime | None = None  # 운영 정책 1장: 마지막 활동(수정·확인·처분·보류 등, 조회 제외)
     stale_notified_at: datetime | None = None  # 방치(정리 후보)로 표시된 시각. 활동하면 비워진다
     is_stale: bool = False                     # 방치 표시 여부 (stale_notified_at 이 있으면 true)
+    file_sha256: str | None = None             # 운영 정책 1장: 파일 고유값 (같은 파일 확인용)
+    duplicate_of: str | None = None            # 같은 파일이 있었는데 확인하고 새로 접수한 경우, 그때 있던 문서 ID
     error_message: str | None
     attempt_count: int = 0                 # 운영 정책 4장: 추출 시도 횟수
     failed_stage: str | None = None        # 실패 단계 (extract, judge, timeout, interrupted)
@@ -85,3 +87,5 @@ class DocumentDetail(BaseModel):
     last_activity_at: datetime | None = None  # 운영 정책 1장: 마지막 활동(수정·확인·처분·보류 등, 조회 제외)
     stale_notified_at: datetime | None = None  # 방치(정리 후보)로 표시된 시각. 활동하면 비워진다
     is_stale: bool = False                     # 방치 표시 여부 (stale_notified_at 이 있으면 true)
+    file_sha256: str | None = None             # 운영 정책 1장: 파일 고유값 (같은 파일 확인용)
+    duplicate_of: str | None = None            # 같은 파일이 있었는데 확인하고 새로 접수한 경우, 그때 있던 문서 ID
