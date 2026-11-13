@@ -9,6 +9,8 @@ import type { UserOption } from './types'
 import DonutCard from './components/DonutCard'
 import { deviationSlices, passFailSlices } from './lib/donut'
 import { MATERIALS } from '../upload/lib/upload'
+import EditRateCard from './components/EditRateCard'
+import { formatPercent } from './lib/format'
 
 export default function DashboardPage() {
     const { user } = useAuth()
@@ -62,13 +64,37 @@ export default function DashboardPage() {
                 </div>
             )}
 
-            {/* 자동 처리율은 화면만 구현해 두고 서버 연결 전이라 값을 주지 않음 */}
             <KpiStrip data={data} />
             {data && (
-                <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-                    <DonutCard title="합·불 비율" centerLabel="전체" slices={passFailSlices(data)} />
-                    <DonutCard title="항목별 이탈 빈도" centerLabel="이탈 합계" slices={deviationSlices(data)} />
-                </div>
+                <>
+                    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                        <DonutCard title="합·불 비율" centerLabel="전체" slices={passFailSlices(data)} />
+                        <DonutCard title="항목별 이탈 빈도" centerLabel="이탈 합계" slices={deviationSlices(data)} />
+                    </div>
+                    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                        <EditRateCard
+                            title="협력사별 수정률"
+                            headline={
+                                data.human_edit_rate != null
+                                    ? `전체 수정률 ${formatPercent(data.human_edit_rate)} (문서 기준)`
+                                    : undefined
+                            }
+                            rows={(data.edit_rate_by_supplier ?? []).map((s) => ({
+                                name: s.supplier,
+                                rate: s.edit_rate,
+                                detail: `${s.edited_documents} / ${s.documents}건`,
+                            }))}
+                        />
+                        <EditRateCard
+                            title="항목별 수정률"
+                            rows={(data.edit_rate_by_item ?? []).map((i) => ({
+                                name: i.item_name,
+                                rate: i.edit_rate,
+                                detail: `${i.edited_items} / ${i.items}개`,
+                            }))}
+                        />
+                    </div>
+                </>
             )}
         </div>
     )
