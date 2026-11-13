@@ -35,6 +35,7 @@ def test_login_success(client, member):
     assert data["expires_in"] == 3600
     assert data["access_token"]
     assert data["user"] == {"id": member.id, "name": "김검수", "role": "USER"}
+    assert data["must_change_password"] is False
 
 
 @pytest.mark.parametrize("username, password", [("kim", "wrong"), ("nobody", "pw1234")])
@@ -56,7 +57,8 @@ def test_me_with_login_token(client, member):
     assert r.status_code == 200
     assert r.json() == {
         "success": True,
-        "data": {"id": member.id, "username": "kim", "name": "김검수", "role": "USER"},
+        "data": {"id": member.id, "username": "kim", "name": "김검수", "role": "USER",
+                 "is_active": True, "must_change_password": False},
         "error": None,
     }
 

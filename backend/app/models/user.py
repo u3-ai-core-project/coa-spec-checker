@@ -4,7 +4,7 @@
 """
 from datetime import datetime
 
-from sqlalchemy import String
+from sqlalchemy import Boolean, String, false, true
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.enums import Role
@@ -20,4 +20,8 @@ class User(Base):
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     name: Mapped[str] = mapped_column(String(50), nullable=False)
     role: Mapped[Role] = mapped_column(str_enum(Role, "role"), nullable=False, default=Role.USER)
+    # 운영 정책 2단계: 계정은 지우지 않고 비활성화한다. 비활성 계정은 로그인·기존 토큰 모두 막힌다
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default=true())
+    # 관리자가 만들거나 비밀번호를 초기화한 계정은 첫 로그인 때 비밀번호를 바꿔야 한다
+    must_change_password: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default=false())
     created_at: Mapped[datetime] = created_at_col()
