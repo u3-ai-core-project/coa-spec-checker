@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
-import { fetchMe, login as loginApi } from '../api/auth'
 import { setOnUnauthorized, tokenStorage } from '../api/client'
 import type { Me } from '../types/auth'
 import { AuthContext } from './authContext'
+import { changePassword as changePasswordApi, fetchMe, login as loginApi } from '../api/auth'
 
 export default function AuthProvider({ children }: { children: ReactNode }) {
     const [user, setUser] = useState<Me | null>(null)
@@ -32,11 +32,18 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
         }
     }, [])
 
+    const changePassword = useCallback(async (currentPassword: string, newPassword: string) => {
+        await changePasswordApi(currentPassword, newPassword)
+        if (user) {
+            setUser({ ...user, must_change_password: false })
+        }
+    }, [])
+
     const logout = useCallback(() => {
         tokenStorage.clear()
         setUser(null)
     }, [])
 
-    const value = useMemo(() => ({ user, loading, login, logout }), [user, loading, login, logout])
+    const value = useMemo(() => ({ user, loading, login, logout, changePassword }), [user, loading, login, logout, changePassword])
     return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }

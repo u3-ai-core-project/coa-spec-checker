@@ -12,6 +12,7 @@ import UploadPage from './features/upload/UploadPage'
 import DashboardPage from './features/dashboard/DashboardPage'
 import BatchPage from './features/dashboard/BatchPage'
 import ReportsPage from './features/reports/ReportsPage'
+import ChangePasswordPage from './pages/ChangePasswordPage'
 
 function ReviewSpecsRoutes() {
   const { user } = useAuth()
@@ -27,6 +28,7 @@ export default function App() {
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route element={<RequireAuth />}>
+            <Route path="/change-password" element={<ChangePasswordPage />} />
             <Route element={<AppLayout />}>
               <Route path="/" element={<Navigate to="/upload" replace />} />
               {NAV_ITEMS.filter((item) => !['/upload', '/inspection', '/specs', '/dashboard', '/reports'].includes(item.path)).map((item) => (
