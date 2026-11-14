@@ -16,6 +16,7 @@ export default function ReportsPage() {
     const [selected, setSelected] = useState<Set<string>>(new Set())
     const [rowStates, setRowStates] = useState<Record<string, RowState>>({})
     const [toast, setToast] = useState<ToastData | null>(null)
+    const [pseudonymize, setPseudonymize] = useState(false) // 외부 공유용(담당자 이름 가명 처리)
     const closeToast = useCallback(() => setToast(null), [])
 
     const visible = filterReports(items, filters)
@@ -44,7 +45,7 @@ export default function ReportsPage() {
     async function fetchOne(item: DocumentListItem): Promise<boolean> {
         setRowState(item.document_id, 'busy')
         try {
-            await downloadReport(item.document_id)
+            await downloadReport(item.document_id, pseudonymize)
             setRowState(item.document_id, null)
             return true
         } catch {
@@ -91,7 +92,19 @@ export default function ReportsPage() {
             <div className="rounded-xl border border-line bg-white p-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                     <FilterBar filters={filters} onChange={setFilters} />
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-4">
+                        <label
+                            title="리포트 속 사용자 이름을 '담당자 A' 같은 가명으로 바꿔 내려받습니다."
+                            className="flex cursor-pointer items-center gap-1.5 text-xs text-ink-sub"
+                        >
+                            <input
+                                type="checkbox"
+                                checked={pseudonymize}
+                                onChange={(e) => setPseudonymize(e.target.checked)}
+                                className="h-4 w-4 accent-brand"
+                            />
+                            외부 공유용
+                        </label>
                         <span className={`text-xs ${selectedVisible.length > 0 ? 'font-bold text-ink' : 'text-ink-sub'}`}>
                             {selectedVisible.length}건 선택됨
                         </span>
