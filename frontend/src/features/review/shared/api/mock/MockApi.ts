@@ -53,6 +53,7 @@ import type {
   SpecSetRef,
 } from '../types';
 import { DOCUMENT_LOG_ITEM_ID } from '../types';
+import { DELETE_REASON_MAX_LENGTH, DELETE_REASON_MIN_LENGTH, isDeleteReasonValid } from '../../domain/deletion';
 import { type MockDoc, type MockState, type MockUser, createMockState } from './fixtures';
 import { getFollowUps, MOCK_AI_TIMEOUT_DOCS } from './followUps';
 import { buildPdfBlob } from './mockPdf';
@@ -298,11 +299,12 @@ export class MockApi implements Api {
       ...(detail.attempt_count === undefined ? {} : { attempt_count: detail.attempt_count }),
       ...(detail.failed_stage === undefined ? {} : { failed_stage: detail.failed_stage }),
       ...(detail.error_kind === undefined ? {} : { error_kind: detail.error_kind }),
+      ...(detail.is_stale === undefined ? {} : { is_stale: detail.is_stale, stale_notified_at: detail.stale_notified_at, last_activity_at: detail.last_activity_at }),
     };
   }
 
   /** 서버(DELETE /documents/{id})와 같은 순서로 검사합니다: 없음 404, 권한 403, 처분 완료 409, 추출 중 409. */
-  async deleteDocument(documentId: string): Promise<DocumentDeleted> {
+  async deleteDocument(documentId: string, reason: string): Promise<DocumentDeleted> {
     const user = this.requireUser();
     const doc = this.findDoc(documentId);
     if (user.role !== 'ADMIN' && doc.uploaderId !== user.id) {
@@ -313,6 +315,12 @@ export class MockApi implements Api {
     }
     if (doc.detail.status === 'processing') {
       throw new ApiError(409, 'NOT_READY', '추출 중인 문서는 삭제할 수 없습니다');
+    }
+    // 삭제 사유(백엔드 #65): 앞뒤 공백을 뺀 2~500자. 서버처럼 권한과 상태 검사 뒤에 봅니다.
+    const text = (reason ?? '').trim();
+    if (!text) throw new ApiError(400, 'REASON_REQUIRED', '삭제 사유를 입력해야 합니다');
+    if (!isDeleteReasonValid([...text].length)) {
+      throw new ApiError(400, 'REASON_REQUIRED', `삭제 사유는 ${DELETE_REASON_MIN_LENGTH}~${DELETE_REASON_MAX_LENGTH}자로 입력해야 합니다`);
     }
     this.state.docs = this.state.docs.filter((entry) => entry !== doc);
     return delay({ document_id: documentId });

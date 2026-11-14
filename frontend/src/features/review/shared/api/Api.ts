@@ -54,8 +54,10 @@ export interface Api {
   /**
    * 문서 삭제(DELETE /documents/{id}, 백엔드 PR #45). 올린 사람 본인 또는 ADMIN만 지울 수 있습니다.
    * 처분 완료 문서는 409 ALREADY_APPROVED, 추출 중 문서는 409 NOT_READY, 권한이 없으면 403 FORBIDDEN입니다.
+   * 본문 { reason }은 백엔드 #65에서 필수(앞뒤 공백을 뺀 2~500자, 아니면 400 REASON_REQUIRED)이고, 서버가 삭제 기록(누가, 언제, 왜)을 남깁니다.
+   * #65 이전 서버는 본문을 무시하므로 사유를 보내도 동작합니다.
    */
-  deleteDocument(documentId: string): Promise<DocumentDeleted>;
+  deleteDocument(documentId: string, reason: string): Promise<DocumentDeleted>;
   /**
    * 문서의 같은 로트 CoA 목록과 재발행 충돌 상태(GET /reissue/{document_id}, 백엔드 #61). 같은 로트가 없으면 status는 none, versions는 빈 배열입니다.
    */

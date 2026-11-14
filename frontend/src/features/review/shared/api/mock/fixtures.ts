@@ -522,6 +522,8 @@ interface DocMeta {
   errorMessage?: string;
   /** 백엔드 #61의 실패 정보(실패 문서 시나리오에서만 채웁니다) */
   failure?: Pick<DocumentDetail, 'attempt_count' | 'failed_stage' | 'error_kind'>;
+  /** 백엔드 #65의 방치 표시(방치 시나리오에서만 채웁니다) */
+  stale?: Pick<DocumentDetail, 'is_stale' | 'stale_notified_at' | 'last_activity_at'>;
   fileSize: number;
 }
 
@@ -554,6 +556,7 @@ function buildDetail(meta: DocMeta, id: string, recommendation: ExtractionResult
     approved_at: meta.approvedAt ?? null,
     // 새 필드는 시나리오에서만 채워, 지정하지 않으면 예전 서버 응답처럼 필드가 없습니다.
     ...meta.failure,
+    ...meta.stale,
   };
 }
 
@@ -615,12 +618,13 @@ export interface MockOptions {
    * 'issues': [v1.4] 모든 항목이 적합한 A0390221에 문서 수준 문제(로트 불일치, 날짜 충돌)가 있어 로트 권고가 보류인 상태
    */
   /** 'sets': 탄산리튬에 규격 세트가 둘(D1, D3)인 상태. 규격 관리 화면의 세트 선택을 볼 때 씁니다. */
-  scenario?: 'anomaly' | 'issues' | 'sets' | 'failed-transient' | 'failed-permanent' | 'multilot' | 'reissue-conflict' | 'reissue-review';
+  scenario?: 'anomaly' | 'issues' | 'sets' | 'failed-transient' | 'failed-permanent' | 'multilot' | 'reissue-conflict' | 'reissue-review' | 'stale';
   /**
    * 'failed-transient': 실패 문서가 일시 오류(처리 시간 초과, 서버 재시작으로 중단)인 상태
    * 'failed-permanent': 실패 문서가 영구 오류(추출 실패, 판정 실패: 파일을 고쳐 다시 올려야 함)인 상태
    * 'reissue-conflict': A0266047과 같은 로트의 CoA가 2건 더 있어(총 3개 버전, 모두 처분 전) 기준 버전을 골라야 하는 상태
    * 'reissue-review': 이미 처분된 A0355190에 같은 로트의 재발행본이 들어온 상태(총 2개 버전, 기존 처분은 그대로)
+   * 'stale': 처분 전 문서 2건(A0377415 보류, A0377402 검수 중)이 30일 넘게 처리되지 않아 서버가 방치(정리 대상)로 표시한 상태
    * 'multilot': A0266047이 한 문서에서 로트 2개가 읽힌 복수 로트 상태(lot_no는 null, lot_nos와 is_multi_lot, 문서 수준 문제 MULTI_LOT)
    */
 }
@@ -751,6 +755,17 @@ export function createMockState(options: MockOptions = {}): MockState {
         if (copy.extraction) copy.extraction.lot_no = lot;
         docs.push(copy);
       });
+    }
+  }
+  // 시나리오 'stale': 서버가 방치로 표시한 문서(is_stale, 표시 시각, 마지막 활동 시각)를 채웁니다.
+  if (options.scenario === 'stale') {
+    const stale: Record<string, Pick<DocumentDetail, 'is_stale' | 'stale_notified_at' | 'last_activity_at'>> = {
+      A0377415: { is_stale: true, stale_notified_at: '2026-11-04T09:00:00+09:00', last_activity_at: '2026-10-04T16:22:00+09:00' },
+      A0377402: { is_stale: true, stale_notified_at: '2026-11-04T09:00:00+09:00', last_activity_at: '2026-10-04T13:05:00+09:00' },
+    };
+    for (const [id, fields] of Object.entries(stale)) {
+      const target = docs.find((entry) => entry.detail.document_id === id);
+      if (target) Object.assign(target.detail, fields);
     }
   }
   // 시나리오 'multilot': 한 문서에서 로트가 2개 읽혀 lot_no가 null이고, 서버가 문서 수준 문제 MULTI_LOT을 내려 준 상태입니다.

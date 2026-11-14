@@ -211,6 +211,10 @@ export interface DocumentListItem {
   attempt_count?: number | null;
   failed_stage?: FailedStage | null;
   error_kind?: ErrorKind | null;
+  /** 백엔드 #65: 오래 처리되지 않아 정리 대상으로 표시된 문서 여부와 그 시각, 마지막 활동 시각. 서버가 보내지 않으면 없고 false로 취급합니다. */
+  is_stale?: boolean | null;
+  stale_notified_at?: string | null;
+  last_activity_at?: string | null;
 }
 
 export interface DocumentListResult {
@@ -250,6 +254,10 @@ export interface DocumentDetail {
   /** 한 문서에서 읽힌 로트번호 전체와 복수 로트 여부(백엔드 #61). 복수 로트이면 lot_no는 null입니다. 판정은 서버가 하고 화면은 표시만 합니다. */
   lot_nos?: string[] | null;
   is_multi_lot?: boolean | null;
+  /** 백엔드 #65: 방치(정리 대상) 표시. 목록과 같은 필드입니다. */
+  is_stale?: boolean | null;
+  stale_notified_at?: string | null;
+  last_activity_at?: string | null;
   /**
    * 같은 원자재·같은 로트의 CoA가 여러 개일 때의 재발행 충돌 상태(백엔드 #61). 서버가 보내지 않으면 none으로 취급합니다.
    * conflict: 기준 버전을 골라야 확정 처분할 수 있음(보류는 가능), review_needed: 이미 처분된 로트에 재발행본이 들어옴(기존 처분은 그대로),

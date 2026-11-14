@@ -5,6 +5,12 @@ import type { Bbox } from '../shared/api/types';
 // react-pdf(PDF.js) 작업자 스크립트
 pdfjs.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).toString();
 
+/**
+ * Document에 넘기는 PDF.js 옵션. isEvalSupported를 꺼서 PDF 안의 글꼴 코드를 eval/Function으로 실행하지 않게 합니다.
+ * react-pdf는 options 객체가 바뀌면 문서를 다시 불러오므로 렌더마다 새로 만들지 않고 모듈 상수로 둡니다.
+ */
+const PDF_OPTIONS = { isEvalSupported: false };
+
 export interface PdfHighlight {
   key: string;
   bbox: Bbox;
@@ -76,6 +82,7 @@ export default function PdfViewer({ fileUrl, isImage, page, highlights, onNumPag
         ) : (
           <Document
             file={fileUrl}
+            options={PDF_OPTIONS}
             onLoadSuccess={({ numPages }) => onNumPages(numPages)}
             loading={<div className="p-6 text-[13px] text-[#8A9099]">원본을 불러오는 중입니다.</div>}
             error={<div className="p-6 text-[13px] text-[#C0342E]">원본을 표시하지 못했습니다.</div>}
