@@ -1,17 +1,21 @@
 """[담당: 장수민] 문서 업로드 검증·저장, 목록·상세 조회 (명세 4.4~4.7). 문서 삭제 (홍채령 추가), 재처리·멈춘 문서 정리."""
+import hashlib
 import logging
+from datetime import datetime, timezone
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.config import settings
-from app.core.enums import DocumentStatus, ErrorKind, FailStage, LotRecommendation, Role
+from app.core.private_files import ensure_private_dir, write_private_file
+from app.core.enums import DeletionRule, DocumentStatus, ErrorKind, FailStage, LotRecommendation, Role
 from app.core.errors import AppException, ErrorCode
 from app.models import Document, User
 from app.schemas.document import DocumentDetail, DocumentListItem
 from app.schemas.extraction import Summary
-from app.services import reissue_service, spec_service
+from app.services import deletion_service, reissue_service, spec_service, storage_service
 
 logger = logging.getLogger(__name__)
 
@@ -48,13 +52,29 @@ def create_document(
     received_lot_no: str | None,
     spec_set_code: str | None = None,
     batch_id: str | None = None,
+    confirm_duplicate: bool = False,
 ) -> Document:
-    """파일을 검증·저장하고 queued 상태로 등록한다. commit 까지 한다. batch_id 는 일괄 접수(UC01)일 때만."""
+    """파일을 검증·저장하고 queued 상태로 등록한다. commit 까지 한다. batch_id 는 일괄 접수(UC01)일 때만.
+
+    같은 파일(SHA-256 이 같은 파일)이 이미 접수돼 있으면 409 DUPLICATE_FILE (운영 정책 1장).
+    담당자가 확인하고 confirm_duplicate=True 로 다시 보내면 새로 접수하고 duplicate_of 에 기존 문서를 남긴다.
+    """
     if not content:
         raise AppException(ErrorCode.INVALID_FILE, "빈 파일입니다")
     if len(content) > settings.MAX_UPLOAD_MB * 1024 * 1024:
         raise AppException(ErrorCode.INVALID_FILE, f"{settings.MAX_UPLOAD_MB}MB 이하 파일만 업로드할 수 있습니다")
     content_type = detect_content_type(file_name, content[:16])
+    sha256 = hashlib.sha256(content).hexdigest()
+    existing = find_duplicates(db, [sha256]).get(sha256, []) if settings.DUPLICATE_FILE_CHECK else []
+    if existing and not confirm_duplicate:
+        first = existing[0]
+        raise AppException(
+            ErrorCode.DUPLICATE_FILE,
+            f"같은 파일이 이미 접수되어 있습니다 ({first.file_name}, {_fmt_date(first.uploaded_at)} 업로드"
+            f"{f' 외 {len(existing) - 1}건' if len(existing) > 1 else ''}). 확인 후 다시 접수할 수 있습니다",
+            data={"duplicates": [duplicate_info(d) for d in existing]},
+        )
+    storage_service.ensure_capacity(len(content))  # 운영 정책 1장: 95% 넘으면 507 STORAGE_FULL
 
     material_code = material_code.strip()
     # 판정에 쓸 규격 세트를 업로드 시점에 정해 문서에 남긴다 (지정 없으면 원자재 기본 세트)
@@ -64,6 +84,8 @@ def create_document(
         file_name=file_name,
         file_path="",
         file_size=len(content),
+        file_sha256=sha256,
+        duplicate_of=existing[0].id if existing else None,
         content_type=content_type,
         material_code=material_code,
         material_name=spec_set.material_name,
@@ -78,10 +100,10 @@ def create_document(
     db.flush()  # id 확정
 
     # 저장 파일 이름은 문서 ID. 원래 이름은 file_name 컬럼에 둔다 (한글·중복 이름 문제 회피)
-    upload_dir = Path(settings.UPLOAD_DIR)
-    upload_dir.mkdir(parents=True, exist_ok=True)
+    # 폴더 0o700, 파일 0o600 (운영 정책 3장: 비공개, 실행 권한 없음)
+    upload_dir = ensure_private_dir(settings.UPLOAD_DIR)
     path = upload_dir / f"{doc.id}{Path(file_name).suffix.lower()}"
-    path.write_bytes(content)
+    write_private_file(path, content)
     doc.file_path = str(path)
 
     try:
@@ -89,7 +111,32 @@ def create_document(
     except Exception:
         path.unlink(missing_ok=True)
         raise
+    storage_service.note_added(len(content))
     return doc
+
+
+def find_duplicates(db: Session, hashes: list[str]) -> dict[str, list[Document]]:
+    """해시마다 그 파일을 가진 문서들 (먼저 올린 것부터). 지운 문서는 없으므로 대상이 아니다."""
+    wanted = {h.lower() for h in hashes if h}
+    if not wanted:
+        return {}
+    out: dict[str, list[Document]] = {}
+    rows = db.scalars(select(Document).where(Document.file_sha256.in_(wanted))
+                      .options(joinedload(Document.uploader)).order_by(Document.uploaded_at, Document.id)).unique()
+    for doc in rows:
+        out.setdefault(doc.file_sha256, []).append(doc)
+    return out
+
+
+def duplicate_info(doc: Document) -> dict:
+    """같은 파일 경고에 보여 줄 기존 문서 정보 (DUPLICATE_FILE 응답의 data.duplicates, 일괄 접수 rejected[].duplicates)."""
+    return {"document_id": doc.id, "file_name": doc.file_name, "status": doc.status.value,
+            "uploaded_at": doc.uploaded_at.isoformat() if doc.uploaded_at else None,
+            "uploaded_by": doc.uploaded_by, "archived": doc.archived_at is not None}
+
+
+def _fmt_date(dt) -> str:
+    return dt.astimezone(ZoneInfo(settings.DB_TIMEZONE)).strftime("%Y-%m-%d %H:%M") if dt else "-"
 
 
 # ---------------------------------------------------------------------------
@@ -109,32 +156,41 @@ def get_document(db: Session, document_id: str) -> Document:
 # ---------------------------------------------------------------------------
 # 삭제
 # ---------------------------------------------------------------------------
-def delete_document(db: Session, document_id: str, user: User) -> str:
-    """DELETE /documents/{id}. 문서와 딸린 기록, 원본 파일을 지운다. commit 까지 한다.
+def _approved_delete_message(doc: Document) -> str:
+    """처분 완료 문서 삭제 거절 메시지. 보관 기간 안이면 만료일을, 지났으면 원본은 보관용 폴더로만 옮길 수 있음을 알린다."""
+    until = doc.retention_until
+    if until is None:
+        return "처분 완료 문서는 삭제할 수 없습니다"
+    if until > datetime.now(timezone.utc):
+        local = until.astimezone(ZoneInfo(settings.DB_TIMEZONE)).date().isoformat()
+        return f"처분 완료 문서는 보관 기간({local}까지) 동안 삭제할 수 없습니다"
+    return "보관 기간이 지난 처분 완료 문서도 삭제하지 않습니다. 원본은 보관용 폴더로 옮기는 것만 할 수 있습니다 (관리자)"
+
+
+def delete_document(db: Session, document_id: str, user: User, reason: str | None) -> str:
+    """DELETE /documents/{id}. 삭제 기록을 남기고 문서와 딸린 기록, 원본 파일을 지운다. commit 까지 한다.
 
     - 권한: 올린 사람 본인 또는 ADMIN. 아니면 403 FORBIDDEN
-    - 처분 완료(approved) 문서는 409 ALREADY_APPROVED. 처분 기록을 지키기 위해 ADMIN 이 처분 취소한 뒤에만 지울 수 있다
+    - 삭제 사유 필수 (2~500자). 없으면 400 REASON_REQUIRED
+    - 처분 완료(approved) 문서는 409 ALREADY_APPROVED (운영 정책 1장: 처분 문서는 보관 기간 동안 삭제하지 않는다)
     - 추출 중(processing) 문서는 409 NOT_READY. 작업이 끝난 뒤(extracted 또는 failed) 지운다
-    - 추출 결과·검수 이력·처분 이력은 DB 의 ON DELETE CASCADE 로 함께 지워진다.
+    - 처분 취소된 문서처럼 처분·검수 이력이 있어도 지울 수 있다. 삭제 직전 이력 요약이 deletion_logs 에 남는다
+    - 추출 결과·검수 이력·처분 이력·재발행 기준 버전 선택 기록은 DB 의 ON DELETE CASCADE 로 함께 지워진다.
       일괄 접수 입고 건(receipts)은 남고 document_id 만 비워져 "CoA 미접수"로 돌아간다 (ON DELETE SET NULL)
     """
     doc = get_document(db, document_id)
     if user.role != Role.ADMIN and doc.uploaded_by != user.id:
         raise AppException(ErrorCode.FORBIDDEN, "본인이 올린 문서만 삭제할 수 있습니다")
     if doc.status == DocumentStatus.APPROVED:
-        raise AppException(ErrorCode.ALREADY_APPROVED, "처분 완료 문서는 삭제할 수 없습니다. 처분 취소 후 삭제하세요")
+        raise AppException(ErrorCode.ALREADY_APPROVED, _approved_delete_message(doc))
     if doc.status == DocumentStatus.PROCESSING:
         raise AppException(ErrorCode.NOT_READY, "추출 중인 문서는 삭제할 수 없습니다")
+    reason = deletion_service.clean_reason(reason)
 
-    path = Path(doc.file_path) if doc.file_path else None
-    db.delete(doc)
+    _, path = deletion_service.delete_with_log(db, doc, actor_id=user.id, reason=reason, rule=DeletionRule.MANUAL)
     db.commit()
-    # 파일은 DB 삭제가 성공한 뒤에 지운다. 파일 삭제가 실패해도 문서는 이미 없으므로 로그만 남긴다
-    if path is not None:
-        try:
-            path.unlink(missing_ok=True)
-        except OSError:
-            logger.warning("원본 파일 삭제 실패: %s", path)
+    # 파일은 DB 삭제가 성공한 뒤에 지운다
+    deletion_service.remove_file(path)
     return document_id
 
 
@@ -240,6 +296,13 @@ def to_list_item(doc: Document) -> DocumentListItem:
         uploaded_at=doc.uploaded_at,
         approved_by=doc.approver.name if doc.approver else None,
         approved_at=doc.approved_at,
+        retention_until=doc.retention_until,
+        archived_at=doc.archived_at,
+        last_activity_at=doc.last_activity_at,
+        stale_notified_at=doc.stale_notified_at,
+        is_stale=doc.stale_notified_at is not None,
+        file_sha256=doc.file_sha256,
+        duplicate_of=doc.duplicate_of,
         error_message=doc.error_message,
         attempt_count=doc.attempt_count,
         failed_stage=doc.failed_stage,
@@ -282,7 +345,31 @@ def to_detail(db: Session, doc: Document) -> DocumentDetail:
         uploaded_at=doc.uploaded_at,
         approved_by=doc.approver.name if doc.approver else None,
         approved_at=doc.approved_at,
+        retention_until=doc.retention_until,
+        archived_at=doc.archived_at,
+        last_activity_at=doc.last_activity_at,
+        stale_notified_at=doc.stale_notified_at,
+        is_stale=doc.stale_notified_at is not None,
+        file_sha256=doc.file_sha256,
+        versions=doc.extraction.versions if doc.extraction else None,
+        duplicate_of=doc.duplicate_of,
     )
+
+
+def list_stale_overdue(db: Session, *, page: int, size: int) -> tuple[int, list[Document]]:
+    """GET /documents/stale-overdue (ADMIN). 방치 표시가 오래된 것부터."""
+    from app.services.cleanup_service import _now, stale_overdue_conditions
+    conditions = stale_overdue_conditions(_now())
+    total = db.scalar(select(func.count()).select_from(Document).where(*conditions))
+    rows = db.scalars(
+        select(Document)
+        .where(*conditions)
+        .options(joinedload(Document.uploader), joinedload(Document.approver), joinedload(Document.extraction))
+        .order_by(Document.stale_notified_at, Document.id)
+        .offset((page - 1) * size)
+        .limit(size)
+    ).unique()
+    return total, list(rows)
 
 
 def parse_status_filter(value: str | None) -> list[DocumentStatus] | None:
@@ -305,6 +392,7 @@ def list_documents(
     page: int,
     size: int,
     batch_id: str | None = None,
+    stale: bool | None = None,
 ) -> tuple[int, list[Document]]:
     """최근 업로드 순. 검수 화면의 이전/다음 이동도 이 순서를 따른다 (명세 4.5)."""
     conditions = []
@@ -316,6 +404,8 @@ def list_documents(
         conditions.append(Document.uploaded_by == uploaded_by)
     if batch_id:
         conditions.append(Document.batch_id == batch_id)
+    if stale is not None:  # 운영 정책 1장: 방치(정리 후보) 표시된 문서만 / 표시 안 된 문서만
+        conditions.append(Document.stale_notified_at.is_not(None) if stale else Document.stale_notified_at.is_(None))
 
     total = db.scalar(select(func.count()).select_from(Document).where(*conditions))
     rows = db.scalars(

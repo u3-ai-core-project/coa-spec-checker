@@ -5,6 +5,7 @@ __pycache__/
 .pytest_cache/
 storage/uploads/*
 !storage/uploads/.gitkeep
+storage/archive/
 *.xlsx
 .idea/
 .vscode/

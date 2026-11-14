@@ -22,5 +22,8 @@ class ExtractionResult(Base):
     result: Mapped[dict] = mapped_column(MutableDict.as_mutable(JSONB), nullable=False)
     created_at: Mapped[datetime] = created_at_col()
     updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))  # 2.5 표에는 없음, 재판정 시각
+    # 운영 정책 6장: 어떤 프로그램·AI·매핑 사전·규격·정책으로 읽고 판정했는지 (app/services/version_service.py).
+    # AI 결과 JSON(result)과 따로 둔다 (명세 2.1 형식을 바꾸지 않기 위해). 이 기능 전에 만든 결과는 null
+    versions: Mapped[dict | None] = mapped_column(JSONB)
 
     document: Mapped["Document"] = relationship(back_populates="extraction")  # noqa: F821

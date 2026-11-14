@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from app.core.enums import DocumentStatus, ErrorKind, status_to_review_status
 from app.models import Document, ExtractionResult as ExtractionResultRow
 from app.schemas.extraction import ExtractionInput, ExtractionResult
-from app.services import batch_service, spec_service
+from app.services import batch_service, spec_service, version_service
 from app.services.judgement.document_checks import check_document, distinct_lots
 from app.services.judgement.engine import judge_document
 
@@ -61,6 +61,12 @@ def save_extraction(db: Session, document: Document, extraction: ExtractionInput
         document.extraction = ExtractionResultRow(result=result.to_json())
     else:
         document.extraction.result = result.to_json()
+    # 운영 정책 6장: 무엇으로 읽고 판정했는지 기록 (다시 처리하면 이전 기록은 history 로)
+    version_service.record(
+        document,
+        extraction=version_service.extraction_record(db, document, extraction.model_dump()),
+        judgement=version_service.judgement_record(spec_set, specs, "extraction"),
+    )
     return result
 
 

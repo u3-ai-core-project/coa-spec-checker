@@ -19,6 +19,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.config import settings
+from app.core.safe_log import log_exception
 from app.core.enums import DocumentStatus, NOT_READY_STATUSES
 from app.core.errors import AppException, ErrorCode
 from app.models import Document
@@ -105,12 +106,12 @@ def _draft(supplier: str | None, lots: list[LotRequest], mode: str | None = None
         drafter = get_drafter(mode) if mode else get_drafter()
         subject, body = drafter.draft(supplier, lots)
         source = drafter.source
-    except Exception:
+    except Exception as e:
         used = mode or settings.INQUIRY_DRAFTER
         if isinstance(drafter, TemplateDrafter) or (drafter is None and used == "template"):
             raise
         stage = "준비" if drafter is None else "생성"
-        logger.exception("문의 초안 생성기 %s 실패 (mode=%s), 템플릿으로 대체", stage, used)
+        log_exception(logger, "문의 초안 생성기 %s 실패 (mode=%s), 템플릿으로 대체", stage, used, exc=e)
         subject, body = TemplateDrafter().draft(supplier, lots)
         source = "template_fallback"
     return InquiryDraftOut(subject=subject, body=body, source=source, lot_nos=[lot.lot_no for lot in lots])

@@ -61,9 +61,12 @@ def test_user_cannot_list_users(client, user):
 def test_admin_lists_users(client, user, admin):
     r = client.get("/api/v1/users", headers=bearer(create_access_token(admin.id)))
     assert r.status_code == 200
-    assert r.json()["data"] == [
-        {"id": user.id, "name": "김사용", "role": "USER"},
-        {"id": admin.id, "name": "관리자", "role": "ADMIN"},
+    assert [{k: d[k] for k in ("id", "username", "name", "role", "is_active", "must_change_password")}
+            for d in r.json()["data"]] == [
+        {"id": user.id, "username": "user1", "name": "김사용", "role": "USER",
+         "is_active": True, "must_change_password": False},
+        {"id": admin.id, "username": "admin", "name": "관리자", "role": "ADMIN",
+         "is_active": True, "must_change_password": False},
     ]
 
 

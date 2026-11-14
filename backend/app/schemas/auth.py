@@ -14,3 +14,4 @@ class LoginResponse(BaseModel):
     token_type: str = "bearer"
     expires_in: int  # 초
     user: UserSummary
+    must_change_password: bool = False  # true 면 POST /auth/password 로 비밀번호부터 바꿔야 한다 (운영 정책 2단계)

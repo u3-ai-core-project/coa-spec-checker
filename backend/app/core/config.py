@@ -1,19 +1,37 @@
 """[담당: 공통(장수민 생성, 둘 다 수정)] 환경설정. 값은 .env 또는 환경변수에서 읽는다."""
 from functools import lru_cache
 
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+DEFAULT_JWT_SECRET = "change-me"
+MIN_JWT_SECRET_LENGTH = 32
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    # hide_input_in_errors: 설정 오류 메시지에 비밀키 같은 입력값이 찍히지 않게 한다
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore", hide_input_in_errors=True)
+
+    # 실행 환경. "production" 이면 시작할 때 보안 설정(JWT_SECRET 등)을 검사한다
+    APP_ENV: str = "development"
+
+    # 로그 (운영 정책 3장): false 면 예외는 종류와 위치만 남긴다 (메시지에 문서 내용·개인정보가 섞일 수 있어서).
+    # 원인을 자세히 봐야 하는 개발 환경에서만 true 로 켠다 (전체 traceback)
+    LOG_DEBUG_DETAIL: bool = False
 
     # DB
     DATABASE_URL: str = "postgresql+psycopg://coa:coa@localhost:5432/coa"
 
     # 인증 (명세 1장: access token 60분, 리프레시 토큰 없음)
-    JWT_SECRET: str = "change-me"
+    JWT_SECRET: str = DEFAULT_JWT_SECRET
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
+    # 로그인 잠금 (운영 정책 3단계): 비밀번호를 연속 LOGIN_MAX_FAILURES 번 틀리면 LOGIN_LOCK_MINUTES 분 동안 잠근다
+    LOGIN_MAX_FAILURES: int = 5
+    LOGIN_LOCK_MINUTES: int = 15
+    # 접속 IP 를 X-Forwarded-For 헤더에서 읽을지. 앞에 nginx 같은 프록시가 있을 때만 True 로 켠다.
+    # 프록시 없이 켜면 누구나 헤더를 꾸며 IP 를 바꿀 수 있어 잠금을 피할 수 있다
+    TRUST_PROXY_HEADERS: bool = False
 
     # 판정 (명세 1장: confidence < 0.8 이면 신뢰도 낮음)
     LOW_CONFIDENCE_THRESHOLD: float = 0.8
@@ -21,10 +39,40 @@ class Settings(BaseSettings):
     # DB 세션 시간대. 일시 값이 +09:00 오프셋으로 응답된다 (명세 1장 예시)
     DB_TIMEZONE: str = "Asia/Seoul"
 
+    # 보관 기간 (운영 정책 1장): 처분 완료 문서는 처분일부터 이 기간 동안 삭제하지 않는다. 재처분하면 재처분일부터 다시 센다.
+    # 고객사 계약·법규가 더 길게 요구하면 품질팀이 늘린다. 처분할 때 만료일을 문서에 저장하므로, 바꾼 값은 이후 처분 문서부터 적용된다
+    RETENTION_YEARS: int = Field(3, ge=1)
+
+    # 자동 정리·방치 문서 (운영 정책 1장). 서버 1대 운영 전제: 서버 안의 스레드가 CLEANUP_INTERVAL_HOURS 마다 돈다
+    CLEANUP_ENABLED: bool = True
+    CLEANUP_INTERVAL_HOURS: float = Field(24, gt=0)
+    FAILED_RETENTION_DAYS: int = Field(7, ge=1)   # 추출 실패 후 이 기간이 지나면 자동 삭제
+    ORPHAN_FILE_HOURS: int = Field(24, ge=1)      # 어떤 문서와도 연결되지 않은 업로드 파일을 이 시간이 지나면 자동 삭제
+    STALE_DAYS: int = Field(30, ge=1)             # 처분 전 문서가 이 기간 동안 활동이 없으면 방치(정리 후보)로 표시
+    STALE_GRACE_DAYS: int = Field(7, ge=1)        # 방치 표시 후 이 기간이 지나도 그대로면 관리자 목록에 올린다
+
     # 파일
     UPLOAD_DIR: str = "storage/uploads"
+    # 보관 기간이 지난 처분 완료 원본을 옮겨 두는 폴더 (운영 정책 1장: 지우지 않고 옮기기만 한다)
+    ARCHIVE_DIR: str = "storage/archive"
     MAX_UPLOAD_MB: int = 20
+    # 저장 공간 (운영 정책 1장): 업로드 폴더(UPLOAD_DIR)만 센다. 보관용 폴더(ARCHIVE_DIR)는 빼서, 옮기면 자리가 생기게 한다.
+    # 한도의 STORAGE_WARN_PERCENT% 에서 관리자 경고, STORAGE_BLOCK_PERCENT% 에서 새 업로드를 막는다. 그 사이에도 자동 삭제는 하지 않는다
+    # 기본 100GB: CoA 1건을 1MB 로 잡으면 하루 100건 기준 약 2.5년치. 실제 서버에 배정한 디스크 크기에 맞춰 바꾼다
+    STORAGE_LIMIT_GB: float = Field(100, gt=0)
+    STORAGE_WARN_PERCENT: int = Field(80, ge=1, le=100)
+    STORAGE_BLOCK_PERCENT: int = Field(95, ge=1, le=100)
+    # 안전장치: 업로드 폴더가 있는 디스크의 실제 남은 공간이 이보다 적어지면, 한도와 상관없이 새 업로드를 막는다.
+    # 한도(STORAGE_LIMIT_GB)를 디스크보다 크게 잡았거나 DB·로그가 디스크를 먼저 채우는 경우를 막는다
+    MIN_FREE_DISK_GB: float = Field(2, ge=0)
+    # 같은 파일(SHA-256 이 같은 파일) 다시 올리기 경고 (운영 정책 1장). 끄면 해시는 저장하되 경고하지 않는다
+    DUPLICATE_FILE_CHECK: bool = True
     MAX_BATCH_FILES: int = 20   # 일괄 접수 한 번에 올릴 수 있는 CoA 수 (멘토님 UC01 "CoA 1~20개")
+    # 요청 전체 크기 상한 (운영 정책 3장). 업로드가 아닌 모든 요청(JSON 등)의 본문 상한 (KB)
+    MAX_REQUEST_KB: int = Field(1024, ge=1)
+    # 업로드 요청에 파일 말고 더 붙는 부분(멀티파트 경계·헤더, 원자재 구분 같은 폼 값)에 주는 여유 (KB)
+    # 업로드 상한 = 파일 상한 합계 + 이 여유. 단건: MAX_UPLOAD_MB, 일괄: MAX_UPLOAD_MB × (MAX_BATCH_FILES + 입고 CSV 1개)
+    UPLOAD_FORM_OVERHEAD_KB: int = Field(1024, ge=0)
 
     # 처리 실패·재시도 (운영 정책 4장)
     EXTRACTION_TIMEOUT_SEC: int = 300        # 추출 1회가 이 시간을 넘으면 실패로 처리한다 (5분)
@@ -80,6 +128,20 @@ class Settings(BaseSettings):
     LLM_BASE_URL: str | None = None
 
     CORS_ORIGINS: list[str] = ["http://localhost:5173", "http://localhost:3000"]
+    # API 응답 보안 헤더 (운영 정책 2장: CSP, nosniff, 다른 사이트 iframe 금지 등). 자세한 내용은 app/core/security_headers.py
+    SECURITY_HEADERS_ENABLED: bool = True
+
+    @model_validator(mode="after")
+    def _check_production_secrets(self) -> "Settings":
+        # 운영(production)에서 기본 비밀키나 짧은 키로 뜨면 누구나 토큰을 위조할 수 있다. 서버를 띄우지 않는다
+        if self.APP_ENV.lower() == "production":
+            if self.JWT_SECRET == DEFAULT_JWT_SECRET or len(self.JWT_SECRET) < MIN_JWT_SECRET_LENGTH:
+                raise ValueError(
+                    f"APP_ENV=production 에서는 JWT_SECRET 을 기본값({DEFAULT_JWT_SECRET})이 아닌 "
+                    f"{MIN_JWT_SECRET_LENGTH}자 이상의 임의 문자열로 설정해야 합니다. "
+                    "예: python -c \"import secrets; print(secrets.token_urlsafe(48))\""
+                )
+        return self
 
 
 @lru_cache

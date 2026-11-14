@@ -9,6 +9,12 @@ import os
 # app 을 import 하기 전에 DB 주소를 테스트 DB 로 바꾼다 (.env 보다 환경변수가 우선)
 TEST_DATABASE_URL = os.environ.get("TEST_DATABASE_URL", "postgresql+psycopg://coa:coa@localhost:5432/coa_test")
 os.environ["DATABASE_URL"] = TEST_DATABASE_URL
+# 테스트 중에는 자동 정리 스레드를 띄우지 않는다 (cleanup_service.run_cleanup 을 직접 부른다)
+os.environ["CLEANUP_ENABLED"] = "false"
+# 디스크 남은 공간 안전장치는 끈다 (테스트하는 컴퓨터의 실제 디스크 상태와 상관없게). test_storage.py 에서만 가짜 디스크로 켠다
+os.environ["MIN_FREE_DISK_GB"] = "0"
+# 같은 파일 경고도 끈다. 많은 테스트가 같은 테스트 PDF 를 여러 번 올리기 때문. test_duplicates.py 에서만 켠다
+os.environ["DUPLICATE_FILE_CHECK"] = "false"
 
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
@@ -56,8 +62,9 @@ def _schema():
 
 @pytest.fixture
 def db(_schema, tmp_path, monkeypatch):
-    """테스트마다 빈 테이블 + 임시 업로드 폴더."""
+    """테스트마다 빈 테이블 + 임시 업로드·보관용 폴더."""
     monkeypatch.setattr(settings, "UPLOAD_DIR", str(tmp_path / "uploads"))
+    monkeypatch.setattr(settings, "ARCHIVE_DIR", str(tmp_path / "archive"))
     tables = ", ".join(t.name for t in reversed(Base.metadata.sorted_tables))
     with engine.begin() as conn:
         conn.execute(text(f"TRUNCATE {tables} RESTART IDENTITY CASCADE"))

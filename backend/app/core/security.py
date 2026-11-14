@@ -5,6 +5,7 @@ from jose import JWTError, jwt
 from passlib.context import CryptContext
 
 from app.core.config import settings
+from app.core.errors import AppException, ErrorCode
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -19,6 +20,27 @@ def verify_password(password: str, password_hash: str) -> bool:
         return pwd_context.verify(password, password_hash)
     except ValueError:
         return False
+
+
+PASSWORD_MIN_LENGTH = 8
+PASSWORD_MAX_BYTES = 72  # bcrypt 는 72바이트까지만 본다. 넘는 부분은 무시되므로 아예 받지 않는다
+
+
+def validate_password(password: str) -> None:
+    """비밀번호 규칙 (운영 정책 2단계). 맞지 않으면 400 INVALID_PASSWORD 와 이유를 알려 준다.
+
+    - 8자 이상
+    - 영문자(A-Z, a-z) 1개 이상, 숫자 1개 이상
+    - UTF-8 로 72바이트 이하 (한글은 1글자에 3바이트)
+    """
+    if len(password) < PASSWORD_MIN_LENGTH:
+        raise AppException(ErrorCode.INVALID_PASSWORD, f"비밀번호는 {PASSWORD_MIN_LENGTH}자 이상이어야 합니다")
+    if len(password.encode("utf-8")) > PASSWORD_MAX_BYTES:
+        raise AppException(ErrorCode.INVALID_PASSWORD, "비밀번호가 너무 깁니다 (영문 기준 72자 이하)")
+    if not any(c.isascii() and c.isalpha() for c in password):
+        raise AppException(ErrorCode.INVALID_PASSWORD, "비밀번호에 영문자를 하나 이상 넣어야 합니다")
+    if not any(c.isdigit() and c.isascii() for c in password):
+        raise AppException(ErrorCode.INVALID_PASSWORD, "비밀번호에 숫자를 하나 이상 넣어야 합니다")
 
 
 def create_access_token(user_id: int) -> str:

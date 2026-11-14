@@ -39,7 +39,7 @@ from app.schemas.extraction import DocumentIssue, ExtractionItem, ExtractionResu
 from app.schemas.review import (
     ItemUpdateRequest, RejudgeItemChange, RejudgeRequest, RejudgeResponse, ReviewedItem, ReviewLogOut, SpecSetRef,
 )
-from app.services import extraction_service, mapping_service, spec_service
+from app.services import activity_service, extraction_service, mapping_service, spec_service, version_service
 from app.services.judgement.document_checks import check_spec_version
 from app.services.judgement.engine import refresh_summary
 from app.services.judgement.item_judge import current_override, evaluate_item, rejudge_item
@@ -180,7 +180,7 @@ def rejudge_by_spec_set(db: Session, document_id: str, req: RejudgeRequest, user
         doc.spec_set = target
         log = _log(doc, _document_marker(), ReviewAction.RESPEC, current.code if current else None, target.code,
                    user, reason=reason)
-        _save(db, doc, after, [log])
+        _save(db, doc, after, [log], trigger="respec")
     return _rejudge_response(doc.id, applied=req.apply, target=target, previous=current, before=stored, after=after,
                              changes=changes)
 
@@ -316,6 +316,7 @@ def rejudge_document(doc: Document, specs: list[SpecRule], spec_set: SpecSet | N
     doc.lot_recommendation = result.lot_recommendation
     doc.extraction.result = result.to_json()
     doc.extraction.updated_at = datetime.now(timezone.utc)
+    version_service.record(doc, judgement=version_service.judgement_record(spec_set or doc.spec_set, specs, "spec_change"))
     return result, changed
 
 
@@ -380,7 +381,7 @@ def _log(doc: Document, item: ExtractionItem, action: ReviewAction, before: str 
     return log
 
 
-def _save(db: Session, doc: Document, result: ExtractionResult, logs: list[ReviewLog]) -> None:
+def _save(db: Session, doc: Document, result: ExtractionResult, logs: list[ReviewLog], trigger: str = "review") -> None:
     # 검수가 시작되면 extracted·on_hold → in_review (명세 2.6, 4.9, 4.10)
     if doc.status in (DocumentStatus.EXTRACTED, DocumentStatus.ON_HOLD):
         doc.status = DocumentStatus.IN_REVIEW
@@ -388,6 +389,11 @@ def _save(db: Session, doc: Document, result: ExtractionResult, logs: list[Revie
     doc.lot_recommendation = result.lot_recommendation
     doc.extraction.result = result.to_json()
     doc.extraction.updated_at = datetime.now(timezone.utc)
+    # 운영 정책 6장: 판정 근거 기록. 근거(규격·정책·버전)가 그대로면 시각만 바뀐다
+    spec_set = doc.spec_set or spec_service.get_default_set(db, doc.material_code)
+    version_service.record(doc, judgement=version_service.judgement_record(
+        spec_set, spec_service.get_rules(db, spec_set.id) if spec_set else [], trigger))
+    activity_service.touch(doc)  # 운영 정책 1장: 수정·확인·규격 변경은 방치 기간을 다시 센다
     db.add_all(logs)
     db.commit()
     for log in logs:

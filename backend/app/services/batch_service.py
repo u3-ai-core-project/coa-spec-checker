@@ -35,7 +35,7 @@ from app.schemas.batch import (
     BatchDetail, BatchQueueItem, BatchSummary, BatchUploadResponse, ReceiptOut, RejectedFile, UploadedDocument,
 )
 from app.schemas.extraction import DocumentIssue, ExtractionInput, Summary
-from app.services import document_service, spec_service
+from app.services import document_service, spec_service, storage_service
 from app.services.judgement.document_checks import normalize_lot
 
 REQUIRED_COLUMNS = ("receipt_id", "received_lot")
@@ -155,12 +155,15 @@ def create_batch(
     material_code: str,
     spec_set_code: str | None = None,
     receipts_csv: bytes | None = None,
+    confirm_duplicate: bool = False,
 ) -> BatchCreated:
     """묶음을 만들고 파일을 한 건씩 접수한다. 파일 처리(추출)는 호출한 쪽이 백그라운드로 등록한다."""
     if not files:
         raise AppException(ErrorCode.VALIDATION_ERROR, "CoA 파일을 1개 이상 올려야 합니다")
     if len(files) > settings.MAX_BATCH_FILES:
         raise AppException(ErrorCode.VALIDATION_ERROR, f"한 번에 {settings.MAX_BATCH_FILES}개까지 올릴 수 있습니다")
+    # 운영 정책 1장: 묶음 전체를 받아도 차단 기준(95%)을 넘지 않는지 먼저 본다. 넘으면 묶음을 만들지 않고 507
+    storage_service.ensure_capacity(sum(len(f.content) for f in files))
     material_code = material_code.strip()
     spec_set_code = (spec_set_code or "").strip() or None
     spec_service.resolve_spec_set(db, material_code, spec_set_code)  # 기본값부터 검사 (UNKNOWN_MATERIAL 등)
@@ -188,10 +191,13 @@ def create_batch(
             doc = document_service.create_document(
                 db, user=user, file_name=f.name, content=f.content, material_code=material,
                 supplier=supplier, received_lot_no=lot, spec_set_code=spec, batch_id=batch.id,
+                confirm_duplicate=confirm_duplicate,
             )
         except AppException as e:
             db.rollback()
-            out.rejected.append(RejectedFile(file_name=f.name, code=e.code.name, message=e.message))
+            # 같은 파일(DUPLICATE_FILE)도 다른 거절과 같이 이 파일만 빼고, 기존 문서 정보를 붙여 알려 준다 (운영 정책 1장)
+            out.rejected.append(RejectedFile(file_name=f.name, code=e.code.name, message=e.message,
+                                             duplicates=(e.data or {}).get("duplicates")))
             continue
         if receipt:
             receipt.document_id = doc.id
