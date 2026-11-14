@@ -4,6 +4,8 @@ import type { BatchAcceptedDocument, BatchQueueItem } from '../batchTypes'
 import type { SentBatch } from '../hooks/useBatchUpload'
 import { queueReason } from '../lib/batchText'
 import { GRID, Mark, Spinner } from './cells'
+import { STATUS_LABEL } from '../lib/documentStatus'
+import type { DuplicateInfo } from '../types'
 
 const extOf = (name: string) => name.split('.').pop()?.toLowerCase() ?? ''
 
@@ -23,9 +25,46 @@ function Row({ name, meta, owner, danger = false, children }: { name: string; me
 
 function ErrorText({ text }: { text: string }) {
     return (
-        <span className="flex items-center gap-2 text-xs text-[#c0392b]">
+        <span className="flex items-center gap-2 text-xs text-[#c0392b] [word-break:keep-all]">
             <Mark color="bg-[#ff7875]">!</Mark>
             {text}
+        </span>
+    )
+}
+
+// 같은 파일 경고: 한 줄 요약, 기존 문서, [보기] [그래도 접수]
+function DuplicateStatus({ dups, onView, onConfirm }: {
+    dups: DuplicateInfo[]; onView: (documentId: string) => void; onConfirm: () => Promise<string | null>
+}) {
+    const [busy, setBusy] = useState(false)
+    const [err, setErr] = useState<string | null>(null)
+    const dup = dups[0]
+
+    async function handleConfirm() {
+        setBusy(true)
+        setErr(null)
+        setErr(await onConfirm())
+        setBusy(false)
+    }
+
+    return (
+        <span className="flex flex-wrap items-center gap-2 text-xs text-[#9a6700] [word-break:keep-all]">
+            <Mark color="bg-[#e3a008]">!</Mark>
+            <span className="min-w-0 flex-1">
+                같은 파일이 이미 있습니다
+                <span className="block text-[11px] text-ink-sub">
+                    {dup.file_name} ({STATUS_LABEL[dup.status]}){dups.length > 1 ? ` 외 ${dups.length - 1}건` : ''}
+                </span>
+                {err && <span className="block text-[11px] text-[#c0392b]">{err}</span>}
+            </span>
+            <button type="button" onClick={() => onView(dup.document_id)}
+                className="shrink-0 whitespace-nowrap rounded-md border border-line bg-white px-2.5 py-1 text-xs font-bold text-ink">
+                보기
+            </button>
+            <button type="button" disabled={busy} onClick={handleConfirm}
+                className="shrink-0 whitespace-nowrap rounded-md border border-brand bg-white px-2.5 py-1 text-xs font-bold text-brand disabled:opacity-50">
+                {busy ? '접수 중…' : '그래도 접수'}
+            </button>
         </span>
     )
 }
@@ -89,7 +128,13 @@ function DocStatus({ doc, item, onRetry }: { doc: BatchAcceptedDocument; item: B
     return <StatusBadge status={status} />
 }
 
-export default function BatchRows({ batches, owner, onRetry }: { batches: SentBatch[]; owner: string; onRetry: (batchId: string, documentId: string) => Promise<string | null> }) {
+export default function BatchRows({ batches, owner, onRetry, onViewDuplicate, onConfirmDuplicate }: {
+    batches: SentBatch[]
+    owner: string
+    onRetry: (batchId: string, documentId: string) => Promise<string | null>
+    onViewDuplicate: (documentId: string) => void
+    onConfirmDuplicate: (batchId: string, fileName: string) => Promise<string | null>
+}) {
     return (
         <>
             {batches.map((b) => {
@@ -115,7 +160,15 @@ export default function BatchRows({ batches, owner, onRetry }: { batches: SentBa
                         })}
                         {b.rejected.map((r, i) => (
                             <Row key={`${r.file_name}-${i}`} name={r.file_name} meta={extOf(r.file_name)} owner={owner} danger>
-                                <ErrorText text={r.message} />
+                                {r.code === 'DUPLICATE_FILE' && r.duplicates && r.duplicates.length > 0 ? (
+                                    <DuplicateStatus
+                                        dups={r.duplicates}
+                                        onView={onViewDuplicate}
+                                        onConfirm={() => onConfirmDuplicate(b.batchId, r.file_name)}
+                                    />
+                                ) : (
+                                    <ErrorText text={r.message} />
+                                )}
                             </Row>
                         ))}
                     </Fragment>

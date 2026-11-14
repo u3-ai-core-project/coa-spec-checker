@@ -12,11 +12,13 @@ export const tokenStorage = {
 export class ApiError extends Error {
     code: string
     status: number
+    data: unknown // 에러 응답에 딸려 온 추가 정보 (예: DUPLICATE_FILE의 기존 문서 목록)
 
-    constructor(code: string, message: string, status: number) {
+    constructor(code: string, message: string, status: number, data: unknown = null) {
         super(message)
         this.code = code
         this.status = status
+        this.data = data
     }
 }
 
@@ -50,7 +52,7 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
     }
 
     if (!res.ok || !body?.success) {
-        throw new ApiError(body?.error?.code ?? 'UNKNOWN', body?.error?.message ?? '요청에 실패했습니다.', res.status)
+        throw new ApiError(body?.error?.code ?? 'UNKNOWN', body?.error?.message ?? '요청에 실패했습니다.', res.status, body?.data)
     }
     return body.data as T
 }
