@@ -63,7 +63,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // 공통 레이아웃(사이드바, 헤더)은 src/auth의 useAuth()로 사용자를 읽으므로 같은 로그인 상태를 그쪽 컨텍스트에도 넘깁니다.
   const common = useMemo(
-    () => ({ user: user ? { ...user, username: user.username ?? '' } : null, loading, login, logout }),
+    () => ({
+      user: user ? { ...user, username: user.username ?? '' } : null,
+      loading,
+      login,
+      logout,
+      // 개발 미리보기에는 비밀번호 변경이 없으므로 빈 동작으로 채웁니다. (실제 앱은 src/auth/AuthProvider 사용)
+      changePassword: async () => { },
+    }),
     [user, loading, login, logout],
   );
 

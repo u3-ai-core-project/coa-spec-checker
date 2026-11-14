@@ -13,3 +13,10 @@ export function fetchMe() {
         method: 'GET',
     })
 }
+
+export function changePassword(currentPassword: string, newPassword: string) {
+    return apiFetch<Me>('/auth/password', {
+        method: 'POST',
+        body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
+    })
+}

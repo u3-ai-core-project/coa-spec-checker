@@ -1,10 +1,12 @@
 import { useState, type FormEvent } from 'react'
-import { Navigate } from 'react-router-dom'
+import { Navigate, useLocation } from 'react-router-dom'
 import { ApiError } from '../api/client'
 import { useAuth } from '../auth/authContext'
 
 export default function LoginPage() {
     const { user, login } = useAuth()
+    const location = useLocation()
+    const passwordChanged = (location.state as { passwordChanged?: boolean } | null)?.passwordChanged === true
     const [username, setUsername] = useState('')
     const [password, setPassword] = useState('')
     const [error, setError] = useState<string | null>(null)
@@ -19,10 +21,15 @@ export default function LoginPage() {
         try {
             await login(username, password)
         } catch (err) {
+            const code = err instanceof ApiError ? err.code : null
             setError(
-                err instanceof ApiError && err.code === 'INVALID_CREDENTIALS'
+                code === 'INVALID_CREDENTIALS'
                     ? '아이디 또는 비밀번호가 올바르지 않습니다.'
-                    : '로그인에 실패했습니다. 잠시 후 다시 시도해 주세요.',
+                    : code === 'ACCOUNT_DISABLED'
+                        ? '비활성화된 계정입니다. 관리자에게 문의해 주세요.'
+                        : code === 'ACCOUNT_LOCKED'
+                            ? '로그인 시도가 너무 많아 계정이 잠겼습니다. 잠시 후 다시 시도해 주세요.'
+                            : '로그인에 실패했습니다. 잠시 후 다시 시도해 주세요.',
             )
         } finally {
             setSubmitting(false)
@@ -37,6 +44,11 @@ export default function LoginPage() {
             >
                 <p className="text-sm font-bold text-brand">CoA Inspector</p>
                 <h1 className="mt-6 text-xl font-bold text-ink">로그인</h1>
+                {passwordChanged && !error && (
+                    <p role="status" className="mt-2 text-sm text-[#237804]">
+                        비밀번호가 변경되었습니다. 새 비밀번호로 로그인해 주세요.
+                    </p>
+                )}
 
                 <label htmlFor="username" className="mt-5 block text-sm text-ink-sub">
                     아이디

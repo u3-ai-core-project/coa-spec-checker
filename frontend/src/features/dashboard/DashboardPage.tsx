@@ -11,6 +11,7 @@ import { deviationSlices, passFailSlices } from './lib/donut'
 import { MATERIALS } from '../upload/lib/upload'
 import EditRateCard from './components/EditRateCard'
 import { formatPercent } from './lib/format'
+import StorageAlert from './components/StorageAlert'
 
 export default function DashboardPage() {
     const { user } = useAuth()
@@ -38,6 +39,7 @@ export default function DashboardPage() {
 
     return (
         <div className="mx-auto flex w-full max-w-[1152px] flex-col gap-4">
+            {isAdmin && <StorageAlert />}
             <FilterBar
                 isAdmin={isAdmin}
                 users={users}

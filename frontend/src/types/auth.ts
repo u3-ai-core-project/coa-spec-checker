@@ -16,6 +16,7 @@ export interface LoginResult {
     token_type: string
     expires_in: number
     user: { id: number, name: string, role: Role }
+    must_change_password?: boolean
 }
 
 export interface Me {
@@ -23,4 +24,6 @@ export interface Me {
     username: string
     name: string
     role: Role
+    is_active?: boolean
+    must_change_password?: boolean
 }

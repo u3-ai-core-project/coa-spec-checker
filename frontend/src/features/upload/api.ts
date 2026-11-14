@@ -6,15 +6,17 @@ export interface UploadParams {
     materialCode: string
     supplier?: string
     receivedLotNo?: string
+    confirmDuplicate?: boolean // 같은 파일 경고를 보고 "그래도 접수"를 눌렀을 때
 }
 
 // 파일 1개씩 업로드하고 여러 파일은 화면에서 한 개씩 호출
-export function uploadDocument({ file, materialCode, supplier, receivedLotNo }: UploadParams) {
+export function uploadDocument({ file, materialCode, supplier, receivedLotNo, confirmDuplicate }: UploadParams) {
     const form = new FormData()
     form.append('file', file)
     form.append('material_code', materialCode)
     if (supplier) form.append('supplier', supplier)
     if (receivedLotNo) form.append('received_lot_no', receivedLotNo)
+    if (confirmDuplicate) form.append('confirm_duplicate', 'true')
     return apiFetch<UploadResult>('/documents', { method: 'POST', body: form })
 }
 

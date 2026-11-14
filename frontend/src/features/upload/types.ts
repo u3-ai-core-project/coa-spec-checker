@@ -29,3 +29,11 @@ export interface DocumentDetail {
     error_kind?: 'permanent' | 'transient' | null
     attempt_count?: number
 }
+
+// 같은 파일이 이미 있을 때(409 DUPLICATE_FILE) 서버가 알려 주는 기존 문서
+export interface DuplicateInfo {
+    document_id: string
+    file_name: string
+    status: DocumentStatus
+    archived?: boolean
+}

@@ -12,6 +12,7 @@ import BatchRows from './components/BatchRows'
 import { useBatchUpload } from './hooks/useBatchUpload'
 import { splitSelection } from './lib/selection'
 import { failureHint } from './lib/failure'
+import { useStorageStatus } from './storage'
 
 function fileMeta(file: File) {
     const ext = file.name.split('.').pop()?.toLowerCase() ?? ''
@@ -22,7 +23,10 @@ function fileMeta(file: File) {
     return `${ext} · ${size}`
 }
 
-function StatusCell({ item, onOpenDialog, onRetry, onReprocess }: { item: QueueItem; onOpenDialog: () => void; onRetry: () => void; onReprocess: () => void }) {
+function StatusCell({ item, onOpenDialog, onRetry, onReprocess, onViewDuplicate, onConfirmDuplicate }: {
+    item: QueueItem; onOpenDialog: () => void; onRetry: () => void; onReprocess: () => void
+    onViewDuplicate: (documentId: string) => void; onConfirmDuplicate: () => void
+}) {
     if (item.phase === 'staged' && item.info === null) {
         return (
             <div className="flex items-center gap-2 text-xs text-[#9a6700]">
@@ -36,6 +40,29 @@ function StatusCell({ item, onOpenDialog, onRetry, onReprocess }: { item: QueueI
                     입고 정보 입력
                 </button>
             </div>
+        )
+    }
+    if (item.phase === 'staged' && item.duplicates && item.duplicates.length > 0) {
+        const dup = item.duplicates[0]
+        return (
+            <span className="flex flex-wrap items-center gap-2 text-xs text-[#9a6700]">
+                <Mark color="bg-[#e3a008]">!</Mark>
+                <span className="min-w-0 flex-1">
+                    같은 파일이 이미 있습니다
+                    <span className="block text-[11px] text-ink-sub">
+                        {dup.file_name} ({STATUS_LABEL[dup.status]})
+                        {item.duplicates.length > 1 ? ` 외 ${item.duplicates.length - 1}건` : ''}
+                    </span>
+                </span>
+                <button type="button" onClick={() => onViewDuplicate(dup.document_id)}
+                    className="shrink-0 whitespace-nowrap rounded-md border border-line bg-white px-2.5 py-1 text-xs font-bold text-ink">
+                    보기
+                </button>
+                <button type="button" onClick={onConfirmDuplicate}
+                    className="shrink-0 whitespace-nowrap rounded-md border border-brand bg-white px-2.5 py-1 text-xs font-bold text-brand">
+                    그래도 접수
+                </button>
+            </span>
         )
     }
     if (item.phase === 'staged') {
@@ -120,6 +147,7 @@ export default function UploadPage() {
     const { user } = useAuth()
     const queue = useUploadQueue()
     const batch = useBatchUpload()
+    const storage = useStorageStatus()
     const [materialCode, setMaterialCode] = useState(MATERIALS[0].code)
     const [notice, setNotice] = useState<string | null>(null)
     const [dragging, setDragging] = useState(false)
@@ -136,6 +164,10 @@ export default function UploadPage() {
     const dialogItem = queue.items.find((i) => i.localId === dialogId)
 
     async function handleSelect(files: File[]) {
+        if (storage?.level === 'block') {
+            setNotice('저장 공간이 부족해 새 업로드를 받을 수 없습니다. 관리자에게 문의해 주세요.')
+            return
+        }
         const { coa, csv, other } = splitSelection(files)
         const notes: string[] = []
         if (other.length > 0) notes.push(`${other.length}개 파일은 지원하지 않는 형식이라 제외했습니다.`)
@@ -175,7 +207,15 @@ export default function UploadPage() {
     return (
         <div className="mx-auto flex w-full max-w-[900px] flex-col gap-4">
             <MaterialSelect value={materialCode} onChange={setMaterialCode} />
-
+            {storage && storage.level !== 'ok' && (
+                <p role="status" className={`rounded-lg px-4 py-3 text-xs ${storage.level === 'block' ? 'bg-[#FFF1F0] text-[#c0392b]' : 'bg-[#FFF8E6] text-[#9a6700]'}`}>
+                    {storage.level === 'block'
+                        ? (storage.reason === 'disk'
+                            ? '서버 디스크의 남은 공간이 부족해 새 업로드를 받을 수 없습니다. 관리자에게 문의하세요.'
+                            : '저장 공간이 부족해 새 업로드를 받을 수 없습니다. 관리자에게 문의하세요.')
+                        : `저장 공간이 거의 찼습니다 (사용 ${Math.round(storage.used_percent)}%). 관리자에게 정리를 요청해 주세요.`}
+                </p>
+            )}
             <div
                 onDragOver={(e) => {
                     e.preventDefault()
@@ -252,7 +292,7 @@ export default function UploadPage() {
                                     <p className="text-[11px] text-[#9aa0a8]">{fileMeta(item.file)}</p>
                                 </div>
                                 <span className="text-[13px] text-ink-sub">{user?.name}</span>
-                                <StatusCell item={item} onReprocess={() => void queue.retry(item.localId)} onOpenDialog={() => setDialogId(item.localId)} onRetry={() => { if (item.info) void queue.saveInfoAndStart(item.localId, item.info, materialCode) }} />
+                                <StatusCell item={item} onReprocess={() => void queue.retry(item.localId)} onOpenDialog={() => setDialogId(item.localId)} onRetry={() => { if (item.info) void queue.saveInfoAndStart(item.localId, item.info, materialCode) }} onViewDuplicate={(id) => navigate(`/inspection/${id}`)} onConfirmDuplicate={() => void queue.confirmDuplicate(item.localId, materialCode)} />
                                 <div className="flex justify-end">
                                     <button
                                         type="button"
@@ -265,7 +305,13 @@ export default function UploadPage() {
                                 </div>
                             </div>
                         ))}
-                        <BatchRows batches={batch.batches} owner={user?.name ?? ''} onRetry={batch.retry} />
+                        <BatchRows
+                            batches={batch.batches}
+                            owner={user?.name ?? ''}
+                            onRetry={batch.retry}
+                            onViewDuplicate={(id) => navigate(`/inspection/${id}`)}
+                            onConfirmDuplicate={(batchId, fileName) => batch.confirmDuplicate(batchId, fileName, materialCode)}
+                        />
                     </>
                 )}
             </div>

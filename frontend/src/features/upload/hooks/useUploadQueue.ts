@@ -3,7 +3,8 @@ import { ApiError } from '../../../api/client'
 import { fetchDocument, uploadDocument, retryDocument } from '../api'
 import { isSettled } from '../lib/documentStatus'
 import { ALLOWED_EXTENSIONS, MAX_FILE_BYTES, MAX_FILES } from '../lib/upload'
-import type { DocumentStatus, FinalDecision } from '../types'
+import { parseDuplicates } from '../lib/duplicates'
+import type { DocumentStatus, DuplicateInfo, FinalDecision } from '../types'
 
 export interface ReceiptInfo {
     receivedLotNo: string
@@ -22,6 +23,7 @@ export interface QueueItem {
     failedStage?: string | null
     errorKind?: 'permanent' | 'transient' | null
     attemptCount?: number
+    duplicates?: DuplicateInfo[] // 같은 파일 경고가 떴을 때 기존 문서들
 }
 
 const POLL_MS = 3000
@@ -88,17 +90,23 @@ export function useUploadQueue() {
     }, [])
 
     const uploadOne = useCallback(
-        async (item: QueueItem, info: ReceiptInfo, materialCode: string) => {
-            patch(item.localId, { phase: 'uploading', info, message: null })
+        async (item: QueueItem, info: ReceiptInfo, materialCode: string, confirmDuplicate = false) => {
+            patch(item.localId, { phase: 'uploading', info, message: null, duplicates: undefined })
             try {
                 const result = await uploadDocument({
                     file: item.file,
                     materialCode,
                     supplier: info.supplier,
                     receivedLotNo: info.receivedLotNo,
+                    confirmDuplicate,
                 })
                 patch(item.localId, { phase: 'uploaded', documentId: result.document_id, status: result.status })
             } catch (e) {
+                // 같은 파일 경고는 오류가 아니라 확인 대기: 저장되지 않았고, 사용자가 "그래도 접수"를 고를 수 있다
+                if (e instanceof ApiError && e.code === 'DUPLICATE_FILE') {
+                    patch(item.localId, { phase: 'staged', duplicates: parseDuplicates(e.data) })
+                    return
+                }
                 // 서버가 거절한 파일은 다시 해도 같아서 오류로 끝내고, 연결 문제는 다시 시도할 수 있게 남김
                 patch(item.localId, { phase: e instanceof ApiError ? 'error' : 'staged', message: uploadErrorMessage(e) })
             }
@@ -111,6 +119,15 @@ export function useUploadQueue() {
         async (localId: string, info: ReceiptInfo, materialCode: string) => {
             const item = itemsRef.current.find((i) => i.localId === localId)
             if (item) await uploadOne(item, info, materialCode)
+        },
+        [uploadOne],
+    )
+
+    // 같은 파일 경고에서 "그래도 접수"
+    const confirmDuplicate = useCallback(
+        async (localId: string, materialCode: string) => {
+            const item = itemsRef.current.find((i) => i.localId === localId)
+            if (item?.info) await uploadOne(item, item.info, materialCode, true)
         },
         [uploadOne],
     )
@@ -170,5 +187,5 @@ export function useUploadQueue() {
         return () => clearInterval(timer)
     }, [patch])
 
-    return { items, addFiles, saveInfoAndStart, startAll, remove, retry }
+    return { items, addFiles, saveInfoAndStart, confirmDuplicate, startAll, remove, retry }
 }

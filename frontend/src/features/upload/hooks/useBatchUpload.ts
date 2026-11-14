@@ -12,6 +12,10 @@ export interface SentBatch {
     rejected: BatchRejectedFile[]
     detail: BatchDetail | null // 상태를 한 번 불러오면 채워진다
 }
+// 서버가 거절한 파일에 원본 File을 붙여 둔다 ("그래도 접수"로 다시 보낼 때 필요)
+function attachFiles(rejected: BatchRejectedFile[], files: File[]): BatchRejectedFile[] {
+    return rejected.map((r) => ({ ...r, file: files.find((f) => f.name === r.file_name) }))
+}
 
 const POLL_MS = 3000
 
@@ -36,7 +40,7 @@ export function useBatchUpload() {
                     csvName: csv?.name ?? null,
                     receipts: res.receipts,
                     accepted: res.documents,
-                    rejected: res.rejected,
+                    rejected: attachFiles(res.rejected, files),
                     detail: null,
                 },
             ])
@@ -60,6 +64,29 @@ export function useBatchUpload() {
         }
     }, [])
 
+    // 같은 파일 경고에서 "그래도 접수": 그 파일만 새 묶음으로 접수한다 (입고 CSV 없이)
+    const confirmDuplicate = useCallback(async (batchId: string, fileName: string, materialCode: string) => {
+        const file = ref.current.find((b) => b.batchId === batchId)?.rejected.find((r) => r.file_name === fileName)?.file
+        if (!file) return '파일을 찾지 못했습니다. 다시 선택해 주세요.'
+        try {
+            const res = await createBatch({ files: [file], materialCode, confirmDuplicate: true })
+            setBatches((prev) => [
+                ...prev.map((b) => (b.batchId === batchId ? { ...b, rejected: b.rejected.filter((r) => r.file_name !== fileName) } : b)),
+                {
+                    batchId: res.batch_id,
+                    csvName: null,
+                    receipts: res.receipts,
+                    accepted: res.documents,
+                    rejected: attachFiles(res.rejected, [file]),
+                    detail: null,
+                },
+            ])
+            return null
+        } catch (e) {
+            return e instanceof ApiError ? e.message : '서버에 연결하지 못했습니다. 잠시 후 다시 시도해 주세요.'
+        }
+    }, [])
+
     // 처리 중인 문서가 남은 배치만 다시 불러온다
     useEffect(() => {
         const timer = setInterval(async () => {
@@ -80,5 +107,5 @@ export function useBatchUpload() {
         return () => clearInterval(timer)
     }, [])
 
-    return { batches, sending, submit, retry }
+    return { batches, sending, submit, retry, confirmDuplicate }
 }

@@ -1,4 +1,5 @@
 import type { DocumentStatus, LotRecommendation } from '../review/shared/api/types'
+import type { DuplicateInfo } from './types'
 
 // POST /documents/batch 응답 (명세 4.4-1)
 export interface BatchAcceptedDocument {
@@ -10,8 +11,10 @@ export interface BatchAcceptedDocument {
 
 export interface BatchRejectedFile {
     file_name: string
-    code: string // 예: INVALID_FILE
+    code: string // 예: INVALID_FILE, DUPLICATE_FILE
     message: string
+    duplicates?: DuplicateInfo[] // DUPLICATE_FILE일 때 같은 파일의 기존 문서
+    file?: File // 화면에서 붙여 두는 원본 파일("그래도 접수"로 다시 보낼 때 씀, 서버 응답엔 없음)
 }
 
 export interface BatchUploadResponse {
