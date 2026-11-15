@@ -59,7 +59,7 @@ class LLMClient:
         try:
             out = json.loads(_FENCE.sub("", content.strip()))
         except json.JSONDecodeError:
-            logger.warning("LLM 답이 JSON 이 아님: %.80s", content)
+            logger.warning("LLM 답이 JSON 이 아님 (답 길이 %d자)", len(content))  # 답 원문은 문서 내용이 섞일 수 있어 남기지 않는다
             return None
         return out if isinstance(out, dict) else None
 
