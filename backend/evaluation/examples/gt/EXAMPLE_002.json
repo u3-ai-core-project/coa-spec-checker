@@ -1,0 +1,40 @@
+{
+  "document_id": "EXAMPLE_002",
+  "material_code": "LI2CO3",
+  "source": "real",
+  "form": "Fisher",
+  "degradation": "original",
+  "header": {
+    "supplier": "Example Chemical",
+    "lot_no": "L-0002",
+    "test_date": "2026-09-30"
+  },
+  "items": [
+    {
+      "normalized_name": "순도",
+      "raw_value": "99.7 %",
+      "unit": "%",
+      "converted_value": 99.7,
+      "judgement": "pass",
+      "reason_code": null
+    },
+    {
+      "normalized_name": "Na",
+      "raw_value": "0.0018 %",
+      "unit": "%",
+      "converted_value": 18,
+      "judgement": "pass",
+      "reason_code": null
+    },
+    {
+      "normalized_name": "Ca",
+      "raw_value": "15 ppm",
+      "unit": "ppm",
+      "converted_value": 15,
+      "judgement": "pass",
+      "reason_code": null
+    }
+  ],
+  "lot_recommendation": "approve",
+  "document_issues": []
+}

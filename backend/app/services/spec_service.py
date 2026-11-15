@@ -1,0 +1,272 @@
+"""[담당: 장수민] 사내 규격 세트·항목 조회 (명세 2.5, v1.4안).
+
+규격은 "세트" 단위로 고른다 (app/models/spec_set.py 참고).
+  - 업로드 때 spec_set_code 를 주면 그 세트, 없으면 원자재의 기본 세트(is_default)를 문서에 연결한다.
+  - 판정은 문서에 연결된 세트의 항목만 사용한다.
+
+규격 조회·수정 API (명세 4.20, 4.21)
+  - GET /specs        : 항목 목록. 원자재·세트로 거를 수 있다
+  - GET /specs/sets   : 세트 목록 (v1.4안, 명세 외 추가)
+  - PATCH /specs/{id} : 관리자 수정. 이후 업로드되는 문서부터 적용하고, 이미 판정한 문서는 바꾸지 않는다 (명세 4.21).
+                        변경 사유(reason)는 필수이고, 바뀐 값을 spec_change_logs 에 남긴다 (v1.4).
+                        rejudge=true 로 보내면 이 규격 세트로 판정한 처분 전 문서(추출됨·검수 중·보류)를 새 규격으로 다시 판정한다
+                        (10.25 회의 결정). 처분 완료·처리 중·실패 문서는 건드리지 않는다.
+  - GET /specs/{id}/change-logs : 규격 변경 이력 (v1.4)
+"""
+import re
+
+from sqlalchemy import func, select
+from sqlalchemy.orm import Session, joinedload
+
+from app.core.errors import AppException, ErrorCode
+from app.core.enums import DocumentStatus
+from app.models import Document, SpecChangeLog, SpecItem, SpecSet, User
+from app.schemas.spec import (
+    RejudgedDocument, SpecChangeLogOut, SpecItemOut, SpecPreviewOut, SpecRevertRequest, SpecSetOut, SpecUpdateOut,
+    SpecUpdateRequest,
+)
+from app.services.judgement.spec_rule import SpecRule
+
+
+def material_exists(db: Session, material_code: str) -> bool:
+    """등록된 규격 세트가 하나라도 있는 원자재인지."""
+    return db.scalar(select(SpecSet.id).where(SpecSet.material_code == material_code).limit(1)) is not None
+
+
+def get_default_set(db: Session, material_code: str) -> SpecSet | None:
+    """원자재의 기본 세트. is_default 가 없으면 가장 먼저 등록된 세트."""
+    return db.scalar(
+        select(SpecSet)
+        .where(SpecSet.material_code == material_code)
+        .order_by(SpecSet.is_default.desc(), SpecSet.id)
+        .limit(1)
+    )
+
+
+def resolve_spec_set(db: Session, material_code: str, spec_set_code: str | None = None) -> SpecSet:
+    """업로드 시 문서에 연결할 규격 세트를 고른다.
+
+    - 원자재에 세트가 없으면 400 UNKNOWN_MATERIAL
+    - spec_set_code 가 없는 세트이거나 다른 원자재의 세트면 400 UNKNOWN_SPEC_SET (명세 외 추가)
+    """
+    if not material_exists(db, material_code):
+        raise AppException(ErrorCode.UNKNOWN_MATERIAL)
+    if not spec_set_code:
+        return get_default_set(db, material_code)
+
+    spec_set = db.scalar(select(SpecSet).where(SpecSet.code == spec_set_code))
+    if spec_set is None or spec_set.material_code != material_code:
+        raise AppException(ErrorCode.UNKNOWN_SPEC_SET, f"{material_code} 에 등록되지 않은 규격 세트입니다: {spec_set_code}")
+    return spec_set
+
+
+def get_specs(db: Session, spec_set_id: int) -> list[SpecItem]:
+    return list(db.scalars(select(SpecItem).where(SpecItem.spec_set_id == spec_set_id).order_by(SpecItem.id)))
+
+
+def get_rules(db: Session, spec_set_id: int) -> list[SpecRule]:
+    """판정 모듈에 넘길 규격 목록 (세트 1개)."""
+    return [SpecRule.from_model(s) for s in get_specs(db, spec_set_id)]
+
+
+# ---------------------------------------------------------------------------
+# 조회·수정 API
+# ---------------------------------------------------------------------------
+def list_items(db: Session, *, material_code: str | None = None, spec_set_code: str | None = None) -> list[SpecItemOut]:
+    """GET /specs. 원자재 → 세트 → 항목 등록 순."""
+    stmt = (select(SpecItem).join(SpecItem.spec_set)
+            .options(joinedload(SpecItem.spec_set), joinedload(SpecItem.updater))
+            .order_by(SpecSet.material_code, SpecSet.id, SpecItem.id))
+    if material_code:
+        stmt = stmt.where(SpecSet.material_code == material_code)
+    if spec_set_code:
+        stmt = stmt.where(SpecSet.code == spec_set_code)
+    return [to_item_out(i) for i in db.scalars(stmt)]
+
+
+def list_set_summaries(db: Session, material_code: str | None = None) -> list[SpecSetOut]:
+    """GET /specs/sets. 원자재별로 기본 세트가 먼저 온다."""
+    counts = {set_id: n for set_id, n in
+              db.execute(select(SpecItem.spec_set_id, func.count()).group_by(SpecItem.spec_set_id))}
+    stmt = select(SpecSet).order_by(SpecSet.material_code, SpecSet.is_default.desc(), SpecSet.id)
+    if material_code:
+        stmt = stmt.where(SpecSet.material_code == material_code)
+    return [
+        SpecSetOut(code=s.code, material_code=s.material_code, material_name=s.material_name, grade=s.grade,
+                   version=s.version, source=s.source, description=s.description, is_default=s.is_default,
+                   item_count=counts.get(s.id, 0))
+        for s in db.scalars(stmt)
+    ]
+
+
+# 변경 이력에 남기는 필드와 순서 (요청에 보낸 순서와 관계없이 이 순서로 적는다)
+_LOGGED_FIELDS = ("lsl", "usl", "unit")
+
+
+def update_item(db: Session, spec_id: int, req: SpecUpdateRequest, user: User) -> SpecUpdateOut:
+    """PATCH /specs/{id}. 보낸 필드만 바꾸고 수정자·수정 일시와 변경 이력을 남긴다.
+
+    검사 순서: 규격 없음 404 → 사유 누락 400 REASON_REQUIRED → 범위 오류 400 INVALID_SPEC_RANGE
+    실제로 바뀐 값이 없으면 이력은 남기지 않는다 (수정자·수정 일시는 갱신).
+    """
+    item = db.get(SpecItem, spec_id, with_for_update=True)
+    if item is None:
+        raise AppException(ErrorCode.SPEC_NOT_FOUND)
+    reason = (req.reason or "").strip() or None
+    if reason is None:
+        raise AppException(ErrorCode.REASON_REQUIRED, "규격 변경 사유를 입력해야 합니다")
+    changes = _parse_changes(item, req)
+
+    changed = [f for f in _LOGGED_FIELDS if f in changes and changes[f] != getattr(item, f)]
+    if changed:
+        db.add(SpecChangeLog(
+            spec_item_id=item.id,
+            before_value=", ".join(f"{f}: {_fmt_spec_value(getattr(item, f))}" for f in changed),
+            after_value=", ".join(f"{f}: {_fmt_spec_value(changes[f])}" for f in changed),
+            reason=reason,
+            user_id=user.id,
+        ))
+    for field, value in changes.items():
+        setattr(item, field, value)
+    item.updated_by = user.id
+    item.updated_at = func.now()
+    rejudged = rejudge_open_documents(db, item.spec_set_id) if req.rejudge else []
+    db.commit()
+    db.refresh(item)
+    return SpecUpdateOut(**to_item_out(item).model_dump(), rejudged_documents=rejudged)
+
+
+def _parse_changes(item: SpecItem, req: SpecUpdateRequest) -> dict:
+    """요청에서 바꿀 필드만 뽑고 범위를 검사한다. 범위가 틀리면 400 INVALID_SPEC_RANGE."""
+    changes = req.model_dump(exclude_unset=True, exclude={"reason", "rejudge"})
+    if "unit" in changes:
+        changes["unit"] = (changes["unit"] or "").strip() or None
+    lsl = changes.get("lsl", item.lsl)
+    usl = changes.get("usl", item.usl)
+    if lsl is not None and usl is not None and lsl > usl:
+        raise AppException(ErrorCode.INVALID_SPEC_RANGE)
+    return changes
+
+
+def preview_update(db: Session, spec_id: int, req: SpecUpdateRequest) -> SpecPreviewOut:
+    """POST /specs/{id}/preview. 수정을 저장하지 않고 영향 범위(문서 수, 로트 권고 변화)를 계산한다 (운영 정책 5장).
+
+    실제 적용과 같은 재판정 코드를 돌린 뒤 transaction 을 되돌려 아무것도 저장하지 않는다.
+    """
+    item = db.get(SpecItem, spec_id)
+    if item is None:
+        raise AppException(ErrorCode.SPEC_NOT_FOUND)
+    changes = _parse_changes(item, req)
+    changed_fields = [f for f in _LOGGED_FIELDS if f in changes and changes[f] != getattr(item, f)]
+    set_id = item.spec_set_id
+    try:
+        for field, value in changes.items():
+            setattr(item, field, value)
+        targets = rejudge_open_documents(db, set_id)
+    finally:
+        db.rollback()
+    affected = [t for t in targets if t.changed_items or t.lot_recommendation_before != t.lot_recommendation_after]
+    return SpecPreviewOut(
+        changed_fields=changed_fields,
+        target_documents=len(targets),
+        affected_documents=len(affected),
+        recommendation_changed_documents=sum(1 for t in affected if t.lot_recommendation_before != t.lot_recommendation_after),
+        documents=affected,
+    )
+
+
+_LOG_FIELD = re.compile(r"(lsl|usl|unit): (.*?)(?=, (?:lsl|usl|unit): |$)")
+
+
+def _parse_log_values(text: str) -> dict:
+    """변경 이력 문자열("lsl: 1, usl: 없음") → {"lsl": 1.0, "usl": None}. _fmt_spec_value 의 반대."""
+    out: dict = {}
+    for name, raw in _LOG_FIELD.findall(text):
+        if raw == "없음":
+            out[name] = None
+        elif name == "unit":
+            out[name] = raw
+        else:
+            out[name] = float(raw)
+    return out
+
+
+def revert_last_change(db: Session, spec_id: int, req: SpecRevertRequest, user: User) -> SpecUpdateOut:
+    """POST /specs/{id}/revert. 가장 최근 변경 이력의 이전 값으로 되돌린다 (운영 정책 5장).
+
+    되돌리기도 규격 변경이라 사유가 필수이고 변경 이력이 새로 남는다(사유 앞에 "되돌리기: "). 이력은 지우지 않는다.
+    되돌린 뒤에 다시 되돌리면 되돌리기 전 값으로 돌아간다. 이전 이력이 없으면 409 NOTHING_TO_REVERT.
+    """
+    if db.get(SpecItem, spec_id) is None:
+        raise AppException(ErrorCode.SPEC_NOT_FOUND)
+    reason = (req.reason or "").strip()
+    if not reason:
+        raise AppException(ErrorCode.REASON_REQUIRED, "되돌리는 사유를 입력해야 합니다")
+    last = db.scalar(select(SpecChangeLog).where(SpecChangeLog.spec_item_id == spec_id)
+                     .order_by(SpecChangeLog.created_at.desc(), SpecChangeLog.id.desc()).limit(1))
+    if last is None:
+        raise AppException(ErrorCode.NOTHING_TO_REVERT)
+    restored = _parse_log_values(last.before_value)
+    update = SpecUpdateRequest(**restored, reason=f"되돌리기: {reason}", rejudge=req.rejudge)
+    return update_item(db, spec_id, update, user)
+
+
+# 규격을 고쳤을 때 다시 판정하는 문서 상태. 처분 완료 문서는 당시 판정이 근거라 바꾸지 않는다.
+REJUDGE_STATUSES = (DocumentStatus.EXTRACTED, DocumentStatus.IN_REVIEW, DocumentStatus.ON_HOLD)
+
+
+def rejudge_open_documents(db: Session, spec_set_id: int) -> list[RejudgedDocument]:
+    """규격 세트를 쓰는 처분 전 문서를 모두 다시 판정한다. flush 만 하고 commit 은 호출한 쪽이 한다."""
+    from app.services import review_service  # review_service 가 spec_service 를 가져오므로 늦게 가져온다
+
+    spec_set = db.get(SpecSet, spec_set_id)
+    specs = get_rules(db, spec_set_id)
+    # 세트를 직접 고르지 않은 문서는 원자재의 기본 세트로 판정했으므로, 이 세트가 기본 세트면 함께 대상이다
+    condition = Document.spec_set_id == spec_set_id
+    if get_default_set(db, spec_set.material_code).id == spec_set_id:
+        condition = condition | (Document.spec_set_id.is_(None) & (Document.material_code == spec_set.material_code))
+    stmt = (select(Document).where(Document.status.in_(REJUDGE_STATUSES)).where(condition)
+            .order_by(Document.id).with_for_update())
+    out: list[RejudgedDocument] = []
+    for doc in db.scalars(stmt):
+        if doc.extraction is None:
+            continue
+        before = doc.lot_recommendation
+        result, changed = review_service.rejudge_document(doc, specs, spec_set)
+        out.append(RejudgedDocument(document_id=doc.id, lot_recommendation_before=_val(before),
+                                    lot_recommendation_after=_val(result.lot_recommendation), changed_items=changed))
+    return out
+
+
+def _val(v) -> str | None:
+    return getattr(v, "value", v)
+
+
+def list_change_logs(db: Session, spec_id: int) -> list[SpecChangeLogOut]:
+    """GET /specs/{id}/change-logs. 오래된 순."""
+    if db.get(SpecItem, spec_id) is None:
+        raise AppException(ErrorCode.SPEC_NOT_FOUND)
+    rows = db.scalars(
+        select(SpecChangeLog).options(joinedload(SpecChangeLog.user))
+        .where(SpecChangeLog.spec_item_id == spec_id)
+        .order_by(SpecChangeLog.created_at, SpecChangeLog.id)
+    )
+    return [SpecChangeLogOut(before_value=r.before_value, after_value=r.after_value, reason=r.reason,
+                             user_name=r.user.name, created_at=r.created_at) for r in rows]
+
+
+def _fmt_spec_value(v) -> str:
+    """이력 문자열용. 50.0 → "50", None → "없음"."""
+    if v is None:
+        return "없음"
+    return f"{v:g}" if isinstance(v, float) else str(v)
+
+
+def to_item_out(item: SpecItem) -> SpecItemOut:
+    s = item.spec_set
+    return SpecItemOut(
+        id=item.id, material_code=s.material_code, material_name=s.material_name, item_name=item.item_name,
+        unit=item.unit, lsl=item.lsl, usl=item.usl, spec_type=item.spec_type, grade=s.grade, source=item.source,
+        updated_by=item.updater.name if item.updater else None, updated_at=item.updated_at,
+        spec_set_code=s.code, version=s.version, is_required=item.is_required,
+    )

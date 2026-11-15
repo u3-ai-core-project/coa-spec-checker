@@ -1,0 +1,25 @@
+spec_set_code,item_name,unit,lsl,usl,spec_type,is_required,source
+LI2CO3-SUPPLIER-V1,외관,,,,정성,true,공급사 규격서 확인(2026-11-03)
+LI2CO3-SUPPLIER-V1,순도,%,99.6,,정량,true,공급사 규격서 확인(2026-11-03)
+LI2CO3-SUPPLIER-V1,Na,ppm,,200,정량,true,공급사 규격서 확인(2026-11-03)
+LI2CO3-SUPPLIER-V1,K,ppm,,5,정량,true,공급사 규격서 확인(2026-11-03)
+LI2CO3-SUPPLIER-V1,Ca,ppm,,40,정량,true,공급사 규격서 확인(2026-11-03)
+LI2CO3-SUPPLIER-V1,Mg,ppm,,60,정량,true,공급사 규격서 확인(2026-11-03)
+LI2CO3-SUPPLIER-V1,Fe,ppm,,5,정량,true,공급사 규격서 확인(2026-11-03)
+LI2CO3-SUPPLIER-V1,Cu,ppm,,3,정량,true,공급사 규격서 확인(2026-11-03)
+LI2CO3-SUPPLIER-V1,Zn,ppm,,3,정량,true,공급사 규격서 확인(2026-11-03)
+LI2CO3-SUPPLIER-V1,Mn,ppm,,3,정량,true,공급사 규격서 확인(2026-11-03)
+LI2CO3-SUPPLIER-V1,Pb,ppm,,3,정량,true,공급사 규격서 확인(2026-11-03)
+LI2CO3-SUPPLIER-V1,Ni,ppm,,10,정량,true,공급사 규격서 확인(2026-11-03)
+LI2CO3-SUPPLIER-V1,Si,ppm,,20,정량,true,공급사 규격서 확인(2026-11-03)
+LI2CO3-SUPPLIER-V1,Al,ppm,,10,정량,true,공급사 규격서 확인(2026-11-03)
+LI2CO3-SUPPLIER-V1,황산염,ppm,,800,정량,true,공급사 규격서 확인(2026-11-03)
+LI2CO3-SUPPLIER-V1,염화물,ppm,,20,정량,true,공급사 규격서 확인(2026-11-03)
+LI2CO3-SUPPLIER-V1,수분,%,,0.25,정량,true,공급사 규격서 확인(2026-11-03)
+LI2CO3-SUPPLIER-V1,자성이물,ppb,,150,정량,true,"공급사 규격서 확인(2026-11-03), 필수 규칙의 예외"
+LI2CO3-SUPPLIER-V1,입도 D50,µm,5.0,7.0,정량,true,공급사 규격서 확인(2026-11-03)
+LI2CO3-SUPPLIER-V1,B,ppm,,,정량,false,"공급사 규격서 확인(2026-11-03), 참고(규격 한도 없음)"
+LI2CO3-SUPPLIER-V1,Cr,ppm,,,정량,false,"공급사 규격서 확인(2026-11-03), 참고(규격 한도 없음)"
+LI2CO3-SUPPLIER-V1,강열감량,%,,,정량,false,"공급사 규격서 확인(2026-11-03), 참고(규격 한도 없음)"
+LI2CO3-SUPPLIER-V1,입도 D10,µm,,,정량,false,"공급사 규격서 확인(2026-11-03), 참고(규격 한도 없음)"
+LI2CO3-SUPPLIER-V1,입도 D90,µm,,,정량,false,"공급사 규격서 확인(2026-11-03), 참고(규격 한도 없음)"

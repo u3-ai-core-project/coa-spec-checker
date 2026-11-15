@@ -1,0 +1,14 @@
+__pycache__/
+*.pyc
+.venv/
+.env
+.pytest_cache/
+storage/uploads/*
+!storage/uploads/.gitkeep
+storage/archive/
+*.xlsx
+.idea/
+.vscode/
+
+# 평가 리포트 (evaluation/run.py 출력)
+evaluation/reports/

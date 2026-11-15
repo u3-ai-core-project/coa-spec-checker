@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "coa-ai"
+version = "0.1.0"
+description = "CoA(시험성적서) PDF·스캔본 추출 — U3 CoA 검수 시스템 AI 파트"
+requires-python = ">=3.11"
+dependencies = [
+    "pymupdf>=1.24",
+    "rapidocr==3.10.0",  # 모델 테스트(ai/bench)에서 잰 버전. 버전마다 기본 모델이 바뀔 수 있어 고정
+    "onnxruntime>=1.20",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[tool.setuptools.packages.find]
+include = ["coa_ai*"]
+
+[tool.setuptools.package-data]
+coa_ai = ["vocab.json"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

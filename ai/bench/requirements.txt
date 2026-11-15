@@ -1,0 +1,8 @@
+# 모델 테스트 전용 (서비스 의존성 아님). VLM 은 llama.cpp 의 llama-server 를 따로 설치한다 (brew install llama.cpp).
+# ai/ 폴더에서 pip install -r bench/requirements.txt 로 설치한다
+-e .
+rapidocr==3.10.0
+onnxruntime==1.31.0
+pillow
+psutil
+requests

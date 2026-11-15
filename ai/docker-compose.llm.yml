@@ -1,0 +1,35 @@
+# [담당: 고도영] LLM 서버 (Gemma 4 E2B, llama.cpp). 사용법은 ai/README.md 'LLM 기능'.
+#   docker compose -f ai/docker-compose.llm.yml up -d
+#   백엔드 .env: LLM_BASE_URL=http://127.0.0.1:8090
+# 모델 파일 위치는 COA_LLM_MODELS (기본 ~/.cache/coa-bench/models, 모델 테스트와 같은 폴더)
+services:
+  llm:
+    image: ghcr.io/ggml-org/llama.cpp:server-b11669
+    ports:
+      - "8090:8080"
+    volumes:
+      - ${COA_LLM_MODELS:-~/.cache/coa-bench/models}:/models:ro
+    command:
+      - -m
+      - /models/gemma-4-E2B_q4_0-it.gguf
+      - -c
+      - "8192"
+      - -t
+      - "4"
+      - -np
+      - "1"
+      - --temp
+      - "0"
+      - --reasoning-budget
+      - "0"
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8080"
+      - --no-webui
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped

@@ -1,0 +1,41 @@
+{
+  "success": true,
+  "error": null,
+  "data": {
+    "document_id": "EXAMPLE_002",
+    "supplier": "Example Chemical",
+    "lot_no": "L-0002",
+    "test_date": "2026-09-30",
+    "items": [
+      {
+        "item_id": "item-001",
+        "normalized_name": "순도",
+        "raw_value": "99.7 %",
+        "converted_value": 99.7,
+        "judgement": "pass",
+        "confidence": 0.96,
+        "mapping_source": "dictionary"
+      },
+      {
+        "item_id": "item-002",
+        "normalized_name": "Na",
+        "raw_value": "0.0018 %",
+        "converted_value": 18,
+        "judgement": "pass",
+        "confidence": 0.9,
+        "mapping_source": "dictionary"
+      },
+      {
+        "item_id": "item-003",
+        "normalized_name": "Ca",
+        "raw_value": "15 ppm",
+        "converted_value": 15,
+        "judgement": "pass",
+        "confidence": 0.88,
+        "mapping_source": "dictionary"
+      }
+    ],
+    "document_issues": [],
+    "lot_recommendation": "approve"
+  }
+}

@@ -1,0 +1,26 @@
+/*
+ * 검수(2번대)와 규격 관리(5번대) 화면 전용 기본 스타일입니다. 공용 index.css는 건드리지 않고 이 파일에서만 정합니다.
+ * 모두 @layer base 안에 두어서 Tailwind 유틸리티 클래스(placeholder:text-[...] 등)가 항상 이깁니다.
+ *
+ * 색 토큰: 이 파트의 색은 시안 값을 클래스에 직접 적는 방식이라(text-[#1F2328], border-[#E3E5E8] 등) 별도 토큰이 없습니다.
+ */
+@layer base {
+  /* 글꼴 이름은 pretendard 패키지 CSS(@font-face)의 'Pretendard'입니다. */
+  .coa-font {
+    font-family: 'Pretendard', sans-serif;
+    word-break: keep-all;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Tailwind v4 기본 스타일에서 빠진 것: v3에서는 버튼에 손가락 커서가 기본이었습니다. */
+  .coa-font button:not(:disabled),
+  .coa-font [role='button']:not(:disabled) {
+    cursor: pointer;
+  }
+
+  /* Tailwind v4는 placeholder를 글자색 50% 혼합으로 바꿨습니다. v3 값(gray-400)으로 맞춥니다. */
+  .coa-font input::placeholder,
+  .coa-font textarea::placeholder {
+    color: #9ca3af;
+  }
+}
