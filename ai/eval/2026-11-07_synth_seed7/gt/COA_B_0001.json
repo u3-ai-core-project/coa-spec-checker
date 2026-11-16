@@ -1,0 +1,148 @@
+{
+ "document_id": "COA_B_0001",
+ "material_code": "LI2CO3",
+ "source": "synthetic",
+ "form": "B",
+ "split": "dev",
+ "header": {
+  "supplier": "Ruilan Lithium (Yichun) Co., Ltd.",
+  "lot_no": "LC25102001",
+  "test_date": "2025-10-21"
+ },
+ "items": [
+  {
+   "normalized_name": "외관",
+   "raw_value": "符合",
+   "unit": null,
+   "judgement": "pass",
+   "reason_code": null
+  },
+  {
+   "normalized_name": "순도",
+   "raw_value": "99.88",
+   "unit": "%",
+   "converted_value": 99.88,
+   "judgement": "pass",
+   "reason_code": null
+  },
+  {
+   "normalized_name": "Na",
+   "raw_value": "0.0122",
+   "unit": "%",
+   "converted_value": 122.0,
+   "judgement": "pass",
+   "reason_code": null
+  },
+  {
+   "normalized_name": "K",
+   "raw_value": "0.00055",
+   "unit": "%",
+   "converted_value": 5.5,
+   "judgement": "pass",
+   "reason_code": null
+  },
+  {
+   "normalized_name": "Ca",
+   "raw_value": "0.0028",
+   "unit": "%",
+   "converted_value": 28.0,
+   "judgement": "pass",
+   "reason_code": null
+  },
+  {
+   "normalized_name": "Mg",
+   "raw_value": "0.0034",
+   "unit": "%",
+   "converted_value": 34.0,
+   "judgement": "pass",
+   "reason_code": null
+  },
+  {
+   "normalized_name": "Fe",
+   "raw_value": "0.00036",
+   "unit": "%",
+   "converted_value": 3.6,
+   "judgement": "pass",
+   "reason_code": null
+  },
+  {
+   "normalized_name": "Cu",
+   "raw_value": "0.00005",
+   "unit": "%",
+   "converted_value": 0.5,
+   "judgement": "pass",
+   "reason_code": null
+  },
+  {
+   "normalized_name": "Mn",
+   "raw_value": "0.00008",
+   "unit": "%",
+   "converted_value": 0.8,
+   "judgement": "pass",
+   "reason_code": null
+  },
+  {
+   "normalized_name": "Ni",
+   "raw_value": "0.00017",
+   "unit": "%",
+   "converted_value": 1.7
+  },
+  {
+   "normalized_name": "Si",
+   "raw_value": "0.0013",
+   "unit": "%",
+   "converted_value": 13.0,
+   "judgement": "pass",
+   "reason_code": null
+  },
+  {
+   "normalized_name": "B",
+   "raw_value": "0.00101",
+   "unit": "%",
+   "converted_value": 10.1
+  },
+  {
+   "normalized_name": "황산염",
+   "raw_value": "0.031",
+   "unit": "%",
+   "converted_value": 310.0,
+   "judgement": "pass",
+   "reason_code": null
+  },
+  {
+   "normalized_name": "염화물",
+   "raw_value": "0.0022",
+   "unit": "%",
+   "converted_value": 22.0,
+   "judgement": "pass",
+   "reason_code": null
+  },
+  {
+   "normalized_name": "수분",
+   "raw_value": "0.09",
+   "unit": "%",
+   "converted_value": 0.09,
+   "judgement": "pass",
+   "reason_code": null
+  },
+  {
+   "normalized_name": "자성이물",
+   "raw_value": "131",
+   "unit": "μg/kg",
+   "converted_value": 131.0,
+   "judgement": "pass",
+   "reason_code": null
+  },
+  {
+   "normalized_name": "입도 D50",
+   "raw_value": "6.0",
+   "unit": "μm",
+   "converted_value": 6.0,
+   "judgement": "pass",
+   "reason_code": null
+  }
+ ],
+ "lot_recommendation": "approve",
+ "document_issues": [],
+ "degradation": "original"
+}

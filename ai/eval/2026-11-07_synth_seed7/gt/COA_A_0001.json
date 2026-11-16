@@ -1,0 +1,134 @@
+{
+ "document_id": "COA_A_0001",
+ "material_code": "LI2CO3",
+ "source": "synthetic",
+ "form": "A",
+ "split": "dev",
+ "header": {
+  "supplier": "Arvelle Lithium Pty Ltd",
+  "lot_no": "AL2511013"
+ },
+ "items": [
+  {
+   "normalized_name": "외관",
+   "raw_value": "Conforms",
+   "unit": null,
+   "judgement": "pass",
+   "reason_code": null
+  },
+  {
+   "normalized_name": "순도",
+   "raw_value": "99.77 %",
+   "unit": "%",
+   "converted_value": 99.77,
+   "judgement": "pass",
+   "reason_code": null
+  },
+  {
+   "normalized_name": "Na",
+   "raw_value": "61.1 ppm",
+   "unit": "ppm",
+   "converted_value": 61.1,
+   "judgement": "pass",
+   "reason_code": null
+  },
+  {
+   "normalized_name": "K",
+   "raw_value": "2.2 ppm",
+   "unit": "ppm",
+   "converted_value": 2.2,
+   "judgement": "pass",
+   "reason_code": null
+  },
+  {
+   "normalized_name": "Ca",
+   "raw_value": "9.2 ppm",
+   "unit": "ppm",
+   "converted_value": 9.2,
+   "judgement": "pass",
+   "reason_code": null
+  },
+  {
+   "normalized_name": "Mg",
+   "raw_value": "17.6 ppm",
+   "unit": "ppm",
+   "converted_value": 17.6,
+   "judgement": "pass",
+   "reason_code": null
+  },
+  {
+   "normalized_name": "Fe",
+   "raw_value": "1.7 ppm",
+   "unit": "ppm",
+   "converted_value": 1.7,
+   "judgement": "pass",
+   "reason_code": null
+  },
+  {
+   "normalized_name": "Cu",
+   "raw_value": "< 0.30 ppm",
+   "unit": "ppm",
+   "judgement": "pass",
+   "reason_code": null
+  },
+  {
+   "normalized_name": "Mn",
+   "raw_value": "0.40 ppm",
+   "unit": "ppm",
+   "converted_value": 0.4,
+   "judgement": "pass",
+   "reason_code": null
+  },
+  {
+   "normalized_name": "Si",
+   "raw_value": "9.4 ppm",
+   "unit": "ppm",
+   "converted_value": 9.4,
+   "judgement": "pass",
+   "reason_code": null
+  },
+  {
+   "normalized_name": "황산염",
+   "raw_value": "203 ppm",
+   "unit": "ppm",
+   "converted_value": 203.0,
+   "judgement": "pass",
+   "reason_code": null
+  },
+  {
+   "normalized_name": "염화물",
+   "raw_value": "6.0 ppm",
+   "unit": "ppm",
+   "converted_value": 6.0,
+   "judgement": "pass",
+   "reason_code": null
+  },
+  {
+   "normalized_name": "수분",
+   "raw_value": "0.10 %",
+   "unit": "%",
+   "converted_value": 0.1,
+   "judgement": "pass",
+   "reason_code": null
+  },
+  {
+   "normalized_name": "자성이물",
+   "raw_value": "30 ppb",
+   "unit": "ppb",
+   "converted_value": 30.0,
+   "judgement": "pass",
+   "reason_code": null
+  },
+  {
+   "normalized_name": "입도 D50",
+   "raw_value": "6.1 μm",
+   "unit": "μm",
+   "converted_value": 6.1,
+   "judgement": "pass",
+   "reason_code": null
+  }
+ ],
+ "lot_recommendation": "approve",
+ "document_issues": [],
+ "degradation": "original"
+}

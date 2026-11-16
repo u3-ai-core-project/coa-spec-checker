@@ -1,0 +1,133 @@
+{
+ "document_id": "COA_A_0011_lowres",
+ "material_code": "LI2CO3",
+ "source": "synthetic",
+ "form": "A",
+ "split": "dev",
+ "header": {
+  "supplier": "Selmora Lithium S.A.",
+  "lot_no": "SL26-0005"
+ },
+ "items": [
+  {
+   "normalized_name": "외관",
+   "raw_value": "Complies",
+   "unit": null,
+   "judgement": "pass",
+   "reason_code": null
+  },
+  {
+   "normalized_name": "순도",
+   "raw_value": "99.67 %",
+   "unit": "%",
+   "converted_value": 99.67,
+   "judgement": "pass",
+   "reason_code": null
+  },
+  {
+   "normalized_name": "Na",
+   "raw_value": "144.9 ppm",
+   "unit": "ppm",
+   "converted_value": 144.9,
+   "judgement": "pass",
+   "reason_code": null
+  },
+  {
+   "normalized_name": "K",
+   "raw_value": "< 40 ppm",
+   "unit": "ppm",
+   "judgement": "undetermined",
+   "reason_code": "BOUND_ABOVE_LIMIT"
+  },
+  {
+   "normalized_name": "Ca",
+   "raw_value": "13.9 ppm",
+   "unit": "ppm",
+   "converted_value": 13.9,
+   "judgement": "pass",
+   "reason_code": null
+  },
+  {
+   "normalized_name": "Mg",
+   "raw_value": "17.9 ppm",
+   "unit": "ppm",
+   "converted_value": 17.9,
+   "judgement": "pass",
+   "reason_code": null
+  },
+  {
+   "normalized_name": "Fe",
+   "raw_value": "2.9 ppm",
+   "unit": "ppm",
+   "converted_value": 2.9,
+   "judgement": "pass",
+   "reason_code": null
+  },
+  {
+   "normalized_name": "Cu",
+   "raw_value": "0.92 ppm",
+   "unit": "ppm",
+   "converted_value": 0.92,
+   "judgement": "pass",
+   "reason_code": null
+  },
+  {
+   "normalized_name": "Mn",
+   "raw_value": "1.08 ppm",
+   "unit": "ppm",
+   "converted_value": 1.08,
+   "judgement": "pass",
+   "reason_code": null
+  },
+  {
+   "normalized_name": "Si",
+   "raw_value": "5.4 ppm",
+   "unit": "ppm",
+   "converted_value": 5.4,
+   "judgement": "pass",
+   "reason_code": null
+  },
+  {
+   "normalized_name": "황산염",
+   "raw_value": "≤ 800 ppm",
+   "unit": "ppm",
+   "judgement": "check",
+   "reason_code": "SPEC_COPIED"
+  },
+  {
+   "normalized_name": "염화물",
+   "raw_value": "9.5 ppm",
+   "unit": "ppm",
+   "converted_value": 9.5,
+   "judgement": "pass",
+   "reason_code": null
+  },
+  {
+   "normalized_name": "수분",
+   "raw_value": "0.10 %",
+   "unit": "%",
+   "converted_value": 0.1,
+   "judgement": "pass",
+   "reason_code": null
+  },
+  {
+   "normalized_name": "자성이물",
+   "raw_value": "67 ppb",
+   "unit": "ppb",
+   "converted_value": 67.0,
+   "judgement": "pass",
+   "reason_code": null
+  },
+  {
+   "normalized_name": "입도 D50",
+   "raw_value": "6.0 μm",
+   "unit": "μm",
+   "converted_value": 6.0,
+   "judgement": "pass",
+   "reason_code": null
+  }
+ ],
+ "lot_recommendation": "hold",
+ "document_issues": [],
+ "degradation": "lowres"
+}

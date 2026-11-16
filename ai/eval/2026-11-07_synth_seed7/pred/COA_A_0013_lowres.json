@@ -1,0 +1,300 @@
+{
+ "doc_type": "coa",
+ "supplier": "Teramis Lithium Inc.",
+ "lot_no": "T26062615",
+ "test_date": null,
+ "origin": null,
+ "applied_standard": null,
+ "product_name": "Li2CO3 BG Micronized",
+ "manufacture_date": "2026-06-26",
+ "issue_date": null,
+ "expiry_date": "2027-06-26",
+ "retest_date": null,
+ "items": [
+  {
+   "raw_name": "Appearance",
+   "normalized_name": "외관",
+   "mapping_source": "dictionary",
+   "raw_value": "Conforms",
+   "raw_spec": "White powder",
+   "unit": null,
+   "confidence": 0.75,
+   "bbox": {
+    "page": 1,
+    "x": 0.572,
+    "y": 0.338,
+    "w": 0.071,
+    "h": 0.0141
+   },
+   "value_kind": "pass_text",
+   "value_reason": "합격 문구(Conforms)",
+   "check_reasons": []
+  },
+  {
+   "raw_name": "Lithium Carbonate (as Li2CO3)",
+   "normalized_name": "순도",
+   "mapping_source": "dictionary",
+   "raw_value": "99.77 %",
+   "raw_spec": "≥ 99.5 %",
+   "unit": null,
+   "confidence": 0.75,
+   "bbox": {
+    "page": 1,
+    "x": 0.5769,
+    "y": 0.3571,
+    "w": 0.0594,
+    "h": 0.0141
+   },
+   "value_kind": "number",
+   "value_reason": "숫자 결과(99.77 %)",
+   "check_reasons": []
+  },
+  {
+   "raw_name": "Sodium (Na)",
+   "normalized_name": "Na",
+   "mapping_source": "dictionary",
+   "raw_value": "81.0 ppm",
+   "raw_spec": "≤ 250 ppm",
+   "unit": null,
+   "confidence": 0.75,
+   "bbox": {
+    "page": 1,
+    "x": 0.5716,
+    "y": 0.3769,
+    "w": 0.0676,
+    "h": 0.0153
+   },
+   "value_kind": "number",
+   "value_reason": "숫자 결과(81.0 ppm)",
+   "check_reasons": []
+  },
+  {
+   "raw_name": "Potassium (K)",
+   "normalized_name": "K",
+   "mapping_source": "dictionary",
+   "raw_value": "5.7 ppm",
+   "raw_spec": "≤ 50 ppm",
+   "unit": null,
+   "confidence": 0.75,
+   "bbox": {
+    "page": 1,
+    "x": 0.5767,
+    "y": 0.3953,
+    "w": 0.0604,
+    "h": 0.0169
+   },
+   "value_kind": "number",
+   "value_reason": "숫자 결과(5.7 ppm)",
+   "check_reasons": []
+  },
+  {
+   "raw_name": "Calcium (Ca)",
+   "normalized_name": "Ca",
+   "mapping_source": "dictionary",
+   "raw_value": "36.9 ppm",
+   "raw_spec": "≤ 80 ppm",
+   "unit": null,
+   "confidence": 0.75,
+   "bbox": {
+    "page": 1,
+    "x": 0.5731,
+    "y": 0.4144,
+    "w": 0.0665,
+    "h": 0.0169
+   },
+   "value_kind": "number",
+   "value_reason": "숫자 결과(36.9 ppm)",
+   "check_reasons": []
+  },
+  {
+   "raw_name": "Magnesium (Mg)",
+   "normalized_name": "Mg",
+   "mapping_source": "dictionary",
+   "raw_value": "3.0 ppm",
+   "raw_spec": "≤ 80 ppm",
+   "unit": null,
+   "confidence": 0.75,
+   "bbox": {
+    "page": 1,
+    "x": 0.5767,
+    "y": 0.4341,
+    "w": 0.0598,
+    "h": 0.0169
+   },
+   "value_kind": "number",
+   "value_reason": "숫자 결과(3.0 ppm)",
+   "check_reasons": []
+  },
+  {
+   "raw_name": "Iron (Fe)",
+   "normalized_name": "Fe",
+   "mapping_source": "dictionary",
+   "raw_value": "2.6 ppm",
+   "raw_spec": "≤ 10 ppm",
+   "unit": null,
+   "confidence": 0.75,
+   "bbox": {
+    "page": 1,
+    "x": 0.5772,
+    "y": 0.4536,
+    "w": 0.0589,
+    "h": 0.0157
+   },
+   "value_kind": "number",
+   "value_reason": "숫자 결과(2.6 ppm)",
+   "check_reasons": []
+  },
+  {
+   "raw_name": "Copper (Cu)",
+   "normalized_name": "Cu",
+   "mapping_source": "dictionary",
+   "raw_value": "0.64 ppm",
+   "raw_spec": "≤ 3 ppm",
+   "unit": null,
+   "confidence": 0.75,
+   "bbox": {
+    "page": 1,
+    "x": 0.5724,
+    "y": 0.4728,
+    "w": 0.0678,
+    "h": 0.0165
+   },
+   "value_kind": "number",
+   "value_reason": "숫자 결과(0.64 ppm)",
+   "check_reasons": []
+  },
+  {
+   "raw_name": "Manganese (Mn)",
+   "normalized_name": "Mn",
+   "mapping_source": "dictionary",
+   "raw_value": "0.38 ppm",
+   "raw_spec": "≤ 3 ppm",
+   "unit": null,
+   "confidence": 0.75,
+   "bbox": {
+    "page": 1,
+    "x": 0.5724,
+    "y": 0.4925,
+    "w": 0.0678,
+    "h": 0.0165
+   },
+   "value_kind": "number",
+   "value_reason": "숫자 결과(0.38 ppm)",
+   "check_reasons": []
+  },
+  {
+   "raw_name": "Silicon (Si)",
+   "normalized_name": "Si",
+   "mapping_source": "dictionary",
+   "raw_value": "4.6 ppm",
+   "raw_spec": "≤ 30 ppm",
+   "unit": null,
+   "confidence": 0.75,
+   "bbox": {
+    "page": 1,
+    "x": 0.5766,
+    "y": 0.512,
+    "w": 0.0595,
+    "h": 0.0157
+   },
+   "value_kind": "number",
+   "value_reason": "숫자 결과(4.6 ppm)",
+   "check_reasons": []
+  },
+  {
+   "raw_name": "Sulfate (SO2)",
+   "normalized_name": "황산염",
+   "mapping_source": "dictionary",
+   "raw_value": "226 ppm",
+   "raw_spec": "≤ 800 ppm",
+   "unit": null,
+   "confidence": 0.75,
+   "bbox": {
+    "page": 1,
+    "x": 0.5753,
+    "y": 0.5317,
+    "w": 0.0621,
+    "h": 0.0153
+   },
+   "value_kind": "number",
+   "value_reason": "숫자 결과(226 ppm)",
+   "check_reasons": []
+  },
+  {
+   "raw_name": "Chloride (CI)",
+   "normalized_name": "염화물",
+   "mapping_source": "dictionary",
+   "raw_value": "22.0 ppm",
+   "raw_spec": "≤ 50 ppm",
+   "unit": null,
+   "confidence": 0.75,
+   "bbox": {
+    "page": 1,
+    "x": 0.573,
+    "y": 0.5505,
+    "w": 0.0672,
+    "h": 0.0165
+   },
+   "value_kind": "number",
+   "value_reason": "숫자 결과(22.0 ppm)",
+   "check_reasons": []
+  },
+  {
+   "raw_name": "Moisture (105 °C)",
+   "normalized_name": "수분",
+   "mapping_source": "dictionary",
+   "raw_value": "0.13 %",
+   "raw_spec": "≤ 0.25 %",
+   "unit": null,
+   "confidence": 0.75,
+   "bbox": {
+    "page": 1,
+    "x": 0.5783,
+    "y": 0.57,
+    "w": 0.0553,
+    "h": 0.0153
+   },
+   "value_kind": "number",
+   "value_reason": "숫자 결과(0.13 %)",
+   "check_reasons": []
+  },
+  {
+   "raw_name": "Magnetic Impurities",
+   "normalized_name": "자성이물",
+   "mapping_source": "dictionary",
+   "raw_value": "86 ppb",
+   "raw_spec": "≤ 300 ppb",
+   "unit": null,
+   "confidence": 0.75,
+   "bbox": {
+    "page": 1,
+    "x": 0.5803,
+    "y": 0.5897,
+    "w": 0.052,
+    "h": 0.0161
+   },
+   "value_kind": "number",
+   "value_reason": "숫자 결과(86 ppb)",
+   "check_reasons": []
+  },
+  {
+   "raw_name": "Particle Size D50",
+   "normalized_name": "입도 D50",
+   "mapping_source": "dictionary",
+   "raw_value": "5.6 μm",
+   "raw_spec": "3-8μm",
+   "unit": null,
+   "confidence": 0.75,
+   "bbox": {
+    "page": 1,
+    "x": 0.5792,
+    "y": 0.6075,
+    "w": 0.0536,
+    "h": 0.0179
+   },
+   "value_kind": "number",
+   "value_reason": "숫자 결과(5.6 μm)",
+   "check_reasons": []
+  }
+ ]
+}
