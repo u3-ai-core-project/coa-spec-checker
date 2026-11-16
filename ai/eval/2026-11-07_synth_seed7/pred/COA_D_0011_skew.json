@@ -1,0 +1,414 @@
+{
+ "doc_type": "coa",
+ "supplier": "Corvane Lithium Refining Pty Ltd",
+ "lot_no": "KC26-094-01",
+ "test_date": "2026-04-06",
+ "origin": null,
+ "applied_standard": "CVL-SPEC-LC-BG Rev 2",
+ "product_name": "SHIPMENT",
+ "manufacture_date": null,
+ "issue_date": null,
+ "expiry_date": null,
+ "retest_date": "2027-04-04",
+ "items": [
+  {
+   "raw_name": "Appearance 一",
+   "normalized_name": "외관",
+   "mapping_source": "ai",
+   "raw_value": "Conforms",
+   "raw_spec": "White powder",
+   "unit": null,
+   "confidence": 0.6,
+   "bbox": {
+    "page": 1,
+    "x": 0.6971,
+    "y": 0.307,
+    "w": 0.0738,
+    "h": 0.0159
+   },
+   "value_kind": "pass_text",
+   "value_reason": "합격 문구(Conforms)",
+   "check_reasons": []
+  },
+  {
+   "raw_name": "Li2CO3 (as Li2CO3)",
+   "normalized_name": "순도",
+   "mapping_source": "dictionary",
+   "raw_value": "99.73",
+   "raw_spec": "≥ 99.50",
+   "unit": "% w/w",
+   "confidence": 0.75,
+   "bbox": {
+    "page": 1,
+    "x": 0.7271,
+    "y": 0.3244,
+    "w": 0.0459,
+    "h": 0.016
+   },
+   "value_kind": "number",
+   "value_reason": "숫자 결과(99.73)",
+   "check_reasons": []
+  },
+  {
+   "raw_name": "Moisture (105 °C)",
+   "normalized_name": "수분",
+   "mapping_source": "dictionary",
+   "raw_value": "0.11",
+   "raw_spec": "≤ 0.25",
+   "unit": "% w/w",
+   "confidence": 0.75,
+   "bbox": {
+    "page": 1,
+    "x": 0.735,
+    "y": 0.3418,
+    "w": 0.0393,
+    "h": 0.0171
+   },
+   "value_kind": "number",
+   "value_reason": "숫자 결과(0.11)",
+   "check_reasons": []
+  },
+  {
+   "raw_name": "Chloride (CI)",
+   "normalized_name": "염화물",
+   "mapping_source": "dictionary",
+   "raw_value": "6",
+   "raw_spec": "≤ 40",
+   "unit": "mg/kg",
+   "confidence": 0.75,
+   "bbox": {
+    "page": 1,
+    "x": 0.7554,
+    "y": 0.3768,
+    "w": 0.0219,
+    "h": 0.0151
+   },
+   "value_kind": "number",
+   "value_reason": "숫자 결과(6)",
+   "check_reasons": []
+  },
+  {
+   "raw_name": "Sulfate (SO4)",
+   "normalized_name": "황산염",
+   "mapping_source": "dictionary",
+   "raw_value": "374",
+   "raw_spec": "≤ 800",
+   "unit": "mg/kg",
+   "confidence": 0.75,
+   "bbox": {
+    "page": 1,
+    "x": 0.7421,
+    "y": 0.3931,
+    "w": 0.0364,
+    "h": 0.0173
+   },
+   "value_kind": "number",
+   "value_reason": "숫자 결과(374)",
+   "check_reasons": []
+  },
+  {
+   "raw_name": "Sodium (Na)",
+   "normalized_name": "Na",
+   "mapping_source": "dictionary",
+   "raw_value": "32",
+   "raw_spec": "≤ 250",
+   "unit": "mg/kg",
+   "confidence": 0.75,
+   "bbox": {
+    "page": 1,
+    "x": 0.7512,
+    "y": 0.4281,
+    "w": 0.0295,
+    "h": 0.0162
+   },
+   "value_kind": "number",
+   "value_reason": "숫자 결과(32)",
+   "check_reasons": []
+  },
+  {
+   "raw_name": "Potassium (K)",
+   "normalized_name": "K",
+   "mapping_source": "dictionary",
+   "raw_value": "4.3",
+   "raw_spec": "≤ 30",
+   "unit": "mg/kg",
+   "confidence": 0.75,
+   "bbox": {
+    "page": 1,
+    "x": 0.7484,
+    "y": 0.4456,
+    "w": 0.0331,
+    "h": 0.016
+   },
+   "value_kind": "number",
+   "value_reason": "숫자 결과(4.3)",
+   "check_reasons": []
+  },
+  {
+   "raw_name": "Calcium (Ca)",
+   "normalized_name": "Ca",
+   "mapping_source": "dictionary",
+   "raw_value": "15.6",
+   "raw_spec": "≤ 60",
+   "unit": "mg/kg",
+   "confidence": 0.75,
+   "bbox": {
+    "page": 1,
+    "x": 0.7427,
+    "y": 0.4637,
+    "w": 0.0394,
+    "h": 0.0167
+   },
+   "value_kind": "number",
+   "value_reason": "숫자 결과(15.6)",
+   "check_reasons": []
+  },
+  {
+   "raw_name": "Magnesium (Mg)",
+   "normalized_name": "Mg",
+   "mapping_source": "dictionary",
+   "raw_value": "30.8",
+   "raw_spec": "≤ 80",
+   "unit": "mg/kg",
+   "confidence": 0.75,
+   "bbox": {
+    "page": 1,
+    "x": 0.7435,
+    "y": 0.4813,
+    "w": 0.0386,
+    "h": 0.0163
+   },
+   "value_kind": "number",
+   "value_reason": "숫자 결과(30.8)",
+   "check_reasons": []
+  },
+  {
+   "raw_name": "Iron (Fe)",
+   "normalized_name": "Fe",
+   "mapping_source": "dictionary",
+   "raw_value": "1.0",
+   "raw_spec": "≤ 8",
+   "unit": "mg/kg",
+   "confidence": 0.75,
+   "bbox": {
+    "page": 1,
+    "x": 0.7507,
+    "y": 0.4983,
+    "w": 0.0334,
+    "h": 0.0176
+   },
+   "value_kind": "number",
+   "value_reason": "숫자 결과(1.0)",
+   "check_reasons": []
+  },
+  {
+   "raw_name": "Copper (Cu)",
+   "normalized_name": "Cu",
+   "mapping_source": "dictionary",
+   "raw_value": "<0.30",
+   "raw_spec": "≤ 3",
+   "unit": "mg/kg",
+   "confidence": 0.75,
+   "bbox": {
+    "page": 1,
+    "x": 0.7385,
+    "y": 0.517,
+    "w": 0.0465,
+    "h": 0.017
+   },
+   "value_kind": "bound",
+   "value_reason": "부등호 결과(<0.30), 규격 조건(<= 3)과 다름",
+   "check_reasons": []
+  },
+  {
+   "raw_name": "Manganese (Mn)",
+   "normalized_name": "Mn",
+   "mapping_source": "dictionary",
+   "raw_value": "0.48",
+   "raw_spec": "≤ 3",
+   "unit": "mg/kg",
+   "confidence": 0.75,
+   "bbox": {
+    "page": 1,
+    "x": 0.7464,
+    "y": 0.5344,
+    "w": 0.0392,
+    "h": 0.0174
+   },
+   "value_kind": "number",
+   "value_reason": "숫자 결과(0.48)",
+   "check_reasons": []
+  },
+  {
+   "raw_name": "Silicon (Si)",
+   "normalized_name": "Si",
+   "mapping_source": "dictionary",
+   "raw_value": "3.4",
+   "raw_spec": "≤ 25",
+   "unit": "mg/kg",
+   "confidence": 0.75,
+   "bbox": {
+    "page": 1,
+    "x": 0.7535,
+    "y": 0.5521,
+    "w": 0.0335,
+    "h": 0.0172
+   },
+   "value_kind": "number",
+   "value_reason": "숫자 결과(3.4)",
+   "check_reasons": []
+  },
+  {
+   "raw_name": "Nickel (Ni)",
+   "normalized_name": "Ni",
+   "mapping_source": "dictionary",
+   "raw_value": "<0.5",
+   "raw_spec": null,
+   "unit": "mg/kg",
+   "confidence": 0.75,
+   "bbox": {
+    "page": 1,
+    "x": 0.7492,
+    "y": 0.5701,
+    "w": 0.0393,
+    "h": 0.0171
+   },
+   "value_kind": "bound",
+   "value_reason": "부등호 결과(<0.5)",
+   "check_reasons": []
+  },
+  {
+   "raw_name": "Chromium (Cr)",
+   "normalized_name": "Cr",
+   "mapping_source": "dictionary",
+   "raw_value": "<0.2",
+   "raw_spec": null,
+   "unit": "mg/kg",
+   "confidence": 0.75,
+   "bbox": {
+    "page": 1,
+    "x": 0.7499,
+    "y": 0.5882,
+    "w": 0.04,
+    "h": 0.0171
+   },
+   "value_kind": "bound",
+   "value_reason": "부등호 결과(<0.2)",
+   "check_reasons": []
+  },
+  {
+   "raw_name": "Zinc (Zn)",
+   "normalized_name": "Zn",
+   "mapping_source": "dictionary",
+   "raw_value": "1.1",
+   "raw_spec": null,
+   "unit": "mg/kg",
+   "confidence": 0.75,
+   "bbox": {
+    "page": 1,
+    "x": 0.7578,
+    "y": 0.6056,
+    "w": 0.0327,
+    "h": 0.0176
+   },
+   "value_kind": "number",
+   "value_reason": "숫자 결과(1.1)",
+   "check_reasons": []
+  },
+  {
+   "raw_name": "Aluminium (AI)",
+   "normalized_name": "Al",
+   "mapping_source": "dictionary",
+   "raw_value": "2.3",
+   "raw_spec": null,
+   "unit": "mg/kg",
+   "confidence": 0.75,
+   "bbox": {
+    "page": 1,
+    "x": 0.7578,
+    "y": 0.6233,
+    "w": 0.0334,
+    "h": 0.0176
+   },
+   "value_kind": "number",
+   "value_reason": "숫자 결과(2.3)",
+   "check_reasons": []
+  },
+  {
+   "raw_name": "Magnetic impurities",
+   "normalized_name": "자성이물",
+   "mapping_source": "dictionary",
+   "raw_value": "82",
+   "raw_spec": "≤ 300",
+   "unit": "ppb",
+   "confidence": 0.75,
+   "bbox": {
+    "page": 1,
+    "x": 0.7647,
+    "y": 0.658,
+    "w": 0.0288,
+    "h": 0.0162
+   },
+   "value_kind": "number",
+   "value_reason": "숫자 결과(82)",
+   "check_reasons": []
+  },
+  {
+   "raw_name": "Particle size D10",
+   "normalized_name": "입도 D10",
+   "mapping_source": "dictionary",
+   "raw_value": "2.4",
+   "raw_spec": null,
+   "unit": "μm",
+   "confidence": 0.75,
+   "bbox": {
+    "page": 1,
+    "x": 0.7626,
+    "y": 0.676,
+    "w": 0.0317,
+    "h": 0.0159
+   },
+   "value_kind": "number",
+   "value_reason": "숫자 결과(2.4)",
+   "check_reasons": []
+  },
+  {
+   "raw_name": "Particle size D50",
+   "normalized_name": "입도 D50",
+   "mapping_source": "dictionary",
+   "raw_value": "5.8",
+   "raw_spec": "3.0 – 8.0",
+   "unit": "μm",
+   "confidence": 0.75,
+   "bbox": {
+    "page": 1,
+    "x": 0.7633,
+    "y": 0.6942,
+    "w": 0.0317,
+    "h": 0.0159
+   },
+   "value_kind": "number",
+   "value_reason": "숫자 결과(5.8)",
+   "check_reasons": []
+  },
+  {
+   "raw_name": "Particle size D90",
+   "normalized_name": "입도 D90",
+   "mapping_source": "dictionary",
+   "raw_value": "11.5",
+   "raw_spec": null,
+   "unit": "μm",
+   "confidence": 0.75,
+   "bbox": {
+    "page": 1,
+    "x": 0.759,
+    "y": 0.7121,
+    "w": 0.0368,
+    "h": 0.0157
+   },
+   "value_kind": "number",
+   "value_reason": "숫자 결과(11.5)",
+   "check_reasons": []
+  }
+ ]
+}
