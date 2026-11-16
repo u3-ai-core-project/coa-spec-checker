@@ -1,0 +1,319 @@
+{
+ "doc_type": "coa",
+ "supplier": "RUILAN LITHIUM (YICHUN) CO., LTD.",
+ "lot_no": "LC26062603",
+ "test_date": "2026-06-28",
+ "origin": null,
+ "applied_standard": "YS/T 582-2023 (D1)",
+ "product_name": "电池级碳酸锂 Battery Grade Lithium Carbonate",
+ "manufacture_date": "2026-06-26",
+ "issue_date": null,
+ "expiry_date": "2027-06-26",
+ "retest_date": null,
+ "items": [
+  {
+   "raw_name": "外观Appearance 一",
+   "normalized_name": "외관",
+   "mapping_source": "dictionary",
+   "raw_value": "符合",
+   "raw_spec": "白色粉末，无可见杂 质",
+   "unit": null,
+   "confidence": 0.75,
+   "bbox": {
+    "page": 1,
+    "x": 0.6895,
+    "y": 0.3917,
+    "w": 0.0365,
+    "h": 0.017
+   },
+   "value_kind": "pass_text",
+   "value_reason": "합격 문구(符合)",
+   "check_reasons": []
+  },
+  {
+   "raw_name": "碳酸锂 Li2CO3",
+   "normalized_name": "순도",
+   "mapping_source": "dictionary",
+   "raw_value": "99.70",
+   "raw_spec": "≥99.5",
+   "unit": "%",
+   "confidence": 0.75,
+   "bbox": {
+    "page": 1,
+    "x": 0.6891,
+    "y": 0.419,
+    "w": 0.0393,
+    "h": 0.0143
+   },
+   "value_kind": "number",
+   "value_reason": "숫자 결과(99.70)",
+   "check_reasons": []
+  },
+  {
+   "raw_name": "钾钠合量 Na+K",
+   "normalized_name": "Na+K",
+   "mapping_source": "dictionary",
+   "raw_value": "0.0083",
+   "raw_spec": "≤0.03",
+   "unit": "%",
+   "confidence": 0.75,
+   "bbox": {
+    "page": 1,
+    "x": 0.6862,
+    "y": 0.4376,
+    "w": 0.0467,
+    "h": 0.0155
+   },
+   "value_kind": "number",
+   "value_reason": "숫자 결과(0.0083)",
+   "check_reasons": []
+  },
+  {
+   "raw_name": "钙Ca",
+   "normalized_name": "Ca",
+   "mapping_source": "dictionary",
+   "raw_value": "0.0017",
+   "raw_spec": "≤0.0080",
+   "unit": "%",
+   "confidence": 0.75,
+   "bbox": {
+    "page": 1,
+    "x": 0.6881,
+    "y": 0.4581,
+    "w": 0.0456,
+    "h": 0.0128
+   },
+   "value_kind": "number",
+   "value_reason": "숫자 결과(0.0017)",
+   "check_reasons": []
+  },
+  {
+   "raw_name": "镁Mg",
+   "normalized_name": "Mg",
+   "mapping_source": "dictionary",
+   "raw_value": "0.0009",
+   "raw_spec": "≤0.0080",
+   "unit": "%",
+   "confidence": 0.75,
+   "bbox": {
+    "page": 1,
+    "x": 0.6889,
+    "y": 0.4767,
+    "w": 0.0456,
+    "h": 0.0128
+   },
+   "value_kind": "number",
+   "value_reason": "숫자 결과(0.0009)",
+   "check_reasons": []
+  },
+  {
+   "raw_name": "铁 Fe",
+   "normalized_name": "Fe",
+   "mapping_source": "dictionary",
+   "raw_value": "0.00021",
+   "raw_spec": "≤0.0010",
+   "unit": "%",
+   "confidence": 0.75,
+   "bbox": {
+    "page": 1,
+    "x": 0.6862,
+    "y": 0.4958,
+    "w": 0.0524,
+    "h": 0.0139
+   },
+   "value_kind": "number",
+   "value_reason": "숫자 결과(0.00021)",
+   "check_reasons": []
+  },
+  {
+   "raw_name": "铜 Cu",
+   "normalized_name": "Cu",
+   "mapping_source": "dictionary",
+   "raw_value": "0.00004",
+   "raw_spec": "≤0.0003",
+   "unit": "%",
+   "confidence": 0.75,
+   "bbox": {
+    "page": 1,
+    "x": 0.6881,
+    "y": 0.5151,
+    "w": 0.052,
+    "h": 0.0132
+   },
+   "value_kind": "number",
+   "value_reason": "숫자 결과(0.00004)",
+   "check_reasons": []
+  },
+  {
+   "raw_name": "锰Mn",
+   "normalized_name": "Mn",
+   "mapping_source": "dictionary",
+   "raw_value": "0.00009",
+   "raw_spec": "≤0.0003",
+   "unit": "%",
+   "confidence": 0.75,
+   "bbox": {
+    "page": 1,
+    "x": 0.6883,
+    "y": 0.5338,
+    "w": 0.0524,
+    "h": 0.014
+   },
+   "value_kind": "number",
+   "value_reason": "숫자 결과(0.00009)",
+   "check_reasons": []
+  },
+  {
+   "raw_name": "镍 Ni",
+   "normalized_name": "Ni",
+   "mapping_source": "dictionary",
+   "raw_value": "<0.00005",
+   "raw_spec": "≤0.0010",
+   "unit": "%",
+   "confidence": 0.75,
+   "bbox": {
+    "page": 1,
+    "x": 0.6862,
+    "y": 0.5525,
+    "w": 0.0609,
+    "h": 0.014
+   },
+   "value_kind": "bound",
+   "value_reason": "부등호 결과(<0.00005), 규격 조건(<= 0.001)과 다름",
+   "check_reasons": []
+  },
+  {
+   "raw_name": "硅 Si",
+   "normalized_name": "Si",
+   "mapping_source": "dictionary",
+   "raw_value": "0.0003",
+   "raw_spec": "≤0.0030",
+   "unit": "%",
+   "confidence": 0.75,
+   "bbox": {
+    "page": 1,
+    "x": 0.6945,
+    "y": 0.5725,
+    "w": 0.0449,
+    "h": 0.0128
+   },
+   "value_kind": "number",
+   "value_reason": "숫자 결과(0.0003)",
+   "check_reasons": []
+  },
+  {
+   "raw_name": "硼B",
+   "normalized_name": "B",
+   "mapping_source": "dictionary",
+   "raw_value": "0.00054",
+   "raw_spec": "≤0.0050",
+   "unit": "%",
+   "confidence": 0.75,
+   "bbox": {
+    "page": 1,
+    "x": 0.6911,
+    "y": 0.591,
+    "w": 0.0538,
+    "h": 0.014
+   },
+   "value_kind": "number",
+   "value_reason": "숫자 결과(0.00054)",
+   "check_reasons": []
+  },
+  {
+   "raw_name": "硫酸根 sO",
+   "normalized_name": "황산염",
+   "mapping_source": "dictionary",
+   "raw_value": "0.032",
+   "raw_spec": "≤0.080",
+   "unit": "%",
+   "confidence": 0.75,
+   "bbox": {
+    "page": 1,
+    "x": 0.6997,
+    "y": 0.6105,
+    "w": 0.0395,
+    "h": 0.0139
+   },
+   "value_kind": "number",
+   "value_reason": "숫자 결과(0.032)",
+   "check_reasons": []
+  },
+  {
+   "raw_name": "氯离子 Cl",
+   "normalized_name": "염화물",
+   "mapping_source": "dictionary",
+   "raw_value": "0.0012",
+   "raw_spec": "≤0.0050",
+   "unit": "%",
+   "confidence": 0.75,
+   "bbox": {
+    "page": 1,
+    "x": 0.6968,
+    "y": 0.6295,
+    "w": 0.046,
+    "h": 0.0136
+   },
+   "value_kind": "number",
+   "value_reason": "숫자 결과(0.0012)",
+   "check_reasons": []
+  },
+  {
+   "raw_name": "水分H2O",
+   "normalized_name": "수분",
+   "mapping_source": "dictionary",
+   "raw_value": "0.09",
+   "raw_spec": "≤0.25",
+   "unit": "%",
+   "confidence": 0.75,
+   "bbox": {
+    "page": 1,
+    "x": 0.7055,
+    "y": 0.6485,
+    "w": 0.0315,
+    "h": 0.0139
+   },
+   "value_kind": "number",
+   "value_reason": "숫자 결과(0.09)",
+   "check_reasons": []
+  },
+  {
+   "raw_name": "磁性物质 Magnetic Substance",
+   "normalized_name": "자성이물",
+   "mapping_source": "dictionary",
+   "raw_value": "33",
+   "raw_spec": "≤300",
+   "unit": "μg/kg",
+   "confidence": 0.75,
+   "bbox": {
+    "page": 1,
+    "x": 0.7119,
+    "y": 0.6684,
+    "w": 0.0209,
+    "h": 0.0134
+   },
+   "value_kind": "number",
+   "value_reason": "숫자 결과(33)",
+   "check_reasons": []
+  },
+  {
+   "raw_name": "粒度 D50 Particle Size",
+   "normalized_name": "입도 D50",
+   "mapping_source": "dictionary",
+   "raw_value": "6.1",
+   "raw_spec": "3.0~8.0",
+   "unit": "μm",
+   "confidence": 0.75,
+   "bbox": {
+    "page": 1,
+    "x": 0.7112,
+    "y": 0.6871,
+    "w": 0.0243,
+    "h": 0.014
+   },
+   "value_kind": "number",
+   "value_reason": "숫자 결과(6.1)",
+   "check_reasons": []
+  }
+ ]
+}

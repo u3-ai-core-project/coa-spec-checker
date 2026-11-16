@@ -1,0 +1,172 @@
+{
+ "document_id": "COA_D_0020_blur",
+ "material_code": "LI2CO3",
+ "source": "synthetic",
+ "form": "D",
+ "split": "dev",
+ "header": {
+  "supplier": "Corvane Lithium Refining Pty Ltd",
+  "lot_no": "KC26-266-03",
+  "test_date": "2026-09-24"
+ },
+ "items": [
+  {
+   "normalized_name": "외관",
+   "raw_value": "Conforms",
+   "unit": null,
+   "judgement": "pass",
+   "reason_code": null
+  },
+  {
+   "normalized_name": "순도",
+   "raw_value": "99.79",
+   "unit": "% w/w",
+   "converted_value": 99.79,
+   "judgement": "pass",
+   "reason_code": null
+  },
+  {
+   "normalized_name": "수분",
+   "raw_value": "0.10",
+   "unit": "% w/w",
+   "converted_value": 0.1,
+   "judgement": "pass",
+   "reason_code": null
+  },
+  {
+   "normalized_name": "염화물",
+   "raw_value": "10",
+   "unit": "mg/kg",
+   "converted_value": 10.0,
+   "judgement": "pass",
+   "reason_code": null
+  },
+  {
+   "normalized_name": "황산염",
+   "raw_value": "463",
+   "unit": "mg/kg",
+   "converted_value": 463.0,
+   "judgement": "pass",
+   "reason_code": null
+  },
+  {
+   "normalized_name": "Na",
+   "raw_value": "59",
+   "unit": "mg/kg",
+   "converted_value": 59.0,
+   "judgement": "pass",
+   "reason_code": null
+  },
+  {
+   "normalized_name": "K",
+   "raw_value": "4.8",
+   "unit": "mg/kg",
+   "converted_value": 4.8,
+   "judgement": "pass",
+   "reason_code": null
+  },
+  {
+   "normalized_name": "Ca",
+   "raw_value": "40.0",
+   "unit": "mg/kg",
+   "converted_value": 40.0,
+   "judgement": "pass",
+   "reason_code": null
+  },
+  {
+   "normalized_name": "Mg",
+   "raw_value": "6.3",
+   "unit": "mg/kg",
+   "converted_value": 6.3,
+   "judgement": "pass",
+   "reason_code": null
+  },
+  {
+   "normalized_name": "Fe",
+   "raw_value": "0.9",
+   "unit": "mg/kg",
+   "converted_value": 0.9,
+   "judgement": "pass",
+   "reason_code": null
+  },
+  {
+   "normalized_name": "Cu",
+   "raw_value": "1.44",
+   "unit": "mg/kg",
+   "converted_value": 1.44,
+   "judgement": "pass",
+   "reason_code": null
+  },
+  {
+   "normalized_name": "Mn",
+   "raw_value": "0.63",
+   "unit": "mg/kg",
+   "converted_value": 0.63,
+   "judgement": "pass",
+   "reason_code": null
+  },
+  {
+   "normalized_name": "Si",
+   "raw_value": "6.2",
+   "unit": "mg/kg",
+   "converted_value": 6.2,
+   "judgement": "pass",
+   "reason_code": null
+  },
+  {
+   "normalized_name": "Ni",
+   "raw_value": "0.8",
+   "unit": "mg/kg",
+   "converted_value": 0.8
+  },
+  {
+   "normalized_name": "Cr",
+   "raw_value": "0.3",
+   "unit": "mg/kg",
+   "converted_value": 0.3
+  },
+  {
+   "normalized_name": "Zn",
+   "raw_value": "0.9",
+   "unit": "mg/kg",
+   "converted_value": 0.9
+  },
+  {
+   "normalized_name": "Al",
+   "raw_value": "1.8",
+   "unit": "mg/kg",
+   "converted_value": 1.8
+  },
+  {
+   "normalized_name": "자성이물",
+   "raw_value": "62",
+   "unit": "ppb",
+   "converted_value": 62.0,
+   "judgement": "pass",
+   "reason_code": null
+  },
+  {
+   "normalized_name": "입도 D10",
+   "raw_value": "2.7",
+   "unit": "µm",
+   "converted_value": 2.7
+  },
+  {
+   "normalized_name": "입도 D50",
+   "raw_value": "6.1",
+   "unit": "µm",
+   "converted_value": 6.1,
+   "judgement": "pass",
+   "reason_code": null
+  },
+  {
+   "normalized_name": "입도 D90",
+   "raw_value": "13.2",
+   "unit": "µm",
+   "converted_value": 13.2
+  }
+ ],
+ "lot_recommendation": "approve",
+ "document_issues": [],
+ "degradation": "blur"
+}

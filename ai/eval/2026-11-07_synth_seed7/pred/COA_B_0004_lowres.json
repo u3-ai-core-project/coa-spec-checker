@@ -1,0 +1,262 @@
+{
+ "doc_type": "coa",
+ "supplier": "RUILAN LITHIUM (YICHUN) CO., LTD",
+ "lot_no": "LC25110702",
+ "test_date": "2025-11-10",
+ "origin": null,
+ "applied_standard": null,
+ "product_name": "电池级碳酸锂 Battrery Grode Lithinm Carbonate",
+ "manufacture_date": "2025-11-07",
+ "issue_date": null,
+ "expiry_date": "2026-11-07",
+ "retest_date": null,
+ "items": [
+  {
+   "raw_name": "Tine ien",
+   "normalized_name": "Tine ien",
+   "mapping_source": "ai",
+   "raw_value": null,
+   "raw_spec": "Spenfionm",
+   "unit": null,
+   "confidence": 0.6,
+   "bbox": {
+    "page": 1,
+    "x": 0.2141,
+    "y": 0.3737,
+    "w": 0.6866,
+    "h": 0.0111
+   },
+   "value_kind": null,
+   "value_reason": null,
+   "check_reasons": []
+  },
+  {
+   "raw_name": "外a",
+   "normalized_name": "外a",
+   "mapping_source": "ai",
+   "raw_value": "符合",
+   "raw_spec": "白色粉末，无可见杂",
+   "unit": null,
+   "confidence": 0.6,
+   "bbox": {
+    "page": 1,
+    "x": 0.6966,
+    "y": 0.3976,
+    "w": 0.0336,
+    "h": 0.0153
+   },
+   "value_kind": "pass_text",
+   "value_reason": "합격 문구(符合)",
+   "check_reasons": []
+  },
+  {
+   "raw_name": "碳酸钾co",
+   "normalized_name": "碳酸钾co",
+   "mapping_source": "ai",
+   "raw_value": "99.77",
+   "raw_spec": "≥99.5",
+   "unit": "%",
+   "confidence": 0.6,
+   "bbox": {
+    "page": 1,
+    "x": 0.6934,
+    "y": 0.4251,
+    "w": 0.04,
+    "h": 0.0133
+   },
+   "value_kind": "number",
+   "value_reason": "숫자 결과(99.77)",
+   "check_reasons": []
+  },
+  {
+   "raw_name": "钠",
+   "normalized_name": "Na",
+   "mapping_source": "dictionary",
+   "raw_value": "0.0185",
+   "raw_spec": "≤0.025",
+   "unit": "%",
+   "confidence": 0.75,
+   "bbox": {
+    "page": 1,
+    "x": 0.6895,
+    "y": 0.4455,
+    "w": 0.0471,
+    "h": 0.0113
+   },
+   "value_kind": "number",
+   "value_reason": "숫자 결과(0.0185)",
+   "check_reasons": []
+  },
+  {
+   "raw_name": "钾",
+   "normalized_name": "K",
+   "mapping_source": "dictionary",
+   "raw_value": "0.00007",
+   "raw_spec": "≤0.0050",
+   "unit": "%",
+   "confidence": 0.75,
+   "bbox": {
+    "page": 1,
+    "x": 0.6862,
+    "y": 0.4638,
+    "w": 0.0531,
+    "h": 0.0125
+   },
+   "value_kind": "number",
+   "value_reason": "숫자 결과(0.00007)",
+   "check_reasons": []
+  },
+  {
+   "raw_name": "钙",
+   "normalized_name": "Ca",
+   "mapping_source": "dictionary",
+   "raw_value": "0.0015",
+   "raw_spec": "<0.0080",
+   "unit": "%",
+   "confidence": 0.75,
+   "bbox": {
+    "page": 1,
+    "x": 0.6896,
+    "y": 0.4833,
+    "w": 0.0477,
+    "h": 0.0117
+   },
+   "value_kind": "number",
+   "value_reason": "숫자 결과(0.0015)",
+   "check_reasons": []
+  },
+  {
+   "raw_name": "铁",
+   "normalized_name": "Fe",
+   "mapping_source": "dictionary",
+   "raw_value": "0.00016",
+   "raw_spec": "<0.0010",
+   "unit": "%",
+   "confidence": 0.75,
+   "bbox": {
+    "page": 1,
+    "x": 0.6869,
+    "y": 0.5212,
+    "w": 0.0531,
+    "h": 0.0125
+   },
+   "value_kind": "number",
+   "value_reason": "숫자 결과(0.00016)",
+   "check_reasons": []
+  },
+  {
+   "raw_name": "重金属m",
+   "normalized_name": "중금속 총량",
+   "mapping_source": "dictionary",
+   "raw_value": "0.00085",
+   "raw_spec": "≤0.0015",
+   "unit": "%",
+   "confidence": 0.75,
+   "bbox": {
+    "page": 1,
+    "x": 0.6862,
+    "y": 0.5394,
+    "w": 0.0531,
+    "h": 0.0125
+   },
+   "value_kind": "number",
+   "value_reason": "숫자 결과(0.00085)",
+   "check_reasons": []
+  },
+  {
+   "raw_name": "硫酸根 N",
+   "normalized_name": "황산염",
+   "mapping_source": "dictionary",
+   "raw_value": "0.038",
+   "raw_spec": "≤0.080",
+   "unit": null,
+   "confidence": 0.75,
+   "bbox": {
+    "page": 1,
+    "x": 0.6933,
+    "y": 0.6352,
+    "w": 0.0409,
+    "h": 0.0129
+   },
+   "value_kind": "number",
+   "value_reason": "숫자 결과(0.038)",
+   "check_reasons": []
+  },
+  {
+   "raw_name": "氯离子",
+   "normalized_name": "염화물",
+   "mapping_source": "dictionary",
+   "raw_value": "0.0024",
+   "raw_spec": "≤0.0050",
+   "unit": "%",
+   "confidence": 0.75,
+   "bbox": {
+    "page": 1,
+    "x": 0.6903,
+    "y": 0.6552,
+    "w": 0.0449,
+    "h": 0.0117
+   },
+   "value_kind": "number",
+   "value_reason": "숫자 결과(0.0024)",
+   "check_reasons": []
+  },
+  {
+   "raw_name": "水分n0 N",
+   "normalized_name": "수분",
+   "mapping_source": "dictionary",
+   "raw_value": "0.10",
+   "raw_spec": "≤0.25",
+   "unit": null,
+   "confidence": 0.75,
+   "bbox": {
+    "page": 1,
+    "x": 0.6982,
+    "y": 0.6739,
+    "w": 0.0298,
+    "h": 0.0121
+   },
+   "value_kind": "number",
+   "value_reason": "숫자 결과(0.10)",
+   "check_reasons": []
+  },
+  {
+   "raw_name": "磁性物M Mtagnanc Sahsaan",
+   "normalized_name": "磁性物M Mtagnanc Sahsaan",
+   "mapping_source": "ai",
+   "raw_value": "58",
+   "raw_spec": "≤300",
+   "unit": "μg/kg",
+   "confidence": 0.6,
+   "bbox": {
+    "page": 1,
+    "x": 0.7004,
+    "y": 0.6931,
+    "w": 0.0246,
+    "h": 0.0129
+   },
+   "value_kind": "number",
+   "value_reason": "숫자 결과(58)",
+   "check_reasons": []
+  },
+  {
+   "raw_name": "检度 D50 Panucie Siae",
+   "normalized_name": "입도 D50",
+   "mapping_source": "dictionary",
+   "raw_value": "5.9",
+   "raw_spec": "3.0~8.0",
+   "unit": "μm",
+   "confidence": 0.75,
+   "bbox": {
+    "page": 1,
+    "x": 0.6991,
+    "y": 0.7118,
+    "w": 0.0265,
+    "h": 0.0133
+   },
+   "value_kind": "number",
+   "value_reason": "숫자 결과(5.9)",
+   "check_reasons": []
+  }
+ ]
+}

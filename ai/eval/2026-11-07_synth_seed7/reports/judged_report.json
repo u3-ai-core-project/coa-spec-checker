@@ -1,0 +1,1563 @@
+{
+  "meta": {
+    "generated_at": "2026-11-07T23:45:09+09:00",
+    "documents": 240,
+    "threshold": 0.8,
+    "gt": "../ai/data/generated/eval_1107_seed7/gt",
+    "pred": "../ai/data/generated/eval_1107_seed7/pred_judged",
+    "baseline": null,
+    "policy": {
+      "LOW_CONFIDENCE_THRESHOLD": 0.8,
+      "REASON_JUDGEMENT": {},
+      "ND_LIMIT_INCLUSIVE": true,
+      "UNMAPPED_AI_ITEM": "check",
+      "CROSS_RULES": [
+        "heavy_metal_total",
+        "na_k_sum"
+      ]
+    }
+  },
+  "system": {
+    "missing_predictions": [],
+    "extra_predictions": [],
+    "overall": {
+      "documents": 240,
+      "extraction": {
+        "items_on_coa": 4228,
+        "item_recall": 0.9927,
+        "extra_items": 58,
+        "value_accuracy": 0.9526,
+        "value_evaluated": 4197,
+        "header_accuracy": 0.9234,
+        "header_fields": 640,
+        "error_types": {
+          "number": 5,
+          "unit": 133,
+          "value_missing": 59,
+          "item_not_recognized": 31,
+          "qualifier": 2
+        }
+      },
+      "judgement": {
+        "items": 3596,
+        "accuracy": 0.3039,
+        "risky_missed": 0,
+        "hidden_fail_missed": 0,
+        "low_confidence_checks": 2451,
+        "confusion": {
+          "pass": {
+            "pass": 1052,
+            "check": 2413,
+            "missing": 59
+          },
+          "check": {
+            "check": 27,
+            "pass": 12,
+            "missing": 1
+          },
+          "fail": {
+            "fail": 5,
+            "check": 15
+          },
+          "undetermined": {
+            "undetermined": 1,
+            "check": 3
+          },
+          "missing": {
+            "missing": 8
+          }
+        }
+      },
+      "confidence": {
+        "threshold": 0.8,
+        "low_items": 3080,
+        "high_items": 1057,
+        "error_rate_low": 0.0325,
+        "error_rate_high": 0.0369,
+        "flag_precision": 0.0325,
+        "flag_recall": 0.7194
+      },
+      "reason_code": {
+        "micro": {
+          "tp": 19,
+          "fp": 135,
+          "fn": 53,
+          "precision": 0.1234,
+          "recall": 0.2639
+        },
+        "per_code": {
+          "AMBIGUOUS_ANALYTE": {
+            "tp": 0,
+            "fp": 2,
+            "fn": 8,
+            "precision": 0.0,
+            "recall": 0.0
+          },
+          "BOUND_ABOVE_LIMIT": {
+            "tp": 1,
+            "fp": 0,
+            "fn": 3,
+            "precision": 1.0,
+            "recall": 0.25
+          },
+          "MISSING_REQUIRED": {
+            "tp": 8,
+            "fp": 72,
+            "fn": 0,
+            "precision": 0.1,
+            "recall": 1.0
+          },
+          "ND_NO_LOD": {
+            "tp": 1,
+            "fp": 0,
+            "fn": 11,
+            "precision": 1.0,
+            "recall": 0.0833
+          },
+          "OUT_OF_SPEC": {
+            "tp": 5,
+            "fp": 0,
+            "fn": 15,
+            "precision": 1.0,
+            "recall": 0.25
+          },
+          "SPEC_COPIED": {
+            "tp": 4,
+            "fp": 0,
+            "fn": 12,
+            "precision": 1.0,
+            "recall": 0.25
+          },
+          "SUM_ONLY": {
+            "tp": 0,
+            "fp": 1,
+            "fn": 4,
+            "precision": 0.0,
+            "recall": 0.0
+          },
+          "UNMAPPED_ITEM": {
+            "tp": 0,
+            "fp": 58,
+            "fn": 0,
+            "precision": 0.0,
+            "recall": null
+          },
+          "UNPARSEABLE_VALUE": {
+            "tp": 0,
+            "fp": 2,
+            "fn": 0,
+            "precision": 0.0,
+            "recall": null
+          }
+        }
+      },
+      "document_issues": {
+        "micro": {
+          "tp": 1,
+          "fp": 0,
+          "fn": 3,
+          "precision": 1.0,
+          "recall": 0.25
+        },
+        "per_code": {
+          "DATE_CONFLICT": {
+            "tp": 1,
+            "fp": 0,
+            "fn": 3,
+            "precision": 1.0,
+            "recall": 0.25
+          }
+        }
+      },
+      "lot": {
+        "documents": 240,
+        "accuracy": 0.3875,
+        "auto_process_rate": 0.25,
+        "over_hold_rate": 0.75,
+        "false_reject_rate": 0.0,
+        "normal_documents": 180,
+        "confusion": {
+          "approve": {
+            "approve": 45,
+            "hold": 135
+          },
+          "hold": {
+            "hold": 44
+          },
+          "reject": {
+            "reject": 4,
+            "hold": 12
+          }
+        }
+      }
+    },
+    "groups": {
+      "material_code": {
+        "LI2CO3": {
+          "documents": 240,
+          "extraction": {
+            "items_on_coa": 4228,
+            "item_recall": 0.9927,
+            "extra_items": 58,
+            "value_accuracy": 0.9526,
+            "value_evaluated": 4197,
+            "header_accuracy": 0.9234,
+            "header_fields": 640,
+            "error_types": {
+              "number": 5,
+              "unit": 133,
+              "value_missing": 59,
+              "item_not_recognized": 31,
+              "qualifier": 2
+            }
+          },
+          "judgement": {
+            "items": 3596,
+            "accuracy": 0.3039,
+            "risky_missed": 0,
+            "hidden_fail_missed": 0,
+            "low_confidence_checks": 2451,
+            "confusion": {
+              "pass": {
+                "pass": 1052,
+                "check": 2413,
+                "missing": 59
+              },
+              "check": {
+                "check": 27,
+                "pass": 12,
+                "missing": 1
+              },
+              "fail": {
+                "fail": 5,
+                "check": 15
+              },
+              "undetermined": {
+                "undetermined": 1,
+                "check": 3
+              },
+              "missing": {
+                "missing": 8
+              }
+            }
+          },
+          "confidence": {
+            "threshold": 0.8,
+            "low_items": 3080,
+            "high_items": 1057,
+            "error_rate_low": 0.0325,
+            "error_rate_high": 0.0369,
+            "flag_precision": 0.0325,
+            "flag_recall": 0.7194
+          },
+          "reason_code": {
+            "micro": {
+              "tp": 19,
+              "fp": 135,
+              "fn": 53,
+              "precision": 0.1234,
+              "recall": 0.2639
+            },
+            "per_code": {
+              "AMBIGUOUS_ANALYTE": {
+                "tp": 0,
+                "fp": 2,
+                "fn": 8,
+                "precision": 0.0,
+                "recall": 0.0
+              },
+              "BOUND_ABOVE_LIMIT": {
+                "tp": 1,
+                "fp": 0,
+                "fn": 3,
+                "precision": 1.0,
+                "recall": 0.25
+              },
+              "MISSING_REQUIRED": {
+                "tp": 8,
+                "fp": 72,
+                "fn": 0,
+                "precision": 0.1,
+                "recall": 1.0
+              },
+              "ND_NO_LOD": {
+                "tp": 1,
+                "fp": 0,
+                "fn": 11,
+                "precision": 1.0,
+                "recall": 0.0833
+              },
+              "OUT_OF_SPEC": {
+                "tp": 5,
+                "fp": 0,
+                "fn": 15,
+                "precision": 1.0,
+                "recall": 0.25
+              },
+              "SPEC_COPIED": {
+                "tp": 4,
+                "fp": 0,
+                "fn": 12,
+                "precision": 1.0,
+                "recall": 0.25
+              },
+              "SUM_ONLY": {
+                "tp": 0,
+                "fp": 1,
+                "fn": 4,
+                "precision": 0.0,
+                "recall": 0.0
+              },
+              "UNMAPPED_ITEM": {
+                "tp": 0,
+                "fp": 58,
+                "fn": 0,
+                "precision": 0.0,
+                "recall": null
+              },
+              "UNPARSEABLE_VALUE": {
+                "tp": 0,
+                "fp": 2,
+                "fn": 0,
+                "precision": 0.0,
+                "recall": null
+              }
+            }
+          },
+          "document_issues": {
+            "micro": {
+              "tp": 1,
+              "fp": 0,
+              "fn": 3,
+              "precision": 1.0,
+              "recall": 0.25
+            },
+            "per_code": {
+              "DATE_CONFLICT": {
+                "tp": 1,
+                "fp": 0,
+                "fn": 3,
+                "precision": 1.0,
+                "recall": 0.25
+              }
+            }
+          },
+          "lot": {
+            "documents": 240,
+            "accuracy": 0.3875,
+            "auto_process_rate": 0.25,
+            "over_hold_rate": 0.75,
+            "false_reject_rate": 0.0,
+            "normal_documents": 180,
+            "confusion": {
+              "approve": {
+                "approve": 45,
+                "hold": 135
+              },
+              "hold": {
+                "hold": 44
+              },
+              "reject": {
+                "reject": 4,
+                "hold": 12
+              }
+            }
+          }
+        }
+      },
+      "source": {
+        "synthetic": {
+          "documents": 240,
+          "extraction": {
+            "items_on_coa": 4228,
+            "item_recall": 0.9927,
+            "extra_items": 58,
+            "value_accuracy": 0.9526,
+            "value_evaluated": 4197,
+            "header_accuracy": 0.9234,
+            "header_fields": 640,
+            "error_types": {
+              "number": 5,
+              "unit": 133,
+              "value_missing": 59,
+              "item_not_recognized": 31,
+              "qualifier": 2
+            }
+          },
+          "judgement": {
+            "items": 3596,
+            "accuracy": 0.3039,
+            "risky_missed": 0,
+            "hidden_fail_missed": 0,
+            "low_confidence_checks": 2451,
+            "confusion": {
+              "pass": {
+                "pass": 1052,
+                "check": 2413,
+                "missing": 59
+              },
+              "check": {
+                "check": 27,
+                "pass": 12,
+                "missing": 1
+              },
+              "fail": {
+                "fail": 5,
+                "check": 15
+              },
+              "undetermined": {
+                "undetermined": 1,
+                "check": 3
+              },
+              "missing": {
+                "missing": 8
+              }
+            }
+          },
+          "confidence": {
+            "threshold": 0.8,
+            "low_items": 3080,
+            "high_items": 1057,
+            "error_rate_low": 0.0325,
+            "error_rate_high": 0.0369,
+            "flag_precision": 0.0325,
+            "flag_recall": 0.7194
+          },
+          "reason_code": {
+            "micro": {
+              "tp": 19,
+              "fp": 135,
+              "fn": 53,
+              "precision": 0.1234,
+              "recall": 0.2639
+            },
+            "per_code": {
+              "AMBIGUOUS_ANALYTE": {
+                "tp": 0,
+                "fp": 2,
+                "fn": 8,
+                "precision": 0.0,
+                "recall": 0.0
+              },
+              "BOUND_ABOVE_LIMIT": {
+                "tp": 1,
+                "fp": 0,
+                "fn": 3,
+                "precision": 1.0,
+                "recall": 0.25
+              },
+              "MISSING_REQUIRED": {
+                "tp": 8,
+                "fp": 72,
+                "fn": 0,
+                "precision": 0.1,
+                "recall": 1.0
+              },
+              "ND_NO_LOD": {
+                "tp": 1,
+                "fp": 0,
+                "fn": 11,
+                "precision": 1.0,
+                "recall": 0.0833
+              },
+              "OUT_OF_SPEC": {
+                "tp": 5,
+                "fp": 0,
+                "fn": 15,
+                "precision": 1.0,
+                "recall": 0.25
+              },
+              "SPEC_COPIED": {
+                "tp": 4,
+                "fp": 0,
+                "fn": 12,
+                "precision": 1.0,
+                "recall": 0.25
+              },
+              "SUM_ONLY": {
+                "tp": 0,
+                "fp": 1,
+                "fn": 4,
+                "precision": 0.0,
+                "recall": 0.0
+              },
+              "UNMAPPED_ITEM": {
+                "tp": 0,
+                "fp": 58,
+                "fn": 0,
+                "precision": 0.0,
+                "recall": null
+              },
+              "UNPARSEABLE_VALUE": {
+                "tp": 0,
+                "fp": 2,
+                "fn": 0,
+                "precision": 0.0,
+                "recall": null
+              }
+            }
+          },
+          "document_issues": {
+            "micro": {
+              "tp": 1,
+              "fp": 0,
+              "fn": 3,
+              "precision": 1.0,
+              "recall": 0.25
+            },
+            "per_code": {
+              "DATE_CONFLICT": {
+                "tp": 1,
+                "fp": 0,
+                "fn": 3,
+                "precision": 1.0,
+                "recall": 0.25
+              }
+            }
+          },
+          "lot": {
+            "documents": 240,
+            "accuracy": 0.3875,
+            "auto_process_rate": 0.25,
+            "over_hold_rate": 0.75,
+            "false_reject_rate": 0.0,
+            "normal_documents": 180,
+            "confusion": {
+              "approve": {
+                "approve": 45,
+                "hold": 135
+              },
+              "hold": {
+                "hold": 44
+              },
+              "reject": {
+                "reject": 4,
+                "hold": 12
+              }
+            }
+          }
+        }
+      },
+      "form": {
+        "A": {
+          "documents": 80,
+          "extraction": {
+            "items_on_coa": 1200,
+            "item_recall": 1.0,
+            "extra_items": 0,
+            "value_accuracy": 0.9992,
+            "value_evaluated": 1200,
+            "header_accuracy": 0.9875,
+            "header_fields": 160,
+            "error_types": {
+              "number": 1
+            }
+          },
+          "judgement": {
+            "items": 1200,
+            "accuracy": 0.3042,
+            "risky_missed": 0,
+            "hidden_fail_missed": 0,
+            "low_confidence_checks": 837,
+            "confusion": {
+              "pass": {
+                "pass": 354,
+                "check": 822
+              },
+              "check": {
+                "check": 8,
+                "pass": 4
+              },
+              "fail": {
+                "fail": 2,
+                "check": 6
+              },
+              "undetermined": {
+                "undetermined": 1,
+                "check": 3
+              }
+            }
+          },
+          "confidence": {
+            "threshold": 0.8,
+            "low_items": 900,
+            "high_items": 300,
+            "error_rate_low": 0.0011,
+            "error_rate_high": 0.0,
+            "flag_precision": 0.0011,
+            "flag_recall": 1.0
+          },
+          "reason_code": {
+            "micro": {
+              "tp": 5,
+              "fp": 4,
+              "fn": 19,
+              "precision": 0.5556,
+              "recall": 0.2083
+            },
+            "per_code": {
+              "AMBIGUOUS_ANALYTE": {
+                "tp": 0,
+                "fp": 1,
+                "fn": 4,
+                "precision": 0.0,
+                "recall": 0.0
+              },
+              "BOUND_ABOVE_LIMIT": {
+                "tp": 1,
+                "fp": 0,
+                "fn": 3,
+                "precision": 1.0,
+                "recall": 0.25
+              },
+              "MISSING_REQUIRED": {
+                "tp": 0,
+                "fp": 3,
+                "fn": 0,
+                "precision": 0.0,
+                "recall": null
+              },
+              "OUT_OF_SPEC": {
+                "tp": 2,
+                "fp": 0,
+                "fn": 6,
+                "precision": 1.0,
+                "recall": 0.25
+              },
+              "SPEC_COPIED": {
+                "tp": 2,
+                "fp": 0,
+                "fn": 6,
+                "precision": 1.0,
+                "recall": 0.25
+              }
+            }
+          },
+          "document_issues": {
+            "micro": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 0,
+              "precision": null,
+              "recall": null
+            },
+            "per_code": {}
+          },
+          "lot": {
+            "documents": 80,
+            "accuracy": 0.3625,
+            "auto_process_rate": 0.25,
+            "over_hold_rate": 0.75,
+            "false_reject_rate": 0.0,
+            "normal_documents": 60,
+            "confusion": {
+              "approve": {
+                "approve": 15,
+                "hold": 45
+              },
+              "hold": {
+                "hold": 12
+              },
+              "reject": {
+                "reject": 2,
+                "hold": 6
+              }
+            }
+          }
+        },
+        "B": {
+          "documents": 80,
+          "extraction": {
+            "items_on_coa": 1352,
+            "item_recall": 0.9771,
+            "extra_items": 57,
+            "value_accuracy": 0.8562,
+            "value_evaluated": 1321,
+            "header_accuracy": 0.8125,
+            "header_fields": 240,
+            "error_types": {
+              "unit": 130,
+              "value_missing": 58,
+              "item_not_recognized": 31,
+              "qualifier": 1,
+              "number": 1
+            }
+          },
+          "judgement": {
+            "items": 1196,
+            "accuracy": 0.3002,
+            "risky_missed": 0,
+            "hidden_fail_missed": 0,
+            "low_confidence_checks": 778,
+            "confusion": {
+              "pass": {
+                "pass": 344,
+                "check": 770,
+                "missing": 58
+              },
+              "check": {
+                "pass": 8,
+                "check": 11,
+                "missing": 1
+              },
+              "missing": {
+                "missing": 4
+              }
+            }
+          },
+          "confidence": {
+            "threshold": 0.8,
+            "low_items": 924,
+            "high_items": 338,
+            "error_rate_low": 0.0996,
+            "error_rate_high": 0.1154,
+            "flag_precision": 0.0996,
+            "flag_recall": 0.7023
+          },
+          "reason_code": {
+            "micro": {
+              "tp": 5,
+              "fp": 129,
+              "fn": 19,
+              "precision": 0.0373,
+              "recall": 0.2083
+            },
+            "per_code": {
+              "AMBIGUOUS_ANALYTE": {
+                "tp": 0,
+                "fp": 1,
+                "fn": 4,
+                "precision": 0.0,
+                "recall": 0.0
+              },
+              "MISSING_REQUIRED": {
+                "tp": 4,
+                "fp": 68,
+                "fn": 0,
+                "precision": 0.0556,
+                "recall": 1.0
+              },
+              "ND_NO_LOD": {
+                "tp": 0,
+                "fp": 0,
+                "fn": 8,
+                "precision": null,
+                "recall": 0.0
+              },
+              "SPEC_COPIED": {
+                "tp": 1,
+                "fp": 0,
+                "fn": 3,
+                "precision": 1.0,
+                "recall": 0.25
+              },
+              "SUM_ONLY": {
+                "tp": 0,
+                "fp": 1,
+                "fn": 4,
+                "precision": 0.0,
+                "recall": 0.0
+              },
+              "UNMAPPED_ITEM": {
+                "tp": 0,
+                "fp": 57,
+                "fn": 0,
+                "precision": 0.0,
+                "recall": null
+              },
+              "UNPARSEABLE_VALUE": {
+                "tp": 0,
+                "fp": 2,
+                "fn": 0,
+                "precision": 0.0,
+                "recall": null
+              }
+            }
+          },
+          "document_issues": {
+            "micro": {
+              "tp": 1,
+              "fp": 0,
+              "fn": 3,
+              "precision": 1.0,
+              "recall": 0.25
+            },
+            "per_code": {
+              "DATE_CONFLICT": {
+                "tp": 1,
+                "fp": 0,
+                "fn": 3,
+                "precision": 1.0,
+                "recall": 0.25
+              }
+            }
+          },
+          "lot": {
+            "documents": 80,
+            "accuracy": 0.475,
+            "auto_process_rate": 0.25,
+            "over_hold_rate": 0.75,
+            "false_reject_rate": 0.0,
+            "normal_documents": 56,
+            "confusion": {
+              "approve": {
+                "approve": 14,
+                "hold": 42
+              },
+              "hold": {
+                "hold": 24
+              }
+            }
+          }
+        },
+        "D": {
+          "documents": 80,
+          "extraction": {
+            "items_on_coa": 1676,
+            "item_recall": 1.0,
+            "extra_items": 1,
+            "value_accuracy": 0.9952,
+            "value_evaluated": 1676,
+            "header_accuracy": 0.9917,
+            "header_fields": 240,
+            "error_types": {
+              "value_missing": 1,
+              "number": 3,
+              "unit": 3,
+              "qualifier": 1
+            }
+          },
+          "judgement": {
+            "items": 1200,
+            "accuracy": 0.3075,
+            "risky_missed": 0,
+            "hidden_fail_missed": 0,
+            "low_confidence_checks": 836,
+            "confusion": {
+              "pass": {
+                "pass": 354,
+                "check": 821,
+                "missing": 1
+              },
+              "check": {
+                "check": 8
+              },
+              "missing": {
+                "missing": 4
+              },
+              "fail": {
+                "fail": 3,
+                "check": 9
+              }
+            }
+          },
+          "confidence": {
+            "threshold": 0.8,
+            "low_items": 1256,
+            "high_items": 419,
+            "error_rate_low": 0.0056,
+            "error_rate_high": 0.0,
+            "flag_precision": 0.0056,
+            "flag_recall": 1.0
+          },
+          "reason_code": {
+            "micro": {
+              "tp": 9,
+              "fp": 2,
+              "fn": 15,
+              "precision": 0.8182,
+              "recall": 0.375
+            },
+            "per_code": {
+              "MISSING_REQUIRED": {
+                "tp": 4,
+                "fp": 1,
+                "fn": 0,
+                "precision": 0.8,
+                "recall": 1.0
+              },
+              "ND_NO_LOD": {
+                "tp": 1,
+                "fp": 0,
+                "fn": 3,
+                "precision": 1.0,
+                "recall": 0.25
+              },
+              "OUT_OF_SPEC": {
+                "tp": 3,
+                "fp": 0,
+                "fn": 9,
+                "precision": 1.0,
+                "recall": 0.25
+              },
+              "SPEC_COPIED": {
+                "tp": 1,
+                "fp": 0,
+                "fn": 3,
+                "precision": 1.0,
+                "recall": 0.25
+              },
+              "UNMAPPED_ITEM": {
+                "tp": 0,
+                "fp": 1,
+                "fn": 0,
+                "precision": 0.0,
+                "recall": null
+              }
+            }
+          },
+          "document_issues": {
+            "micro": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 0,
+              "precision": null,
+              "recall": null
+            },
+            "per_code": {}
+          },
+          "lot": {
+            "documents": 80,
+            "accuracy": 0.325,
+            "auto_process_rate": 0.25,
+            "over_hold_rate": 0.75,
+            "false_reject_rate": 0.0,
+            "normal_documents": 64,
+            "confusion": {
+              "approve": {
+                "approve": 16,
+                "hold": 48
+              },
+              "hold": {
+                "hold": 8
+              },
+              "reject": {
+                "reject": 2,
+                "hold": 6
+              }
+            }
+          }
+        }
+      },
+      "degradation": {
+        "blur": {
+          "documents": 60,
+          "extraction": {
+            "items_on_coa": 1057,
+            "item_recall": 0.9868,
+            "extra_items": 18,
+            "value_accuracy": 0.9559,
+            "value_evaluated": 1043,
+            "header_accuracy": 0.8625,
+            "header_fields": 160,
+            "error_types": {
+              "unit": 25,
+              "value_missing": 19,
+              "item_not_recognized": 14,
+              "qualifier": 2
+            }
+          },
+          "judgement": {
+            "items": 899,
+            "accuracy": 0.0734,
+            "risky_missed": 0,
+            "hidden_fail_missed": 0,
+            "low_confidence_checks": 816,
+            "confusion": {
+              "pass": {
+                "pass": 58,
+                "check": 804,
+                "missing": 19
+              },
+              "check": {
+                "check": 6,
+                "pass": 3,
+                "missing": 1
+              },
+              "fail": {
+                "check": 5
+              },
+              "undetermined": {
+                "check": 1
+              },
+              "missing": {
+                "missing": 2
+              }
+            }
+          },
+          "confidence": {
+            "threshold": 0.8,
+            "low_items": 1023,
+            "high_items": 0,
+            "error_rate_low": 0.0254,
+            "error_rate_high": null,
+            "flag_precision": 0.0254,
+            "flag_recall": 1.0
+          },
+          "reason_code": {
+            "micro": {
+              "tp": 2,
+              "fp": 42,
+              "fn": 16,
+              "precision": 0.0455,
+              "recall": 0.1111
+            },
+            "per_code": {
+              "AMBIGUOUS_ANALYTE": {
+                "tp": 0,
+                "fp": 0,
+                "fn": 2,
+                "precision": null,
+                "recall": 0.0
+              },
+              "BOUND_ABOVE_LIMIT": {
+                "tp": 0,
+                "fp": 0,
+                "fn": 1,
+                "precision": null,
+                "recall": 0.0
+              },
+              "MISSING_REQUIRED": {
+                "tp": 2,
+                "fp": 24,
+                "fn": 0,
+                "precision": 0.0769,
+                "recall": 1.0
+              },
+              "ND_NO_LOD": {
+                "tp": 0,
+                "fp": 0,
+                "fn": 3,
+                "precision": null,
+                "recall": 0.0
+              },
+              "OUT_OF_SPEC": {
+                "tp": 0,
+                "fp": 0,
+                "fn": 5,
+                "precision": null,
+                "recall": 0.0
+              },
+              "SPEC_COPIED": {
+                "tp": 0,
+                "fp": 0,
+                "fn": 4,
+                "precision": null,
+                "recall": 0.0
+              },
+              "SUM_ONLY": {
+                "tp": 0,
+                "fp": 0,
+                "fn": 1,
+                "precision": null,
+                "recall": 0.0
+              },
+              "UNMAPPED_ITEM": {
+                "tp": 0,
+                "fp": 18,
+                "fn": 0,
+                "precision": 0.0,
+                "recall": null
+              }
+            }
+          },
+          "document_issues": {
+            "micro": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 1,
+              "precision": null,
+              "recall": 0.0
+            },
+            "per_code": {
+              "DATE_CONFLICT": {
+                "tp": 0,
+                "fp": 0,
+                "fn": 1,
+                "precision": null,
+                "recall": 0.0
+              }
+            }
+          },
+          "lot": {
+            "documents": 60,
+            "accuracy": 0.1833,
+            "auto_process_rate": 0.0,
+            "over_hold_rate": 1.0,
+            "false_reject_rate": 0.0,
+            "normal_documents": 45,
+            "confusion": {
+              "approve": {
+                "hold": 45
+              },
+              "hold": {
+                "hold": 11
+              },
+              "reject": {
+                "hold": 4
+              }
+            }
+          }
+        },
+        "lowres": {
+          "documents": 60,
+          "extraction": {
+            "items_on_coa": 1057,
+            "item_recall": 0.9839,
+            "extra_items": 40,
+            "value_accuracy": 0.9279,
+            "value_evaluated": 1040,
+            "header_accuracy": 0.8313,
+            "header_fields": 160,
+            "error_types": {
+              "number": 5,
+              "value_missing": 40,
+              "unit": 30,
+              "item_not_recognized": 17
+            }
+          },
+          "judgement": {
+            "items": 899,
+            "accuracy": 0.069,
+            "risky_missed": 0,
+            "hidden_fail_missed": 0,
+            "low_confidence_checks": 801,
+            "confusion": {
+              "pass": {
+                "pass": 53,
+                "check": 788,
+                "missing": 40
+              },
+              "check": {
+                "check": 7,
+                "pass": 3
+              },
+              "fail": {
+                "check": 5
+              },
+              "undetermined": {
+                "check": 1
+              },
+              "missing": {
+                "missing": 2
+              }
+            }
+          },
+          "confidence": {
+            "threshold": 0.8,
+            "low_items": 1000,
+            "high_items": 0,
+            "error_rate_low": 0.035,
+            "error_rate_high": null,
+            "flag_precision": 0.035,
+            "flag_recall": 1.0
+          },
+          "reason_code": {
+            "micro": {
+              "tp": 2,
+              "fp": 84,
+              "fn": 16,
+              "precision": 0.0233,
+              "recall": 0.1111
+            },
+            "per_code": {
+              "AMBIGUOUS_ANALYTE": {
+                "tp": 0,
+                "fp": 0,
+                "fn": 2,
+                "precision": null,
+                "recall": 0.0
+              },
+              "BOUND_ABOVE_LIMIT": {
+                "tp": 0,
+                "fp": 0,
+                "fn": 1,
+                "precision": null,
+                "recall": 0.0
+              },
+              "MISSING_REQUIRED": {
+                "tp": 2,
+                "fp": 44,
+                "fn": 0,
+                "precision": 0.0435,
+                "recall": 1.0
+              },
+              "ND_NO_LOD": {
+                "tp": 0,
+                "fp": 0,
+                "fn": 3,
+                "precision": null,
+                "recall": 0.0
+              },
+              "OUT_OF_SPEC": {
+                "tp": 0,
+                "fp": 0,
+                "fn": 5,
+                "precision": null,
+                "recall": 0.0
+              },
+              "SPEC_COPIED": {
+                "tp": 0,
+                "fp": 0,
+                "fn": 4,
+                "precision": null,
+                "recall": 0.0
+              },
+              "SUM_ONLY": {
+                "tp": 0,
+                "fp": 0,
+                "fn": 1,
+                "precision": null,
+                "recall": 0.0
+              },
+              "UNMAPPED_ITEM": {
+                "tp": 0,
+                "fp": 40,
+                "fn": 0,
+                "precision": 0.0,
+                "recall": null
+              }
+            }
+          },
+          "document_issues": {
+            "micro": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 1,
+              "precision": null,
+              "recall": 0.0
+            },
+            "per_code": {
+              "DATE_CONFLICT": {
+                "tp": 0,
+                "fp": 0,
+                "fn": 1,
+                "precision": null,
+                "recall": 0.0
+              }
+            }
+          },
+          "lot": {
+            "documents": 60,
+            "accuracy": 0.1833,
+            "auto_process_rate": 0.0,
+            "over_hold_rate": 1.0,
+            "false_reject_rate": 0.0,
+            "normal_documents": 45,
+            "confusion": {
+              "approve": {
+                "hold": 45
+              },
+              "hold": {
+                "hold": 11
+              },
+              "reject": {
+                "hold": 4
+              }
+            }
+          }
+        },
+        "original": {
+          "documents": 60,
+          "extraction": {
+            "items_on_coa": 1057,
+            "item_recall": 1.0,
+            "extra_items": 0,
+            "value_accuracy": 0.9631,
+            "value_evaluated": 1057,
+            "header_accuracy": 1.0,
+            "header_fields": 160,
+            "error_types": {
+              "unit": 39
+            }
+          },
+          "judgement": {
+            "items": 899,
+            "accuracy": 0.9967,
+            "risky_missed": 0,
+            "hidden_fail_missed": 0,
+            "low_confidence_checks": 0,
+            "confusion": {
+              "pass": {
+                "pass": 881
+              },
+              "check": {
+                "check": 7,
+                "pass": 3
+              },
+              "fail": {
+                "fail": 5
+              },
+              "undetermined": {
+                "undetermined": 1
+              },
+              "missing": {
+                "missing": 2
+              }
+            }
+          },
+          "confidence": {
+            "threshold": 0.8,
+            "low_items": 0,
+            "high_items": 1057,
+            "error_rate_low": null,
+            "error_rate_high": 0.0369,
+            "flag_precision": null,
+            "flag_recall": 0.0
+          },
+          "reason_code": {
+            "micro": {
+              "tp": 13,
+              "fp": 5,
+              "fn": 5,
+              "precision": 0.7222,
+              "recall": 0.7222
+            },
+            "per_code": {
+              "AMBIGUOUS_ANALYTE": {
+                "tp": 0,
+                "fp": 2,
+                "fn": 2,
+                "precision": 0.0,
+                "recall": 0.0
+              },
+              "BOUND_ABOVE_LIMIT": {
+                "tp": 1,
+                "fp": 0,
+                "fn": 0,
+                "precision": 1.0,
+                "recall": 1.0
+              },
+              "MISSING_REQUIRED": {
+                "tp": 2,
+                "fp": 0,
+                "fn": 0,
+                "precision": 1.0,
+                "recall": 1.0
+              },
+              "ND_NO_LOD": {
+                "tp": 1,
+                "fp": 0,
+                "fn": 2,
+                "precision": 1.0,
+                "recall": 0.3333
+              },
+              "OUT_OF_SPEC": {
+                "tp": 5,
+                "fp": 0,
+                "fn": 0,
+                "precision": 1.0,
+                "recall": 1.0
+              },
+              "SPEC_COPIED": {
+                "tp": 4,
+                "fp": 0,
+                "fn": 0,
+                "precision": 1.0,
+                "recall": 1.0
+              },
+              "SUM_ONLY": {
+                "tp": 0,
+                "fp": 1,
+                "fn": 1,
+                "precision": 0.0,
+                "recall": 0.0
+              },
+              "UNPARSEABLE_VALUE": {
+                "tp": 0,
+                "fp": 2,
+                "fn": 0,
+                "precision": 0.0,
+                "recall": null
+              }
+            }
+          },
+          "document_issues": {
+            "micro": {
+              "tp": 1,
+              "fp": 0,
+              "fn": 0,
+              "precision": 1.0,
+              "recall": 1.0
+            },
+            "per_code": {
+              "DATE_CONFLICT": {
+                "tp": 1,
+                "fp": 0,
+                "fn": 0,
+                "precision": 1.0,
+                "recall": 1.0
+              }
+            }
+          },
+          "lot": {
+            "documents": 60,
+            "accuracy": 1.0,
+            "auto_process_rate": 1.0,
+            "over_hold_rate": 0.0,
+            "false_reject_rate": 0.0,
+            "normal_documents": 45,
+            "confusion": {
+              "approve": {
+                "approve": 45
+              },
+              "hold": {
+                "hold": 11
+              },
+              "reject": {
+                "reject": 4
+              }
+            }
+          }
+        },
+        "skew": {
+          "documents": 60,
+          "extraction": {
+            "items_on_coa": 1057,
+            "item_recall": 1.0,
+            "extra_items": 0,
+            "value_accuracy": 0.9631,
+            "value_evaluated": 1057,
+            "header_accuracy": 1.0,
+            "header_fields": 160,
+            "error_types": {
+              "unit": 39
+            }
+          },
+          "judgement": {
+            "items": 899,
+            "accuracy": 0.0768,
+            "risky_missed": 0,
+            "hidden_fail_missed": 0,
+            "low_confidence_checks": 834,
+            "confusion": {
+              "pass": {
+                "pass": 60,
+                "check": 821
+              },
+              "check": {
+                "check": 7,
+                "pass": 3
+              },
+              "fail": {
+                "check": 5
+              },
+              "undetermined": {
+                "check": 1
+              },
+              "missing": {
+                "missing": 2
+              }
+            }
+          },
+          "confidence": {
+            "threshold": 0.8,
+            "low_items": 1057,
+            "high_items": 0,
+            "error_rate_low": 0.0369,
+            "error_rate_high": null,
+            "flag_precision": 0.0369,
+            "flag_recall": 1.0
+          },
+          "reason_code": {
+            "micro": {
+              "tp": 2,
+              "fp": 4,
+              "fn": 16,
+              "precision": 0.3333,
+              "recall": 0.1111
+            },
+            "per_code": {
+              "AMBIGUOUS_ANALYTE": {
+                "tp": 0,
+                "fp": 0,
+                "fn": 2,
+                "precision": null,
+                "recall": 0.0
+              },
+              "BOUND_ABOVE_LIMIT": {
+                "tp": 0,
+                "fp": 0,
+                "fn": 1,
+                "precision": null,
+                "recall": 0.0
+              },
+              "MISSING_REQUIRED": {
+                "tp": 2,
+                "fp": 4,
+                "fn": 0,
+                "precision": 0.3333,
+                "recall": 1.0
+              },
+              "ND_NO_LOD": {
+                "tp": 0,
+                "fp": 0,
+                "fn": 3,
+                "precision": null,
+                "recall": 0.0
+              },
+              "OUT_OF_SPEC": {
+                "tp": 0,
+                "fp": 0,
+                "fn": 5,
+                "precision": null,
+                "recall": 0.0
+              },
+              "SPEC_COPIED": {
+                "tp": 0,
+                "fp": 0,
+                "fn": 4,
+                "precision": null,
+                "recall": 0.0
+              },
+              "SUM_ONLY": {
+                "tp": 0,
+                "fp": 0,
+                "fn": 1,
+                "precision": null,
+                "recall": 0.0
+              }
+            }
+          },
+          "document_issues": {
+            "micro": {
+              "tp": 0,
+              "fp": 0,
+              "fn": 1,
+              "precision": null,
+              "recall": 0.0
+            },
+            "per_code": {
+              "DATE_CONFLICT": {
+                "tp": 0,
+                "fp": 0,
+                "fn": 1,
+                "precision": null,
+                "recall": 0.0
+              }
+            }
+          },
+          "lot": {
+            "documents": 60,
+            "accuracy": 0.1833,
+            "auto_process_rate": 0.0,
+            "over_hold_rate": 1.0,
+            "false_reject_rate": 0.0,
+            "normal_documents": 45,
+            "confusion": {
+              "approve": {
+                "hold": 45
+              },
+              "hold": {
+                "hold": 11
+              },
+              "reject": {
+                "hold": 4
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
